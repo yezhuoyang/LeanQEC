@@ -14,3 +14,5 @@ import QStab.Invariants.SyndromeCorrectness
 import QStab.Invariants.ErrorPropagation
 import QStab.Invariants.RoundInconsistency
 import QStab.Theorem
+import QStab.Simulate
+import QStab.Examples.RepetitionCode

@@ -28,8 +28,8 @@ def measureStep (P : QECParams) (s : State P) (next_coord : Coord P) : State P :
   let new_F := fun j => if j = s.coord.x
                          then (s.I_syn s.coord.x != measurement)
                          else s.F j
-  let any_inconsistent := ∃ j : Fin P.numStab, new_F j = true
-  let new_RI := if s.coord.isRoundEnd ∧ any_inconsistent
+  let any_inconsistent : Bool := decide (∃ j : Fin P.numStab, new_F j = true)
+  let new_RI := if decide (s.coord.isRoundEnd) && any_inconsistent
                  then s.RI + 1
                  else s.RI
   { s with
