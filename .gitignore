@@ -1,0 +1,7 @@
+/.lake
+/.claude
+/.github
+*.olean
+*.ilean
+*.trace
+*.bak
