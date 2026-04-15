@@ -470,79 +470,6 @@ theorem logicalX_attack_uses_3_errors :
     attack_logicalX_3errors.cnt0 = 3 := by
   native_decide
 
-/-! ### Phase 4 scaffolding — the perpendicular spread invariant
-
-This is the central Phase 4 invariant from [invariant.tex:1561](../../../Codedistance/invariant.tex)
-(ghost-witness reformulation):
-
-    p^{ω_X}(σ)  :=  ∃ S_wit ∈ InStab code, projRowsX (mul S_wit Ẽ) ≤ C_budget − C
-
-For Path A (theorem `d^circ_{v2} ≥ d` under NZ scheduling), this invariant is
-the key tool: combined with the topological lower bound (Phase 5 step 4),
-it forces |F| ≥ d for any execution with `v2 = true`.
-
-Stated here as a `Prop` on `State`; `holds_init` is proved; preservation is
-the subject of Phase 5 step 4 (pending). -/
-
-open QStab
-
-/-- Perpendicular spread (ghost-witness form) for the d=3 surface code. -/
-def perpSpreadX_holds (s : State code) : Prop :=
-  ∃ S_wit : ErrorVec 9,
-    QStab.InStab code S_wit ∧
-    projRowsX (d := 3) (ErrorVec.mul S_wit s.E_tilde) ≤ code.C_budget - s.C
-
-/-- **Init**: at σ_0, `Ẽ = I`, `C = C_budget`, so `C_budget − C = 0`. Choose
-    `S_wit = I`; then `mul I I = I` and `projRowsX I = 0 ≤ 0`. -/
-theorem perpSpreadX_init : perpSpreadX_holds (State.init code) := by
-  refine ⟨ErrorVec.identity 9, QStab.InStab.identity, ?_⟩
-  show projRowsX (d := 3) (ErrorVec.mul (ErrorVec.identity 9) (ErrorVec.identity 9))
-       ≤ code.C_budget - code.C_budget
-  rw [Nat.sub_self]
-  have hmul : ErrorVec.mul (ErrorVec.identity 9) (ErrorVec.identity 9)
-              = ErrorVec.identity 9 := by funext _; rfl
-  rw [hmul]
-  exact Nat.le_of_eq (projRowsX_identity 3)
-
-/-- The preservation obligation for `perpSpreadX_holds`. Structurally mirrors
-    the paper's Proposition `PerpSpreadPreserve` ([invariant.tex:1647](../../../Codedistance/invariant.tex)).
-    Each transition needs its own case:
-      * Type-0, Type-I: single-qubit perturbation — `S_wit' = S_wit`, uses `SingleQubitPerturb`.
-      * Type-II (NZ hook):
-          - weight 1, 2: `S_wit' = S_wit`, uses `HookPerp`.
-          - weight 3: `S_wit' = T_s · S_wit`, uses `StabAbsorb`.
-      * Type-III, measure, halt: `Ẽ` unchanged, same `S_wit` works.
-    TODO — to be proved as Phase 5 step 4. -/
-theorem perpSpreadX_preservation
-    (s s' : State code)
-    (hinv : perpSpreadX_holds s)
-    (hstep : Step code (.active s) (.active s')) :
-    perpSpreadX_holds s' := by
-  sorry
-
-/-! ### Path A canonical theorem (stated; proof is the remaining work)
-
-The theorem that v2-true requires at least `d` errors, for the d=3 case. With
-Phase 4 preservation + topological lower bound + two-phase argument, this
-follows. Empirically verified at 2-op level by exhaustive enumeration. -/
-
-/-- **Target theorem** (Path A, d=3): `d^circ_{v2}(d=3, R=5) ≥ 3`. Equivalently,
-    any execution with `v2 = true` at σ_done uses at least 3 error injections.
-
-    For d=3, the minimum-weight logical operator `L_X = X_{q₁}X_{q₄}X_{q₇}` has
-    weight `d = 3`; since v2-true requires `Ẽ` in a non-trivial stabilizer
-    coset with clean measurement record, at least `d` faults are needed.
-
-    This combines:
-      - `perpSpreadX_preservation` (Phase 5 step 4 — pending),
-      - topological lower bound (Phase 5 step 4 — pending),
-      - two-phase argument (Phase 6 — pending). -/
-theorem d3_nz_dCirc_v2_ge_d :
-    ∀ s : State testCode,
-      isUndetectedLogicalError_v2 testCode logicalZ s = true →
-      testCode.C_budget - s.C ≥ 3 := by
-  sorry
-
 /-! ### A6: spec-level proofs that `logicalX`, `logicalZ` are valid logical operators
 
 These close the "hidden assumption" A6 from `semantics_audit.md`. For the
@@ -688,6 +615,116 @@ theorem weight3_hook_absorb_s2 :
     ErrorVec.mul (stabilizers ⟨1, by decide⟩) (ofList [(1, .X)]) =
       ofList [(2, .X), (4, .X), (5, .X)] := by
   funext i; fin_cases i <;> rfl
+
+/-! ### Phase 4 scaffolding — the perpendicular spread invariant
+
+Central invariant from [invariant.tex:1561](../../../Codedistance/invariant.tex)
+(ghost-witness reformulation):
+
+    p^{ω_X}(σ)  :=  ∃ S_wit ∈ InStab code, projRowsX (mul S_wit Ẽ) ≤ C_budget − C
+
+For Path A (theorem `d^circ_{v2} ≥ d` under NZ scheduling), this invariant is
+the key tool: combined with the topological lower bound (Phase 5 Step 4) +
+two-phase argument (Phase 6), it forces |F| ≥ d for v2-true executions.
+
+Defined here on `State SurfaceD3.code`; init is proved, preservation is
+partially proved (easy cases) with sorries for the data/hook cases. -/
+
+open QStab
+
+/-- Perpendicular spread (ghost-witness form) for the d=3 surface code. -/
+def perpSpreadX_holds (s : State code) : Prop :=
+  ∃ S_wit : ErrorVec 9,
+    QStab.InStab code S_wit ∧
+    projRowsX (d := 3) (ErrorVec.mul S_wit s.E_tilde) ≤ code.C_budget - s.C
+
+/-- **Init**: at σ_0, `Ẽ = I`, `C = C_budget`. `S_wit = I`, bound is `0 ≤ 0`. -/
+theorem perpSpreadX_init : perpSpreadX_holds (State.init code) := by
+  refine ⟨ErrorVec.identity 9, QStab.InStab.identity, ?_⟩
+  show projRowsX (d := 3) (ErrorVec.mul (ErrorVec.identity 9) (ErrorVec.identity 9))
+       ≤ code.C_budget - code.C_budget
+  rw [Nat.sub_self]
+  have hmul : ErrorVec.mul (ErrorVec.identity 9) (ErrorVec.identity 9)
+              = ErrorVec.identity 9 := by funext _; rfl
+  rw [hmul]
+  exact Nat.le_of_eq (projRowsX_identity 3)
+
+/-! Helper lemmas pending for Phase 5 Step 4: each transition's effect on
+    projRowsX. Their proofs are the paper's `SingleQubitPerturb`
+    ([invariant.tex:1592](../../../Codedistance/invariant.tex)) and
+    `NZHookPerturb` ([invariant.tex:1613](../../../Codedistance/invariant.tex))
+    specialised to d=3. Both are combinatorial facts about `projRowsX`. -/
+
+/-- Single-qubit perturbation (paper Lemma `SingleQubitPerturb`): applying a
+    single-qubit Pauli via `ErrorVec.update` can add at most one row to
+    `projRowsX`. TODO. -/
+theorem projRowsX_update_le (E : ErrorVec 9) (q : Fin 9) (p : Pauli) :
+    projRowsX (d := 3) (ErrorVec.update E q p)
+      ≤ projRowsX (d := 3) E + 1 := sorry
+
+/-- NZ hook perturbation (paper Lemma `NZHookPerturb`): hook errors (weight
+    1, 2, or 3) from `hookErrors s` under NZ scheduling increase `projRowsX`
+    by at most 1. Uses already-proved `HookPerp` and `StabAbsorb`. TODO. -/
+theorem projRowsX_hook_le (E : ErrorVec 9) (stab_idx : Fin 8) (e : ErrorVec 9)
+    (he : e ∈ hookErrors stab_idx) :
+    projRowsX (d := 3) (ErrorVec.mul e E)
+      ≤ projRowsX (d := 3) E + 1 := sorry
+
+/-- Preservation of `perpSpreadX_holds` by each active→active transition.
+    Paper's Proposition `PerpSpreadPreserve` ([invariant.tex:1647](../../../Codedistance/invariant.tex))
+    for d=3. Easy cases (type3, measure) proved directly; hard cases
+    (type0/1/2) remain sorried and use the perturbation helpers above. -/
+theorem perpSpreadX_preservation
+    (s s' : State code)
+    (hinv : perpSpreadX_holds s)
+    (hstep : Step code (.active s) (.active s')) :
+    perpSpreadX_holds s' := by
+  obtain ⟨S_wit, hS_stab, hbound⟩ := hinv
+  cases hstep with
+  | type0 _ i p _ hC =>
+    refine ⟨S_wit, hS_stab, ?_⟩
+    show projRowsX (d := 3)
+           (ErrorVec.mul S_wit (ErrorVec.update s.E_tilde i p))
+         ≤ code.C_budget - (s.C - 1)
+    sorry
+  | type1 _ i p _ hC =>
+    refine ⟨S_wit, hS_stab, ?_⟩
+    show projRowsX (d := 3)
+           (ErrorVec.mul S_wit (ErrorVec.update s.E_tilde i p))
+         ≤ code.C_budget - (s.C - 1)
+    sorry
+  | type2 _ e he hC =>
+    refine ⟨S_wit, hS_stab, ?_⟩
+    show projRowsX (d := 3)
+           (ErrorVec.mul S_wit (ErrorVec.mul e s.E_tilde))
+         ≤ code.C_budget - (s.C - 1)
+    sorry
+  | type3 _ hC =>
+    -- s' has C-1, Ẽ unchanged (Type-3 is measurement bit flip).
+    refine ⟨S_wit, hS_stab, ?_⟩
+    show projRowsX (d := 3) (ErrorVec.mul S_wit s.E_tilde)
+         ≤ code.C_budget - (s.C - 1)
+    calc projRowsX (d := 3) (ErrorVec.mul S_wit s.E_tilde)
+        ≤ code.C_budget - s.C := hbound
+      _ ≤ code.C_budget - (s.C - 1) := by omega
+  | measure _ nc _ =>
+    -- s' = measureStep code s nc; Ẽ and C unchanged.
+    refine ⟨S_wit, hS_stab, ?_⟩
+    show projRowsX (d := 3)
+           (ErrorVec.mul S_wit (measureStep code s nc).E_tilde)
+         ≤ code.C_budget - (measureStep code s nc).C
+    rw [measureStep_E_tilde, measureStep_C]
+    exact hbound
+
+/-- **Path A target theorem** (d=3, stated; proof pending).
+    Any execution with v2-true at σ_done uses at least `d = 3` error injections.
+    Combines `perpSpreadX_preservation` + topological lower bound
+    (Phase 5 Step 4) + two-phase argument (Phase 6). -/
+theorem d3_nz_dCirc_v2_ge_d :
+    ∀ s : State testCode,
+      isUndetectedLogicalError_v2 testCode logicalZ s = true →
+      testCode.C_budget - s.C ≥ 3 := by
+  sorry
 
 end QStab.Examples.SurfaceD3
 
