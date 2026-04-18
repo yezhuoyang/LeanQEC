@@ -32,7 +32,9 @@ def repCode3 : QECParams where
   R := 3
   numStab := 2
   stabilizers := repStabilizers
+  backActionSet := fun _ => ∅
   r := 1
+  backAction_weight_bound := fun _ _ h => h.elim
   C_budget := 1
   hn := by omega
   hns := by omega

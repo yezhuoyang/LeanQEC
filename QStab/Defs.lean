@@ -20,8 +20,14 @@ structure QECParams where
   numStab : Nat
   /-- The stabilizer generators, each an n-qubit Pauli vector -/
   stabilizers : Fin numStab → ErrorVec n
+  /-- Back-action error set B¹(T_s) for each stabilizer s.
+      Contains all single-fault back-action errors that survive post-selection. -/
+  backActionSet : Fin numStab → Set (ErrorVec n)
   /-- Back-action weight upper bound per syndrome qubit -/
   r : Nat
+  /-- Every back-action error has weight ≤ r -/
+  backAction_weight_bound : ∀ (s : Fin numStab) (e : ErrorVec n),
+    e ∈ backActionSet s → ErrorVec.weight e ≤ r
   /-- Total error budget -/
   C_budget : Nat
   /-- n > 0 -/
@@ -105,6 +111,28 @@ def isRoundEnd {P : QECParams} (c : Coord P) : Prop :=
 
 instance {P : QECParams} (c : Coord P) : Decidable c.isRoundEnd :=
   inferInstanceAs (Decidable (c.x.val = P.numStab - 1))
+
+/-- Coord.next increases toLinear when it returns some. -/
+theorem next_toLinear_lt {P : QECParams} {c nc : Coord P}
+    (h : c.next = some nc) : c.toLinear < nc.toLinear := by
+  unfold next at h
+  split at h
+  · cases h; simp [toLinear]
+  · split at h
+    · cases h; simp [toLinear, Nat.mul_succ]; omega
+    · contradiction
+
+/-- Coord.toLinear is bounded by numStab * R. -/
+theorem toLinear_bound {P : QECParams} (c : Coord P) :
+    c.toLinear < P.numStab * P.R := by
+  unfold toLinear
+  have h1 : P.numStab * (c.y.val + 1) = P.numStab * c.y.val + P.numStab :=
+    Nat.mul_succ P.numStab c.y.val
+  have h2 : c.y.val + 1 ≤ P.R := Nat.succ_le_of_lt c.y.isLt
+  have h3 : P.numStab * (c.y.val + 1) ≤ P.numStab * P.R :=
+    Nat.mul_le_mul_left P.numStab h2
+  have := c.x.isLt
+  omega
 
 end Coord
 

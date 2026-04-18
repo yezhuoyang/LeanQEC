@@ -77,7 +77,9 @@ def params (R : Nat) (hR : 0 < R) : QECParams where
   R := R
   numStab := 8
   stabilizers := stabilizers
-  r := 3            -- max hook weight under NZ scheduling (weight-3 of weight-4 stab)
+  backActionSet := fun _ => ∅
+  r := 3
+  backAction_weight_bound := fun _ _ h => h.elim            -- max hook weight under NZ scheduling (weight-3 of weight-4 stab)
   C_budget := 1     -- ⌊(d-1)/2⌋ for standard distance
   hn := by omega
   hns := by omega
@@ -213,7 +215,9 @@ def params (R : Nat) (hR : 0 < R) : QECParams where
   R := R
   numStab := 15
   stabilizers := stabilizers
+  backActionSet := fun _ => ∅
   r := 3
+  backAction_weight_bound := fun _ _ h => h.elim
   C_budget := 1     -- ⌊(d-1)/2⌋ = 1
   hn := by omega
   hns := by omega
