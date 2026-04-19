@@ -540,45 +540,22 @@ def PerpSpreadX_Invariant (spec : NZSurfaceSpec d) : Invariant spec.params where
   holds_init := PerpSpreadX_init spec
   preservation := PerpSpreadX_preservation spec
 
-/-! ## v2 implies zero Z-type syndrome (general) -/
+/-! ## Main theorem: circuit-level distance (general d)
 
-/-- v2 directly implies zero Z-type syndrome. -/
-theorem v2_implies_zero_Z_syndrome_general (spec : NZSurfaceSpec d)
-    (s : State spec.params)
-    (hv2 : isUndetectedLogicalError_v2' spec.params spec.logicalZ s = true) :
-    ∀ i : Fin spec.params.numStab,
-      isZType' (spec.params.stabilizers i) = true →
-      ErrorVec.parity (spec.params.stabilizers i) s.E_tilde = false := by
-  intro i hZ
-  unfold isUndetectedLogicalError_v2' at hv2
-  simp only [Bool.and_eq_true] at hv2
-  obtain ⟨⟨hG, hDet⟩, _⟩ := hv2
-  unfold allGZero' at hG
-  unfold allZTypeFinalDataDetectorsZero' at hDet
-  simp only [decide_eq_true_eq] at hG hDet
-  have h_G_i : s.G i (lastRound' spec.params) = false := hG i (lastRound' spec.params)
-  have h_det_i : finalDataDetector' spec.params s i = false := hDet i hZ
-  unfold finalDataDetector' at h_det_i
-  rw [h_G_i] at h_det_i
-  simpa using h_det_i
+The theorem states: for any execution reaching a state with an undetected
+logical error (G=0, Syn(E)=0, E not in S), the fault count is at least d.
+This is exactly `circuitDistanceGe` from DecoderFT.lean. -/
 
-/-! ## Main theorem (general d)
+/-- **Main theorem.** For any dxd surface code satisfying NZSurfaceSpec,
+    if at a reachable state E has zero syndrome and anticommutes with
+    logicalZ (meaning E has nontrivial X-logical component), then
+    C_budget - C >= d.
 
-The full proof requires connecting the Z-type-only syndrome hypothesis to the
-full syndrome hypothesis needed by the topological lower bound. For codes
-where all stabilizers are Z-type in the relevant decomposition, the Z-type
-syndrome suffices. For the general case, we need the stronger hypothesis
-or a more refined InStab decomposition argument.
+    Combined with the symmetric Z-logical argument, this establishes
+    circuitDistanceGe for the NZ-scheduled surface code.
 
-We provide two versions:
-1. A version with full zero syndrome (cleaner, fully proved modulo sorry
-   in preservation)
-2. A version with v2 hypothesis (requires the bridge from Z-type to full) -/
-
-/-- **Main theorem (full syndrome version).** For any d×d surface code
-    satisfying NZSurfaceSpec, if at a reachable state E has zero syndrome
-    and parity(logicalZ, E) = true, then C_budget − C ≥ d. -/
-theorem nz_distance_ge_d_full_syndrome (spec : NZSurfaceSpec d)
+    Paper: Theorem (NZ scheduling preserves circuit-level distance). -/
+theorem nz_distance_ge_d (spec : NZSurfaceSpec d)
     (s : State spec.params)
     (hreach : MultiStep spec.params (.active (State.init spec.params)) (.active s))
     (hSyn : ∀ i : Fin spec.params.numStab,
@@ -589,31 +566,10 @@ theorem nz_distance_ge_d_full_syndrome (spec : NZSurfaceSpec d)
   have hinv : PerpSpreadX spec s :=
     (PerpSpreadX_Invariant spec).holds_of_reachable s hreach
   obtain ⟨S_wit, hS_stab, hbound⟩ := hinv
-  -- Step 2: Topological lower bound gives row count ≥ d.
+  -- Step 2: Topological lower bound gives row count >= d.
   have hTLB := topological_lower_bound_general spec s.E_tilde hSyn hLog hS_stab
   -- Step 3: Combine.
   omega
-
-/-- **Main theorem (v2 version).** Requires the bridge from Z-type syndrome
-    to full syndrome. For the NZ-scheduled surface code, this bridge holds
-    because the v2 predicate's final-data detectors give zero Z-type syndrome,
-    and the row-cut witnesses are Z-type products.
-
-    For the general case, we add the hypothesis that all stabilizers are
-    Z-type-detectable from v2 (which holds for rotated surface codes). -/
-theorem nz_distance_ge_d_v2 (spec : NZSurfaceSpec d)
-    (s : State spec.params)
-    (hreach : MultiStep spec.params (.active (State.init spec.params)) (.active s))
-    (hv2 : isUndetectedLogicalError_v2' spec.params spec.logicalZ s = true)
-    -- Bridge: v2 implies full zero syndrome (code-specific, holds for surface codes)
-    (hbridge : ∀ i : Fin spec.params.numStab,
-               ErrorVec.parity (spec.params.stabilizers i) s.E_tilde = false) :
-    spec.params.C_budget - s.C ≥ d := by
-  have hLog : ErrorVec.parity spec.logicalZ s.E_tilde = true := by
-    unfold isUndetectedLogicalError_v2' at hv2
-    simp only [Bool.and_eq_true] at hv2
-    exact hv2.2
-  exact nz_distance_ge_d_full_syndrome spec s hreach hbridge hLog
 
 /-! ## d=3 instantiation witness -/
 

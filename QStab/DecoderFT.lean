@@ -56,18 +56,22 @@ theorem trivialDecoder_succeeds_iff (P : QECParams) (s : State P) :
   · intro h
     rwa [ErrorVec.mul_identity_left]
 
-/-! ### Code distance definitions -/
+/-! ### Code distance definition -/
 
-/-- **Old definition (G=0, E∉S).** Allows timing attacks (d_circ=1).
-    Kept for reference but NOT used for the main theorem. -/
-def isUndetectedError_weak (P : QECParams) (s : State P) : Prop :=
-  (∀ (j : Fin P.numStab) (y : Fin P.R), s.G j y = false) ∧
-  ¬ InStab P s.E_tilde
+/-- **Undetected logical error**: the condition defining circuit-level code distance.
+    An execution produces an undetected logical error if:
+    1. G = 0: all measurement records are zero (undetectable by syndrome history)
+    2. Syn(E) = 0: E commutes with all stabilizers (zero syndrome)
+    3. E ∉ S: the error is not a stabilizer (nontrivial logical class)
 
-/-- **Corrected definition: undetected LOGICAL error.**
-    G = 0 AND E commutes with all stabilizers (zero syndrome) AND E ∉ S.
-    Equivalently: G = 0 and E ∈ N(S)\S (normalizer minus stabilizer group).
-    This excludes timing attacks (detectable errors masked by timing). -/
+    Equivalently: E ∈ N(S)\S with G = 0.
+
+    The combined-configuration argument (Lemma `decoder_FT_from_distance`)
+    shows this is equivalent to decoder-based fault-tolerance: if the minimum
+    fault count for an undetected logical error is d, then any decoder that
+    picks a minimum-weight consistent explanation is ⌊(d-1)/2⌋-fault-tolerant.
+
+    Paper: Definition 4.8 (Circuit-level distance). -/
 def isUndetectedLogicalError (P : QECParams) (s : State P) : Prop :=
   (∀ (j : Fin P.numStab) (y : Fin P.R), s.G j y = false) ∧
   (∀ (i : Fin P.numStab),
