@@ -179,4 +179,100 @@ theorem decoder_FT_from_distance
   rw [hE_c] at h_stab
   exact h_fail h_stab
 
+/-! ### Converse: decoder FT implies circuit distance
+
+If EVERY decoder is t-fault-tolerant, then d^circ ≥ 2t + 1.
+Equivalently (contrapositive): if d^circ ≤ 2t, then no decoder is t-FT.
+
+The argument: if d^circ ≤ 2t, there exist two executions F1, F2 with
+|F1| ≤ t, |F2| ≤ t, producing the same G, but E(F1) · E(F2) ∈ N(S)\S.
+Any decoder seeing G = G(F1) = G(F2) outputs a single correction E_hat.
+It can succeed on at most one of F1, F2: if E_hat · E(F1) ∈ S, then
+E_hat · E(F2) = E_hat · E(F1) · E(F1) · E(F2) = S' · (logical) ∉ S.
+So the decoder fails on the other, violating t-FT.
+
+We formalize this as: given two "confusable" executions (same G,
+different logical class, each ≤ t faults), no decoder succeeds on both. -/
+
+/-- Two executions are **confusable** if they produce the same measurement
+    record G but their combined error is a logical operator (not in S). -/
+def confusable (P : QECParams) (s1 s2 : State P) : Prop :=
+  (∀ j y, s1.G j y = s2.G j y) ∧
+  ¬ InStab P (ErrorVec.mul s1.E_tilde s2.E_tilde)
+
+/-- **No decoder succeeds on both confusable executions.**
+    If s1 and s2 are confusable (same G, combined error ∉ S), and the
+    decoder depends only on G (same output for same G), then the decoder
+    fails on at least one of them. -/
+theorem decoder_fails_on_confusable (P : QECParams) (D : Decoder P)
+    (s1 s2 : State P)
+    (hconf : confusable P s1 s2)
+    -- The decoder depends only on G: same G → same output
+    (hD_det : ∀ (a b : State P), (∀ j y, a.G j y = b.G j y) → D a = D b) :
+    decoderFails P D s1 ∨ decoderFails P D s2 := by
+  unfold confusable at hconf
+  obtain ⟨hG_eq, h_not_stab⟩ := hconf
+  -- D produces the same correction for s1 and s2
+  have hD_eq : D s1 = D s2 := hD_det s1 s2 hG_eq
+  -- Suppose D succeeds on both: derive contradiction
+  by_contra h_both_ok
+  push_neg at h_both_ok
+  unfold decoderFails at h_both_ok
+  push_neg at h_both_ok
+  obtain ⟨h1, h2⟩ := h_both_ok
+  -- h1: mul (D s1) s1.E_tilde ∈ S
+  -- h2: mul (D s2) s2.E_tilde ∈ S
+  -- So mul (D s1) s1.E_tilde · mul (D s2) s2.E_tilde ∈ S (product of stab elements)
+  -- But D s1 = D s2, and the product simplifies to:
+  --   (D · E1) · (D · E2) = D² · E1 · E2 = E1 · E2 (since D² = I for Paulis)
+  -- Actually: InStab is closed under multiplication.
+  -- (D s1 · E1) ∈ S and (D s2 · E2) ∈ S means their product ∈ S.
+  -- Product = (D s1 · E1) · (D s2 · E2).
+  -- We need to relate this to E1 · E2.
+  -- Since D s1 = D s2, we have D s1 · D s2 ∈ S (Pauli self-inverse: D · D = I ∈ S).
+  -- So (D·E1) · (D·E2) = D·E1·D·E2. By associativity/commutativity of Pauli mul
+  -- (up to phase, which we ignore), this is D²·E1·E2 = E1·E2.
+  -- Hence E1·E2 ∈ S, contradicting h_not_stab.
+  --
+  -- Formal proof uses InStab.mul and ErrorVec.mul properties.
+  have h12 := InStab.mul h1 (hD_eq ▸ h2)
+  -- h12 : InStab P (mul (mul (D s1) E1) (mul (D s1) E2))
+  -- Need: mul E1 E2 ∈ S
+  -- Key: (D·E1)·(D·E2) = E1·E2 pointwise, because
+  --   Pauli.mul (Pauli.mul d e1) (Pauli.mul d e2)
+  --   = Pauli.mul d (Pauli.mul e1 (Pauli.mul d e2))  -- assoc
+  --   = Pauli.mul d (Pauli.mul (Pauli.mul e1 d) e2)  -- assoc
+  --   = Pauli.mul d (Pauli.mul (Pauli.mul d e1) e2)  -- comm
+  --   = Pauli.mul (Pauli.mul d (Pauli.mul d e1)) e2  -- assoc
+  --   = Pauli.mul (Pauli.mul I e1) e2                -- self-cancel
+  --   = Pauli.mul e1 e2                              -- identity
+  have key : ErrorVec.mul (ErrorVec.mul (D s1) s1.E_tilde)
+               (ErrorVec.mul (D s1) s2.E_tilde)
+             = ErrorVec.mul s1.E_tilde s2.E_tilde := by
+    funext i
+    show Pauli.mul (Pauli.mul (D s1 i) (s1.E_tilde i))
+                   (Pauli.mul (D s1 i) (s2.E_tilde i))
+         = Pauli.mul (s1.E_tilde i) (s2.E_tilde i)
+    cases (D s1 i) <;> cases (s1.E_tilde i) <;> cases (s2.E_tilde i) <;> rfl
+  rw [key] at h12
+  exact h_not_stab h12
+
+/-- **Converse: confusable pair implies decoder not FT.**
+    If two executions s1, s2 with |F1| ≤ t, |F2| ≤ t are confusable,
+    then no G-deterministic decoder is t-FT. -/
+theorem confusable_implies_not_FT (P : QECParams) (D : Decoder P) (t : Nat)
+    (s1 s2 : State P)
+    (hrun1 : Run P (.done s1))
+    (hrun2 : Run P (.done s2))
+    (hf1 : P.C_budget - s1.C ≤ t)
+    (hf2 : P.C_budget - s2.C ≤ t)
+    (hconf : confusable P s1 s2)
+    (hD_det : ∀ (a b : State P), (∀ j y, a.G j y = b.G j y) → D a = D b) :
+    ¬ isFaultTolerant P D t := by
+  intro hFT
+  have h := decoder_fails_on_confusable P D s1 s2 hconf hD_det
+  cases h with
+  | inl hf => exact hf (hFT s1 hrun1 hf1)
+  | inr hf => exact hf (hFT s2 hrun2 hf2)
+
 end QStab.DecoderFT

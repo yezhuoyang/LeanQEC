@@ -196,6 +196,25 @@ theorem ErrorVec.mul_identity_right {n : Nat} (E : ErrorVec n) :
   show Pauli.mul (E i) .I = E i
   cases (E i) <;> rfl
 
+/-- Pauli multiplication is commutative (up to phase, which we ignore). -/
+theorem ErrorVec.mul_comm {n : Nat} (a b : ErrorVec n) :
+    ErrorVec.mul a b = ErrorVec.mul b a := by
+  funext i; show Pauli.mul (a i) (b i) = Pauli.mul (b i) (a i)
+  cases (a i) <;> cases (b i) <;> rfl
+
+/-- Pauli multiplication is associative. -/
+theorem ErrorVec.mul_assoc {n : Nat} (a b c : ErrorVec n) :
+    ErrorVec.mul (ErrorVec.mul a b) c = ErrorVec.mul a (ErrorVec.mul b c) := by
+  funext i; show Pauli.mul (Pauli.mul (a i) (b i)) (c i) =
+                 Pauli.mul (a i) (Pauli.mul (b i) (c i))
+  cases (a i) <;> cases (b i) <;> cases (c i) <;> rfl
+
+/-- Every Pauli vector is its own inverse: `mul E E = identity`. -/
+theorem ErrorVec.mul_self_cancel {n : Nat} (E : ErrorVec n) :
+    ErrorVec.mul E E = ErrorVec.identity n := by
+  funext i; show Pauli.mul (E i) (E i) = Pauli.I
+  cases (E i) <;> rfl
+
 /-- Helper: `|U ∆ V| + 2 |U ∩ V| = |U| + |V|`. Derived locally since Mathlib's
     `Finset.card_symmDiff` isn't directly available here. -/
 private theorem Finset.card_symmDiff_add_inter {α : Type*} [DecidableEq α]
