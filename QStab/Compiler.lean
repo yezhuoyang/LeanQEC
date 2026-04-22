@@ -89,20 +89,49 @@ def computeR (spec : CodeSpec) : Nat :=
 
 /-! ## Hook weight bound -/
 
-/-- A hook built from a suffix has weight ≤ the suffix length.
-    Proof: each non-I position in the hook corresponds to a unique
-    element of the suffix list (by the `contains` guard in buildHook). -/
+/-- If i is not in suffix, then buildHook returns I at position i. -/
+theorem buildHook_not_mem (n : Nat) (stab : ErrorVec n) (suffix : List (Fin n))
+    (i : Fin n) (hmem : i ∉ suffix) :
+    buildHook n stab suffix i = Pauli.I := by
+  unfold buildHook
+  show (if suffix.contains i = true then stab i else Pauli.I) = Pauli.I
+  simp only [ite_eq_right_iff]
+  intro hc
+  exfalso
+  rw [List.contains_eq_any_beq, List.any_eq_true] at hc
+  obtain ⟨a, ha, hbeq⟩ := hc
+  simp only [BEq.beq, decide_eq_true_eq] at hbeq
+  exact hmem (hbeq ▸ ha)
+
+/-- A hook built from a suffix has weight ≤ the suffix length. -/
 theorem buildHook_weight_le (n : Nat) (stab : ErrorVec n) (suffix : List (Fin n))
     (hnodup : suffix.Nodup) :
     ErrorVec.weight (buildHook n stab suffix) ≤ suffix.length := by
-  sorry -- combinatorial: |{q : stab q ≠ I ∧ q ∈ suffix}| ≤ |suffix|
+  unfold ErrorVec.weight
+  calc (Finset.univ.filter fun i => buildHook n stab suffix i ≠ Pauli.I).card
+      ≤ suffix.toFinset.card := by
+        apply Finset.card_le_card
+        intro i hi
+        simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi
+        rw [List.mem_toFinset]
+        by_contra hmem
+        exact hi (buildHook_not_mem n stab suffix i hmem)
+    _ = suffix.length := by
+        rw [List.toFinset_card_of_nodup hnodup]
 
 /-- Every hook in allHooks has weight ≤ |ordering| - 1. -/
 theorem allHooks_weight_bound (n : Nat) (stab : ErrorVec n)
     (ordering : List (Fin n)) (hnodup : ordering.Nodup)
     (e : ErrorVec n) (he : e ∈ allHooks n stab ordering) :
     ErrorVec.weight e ≤ ordering.length - 1 := by
-  sorry -- follows from buildHook_weight_le + suffix length bound
+  unfold allHooks at he
+  simp only [List.mem_map, List.mem_range] at he
+  obtain ⟨k, hk, rfl⟩ := he
+  have hdrop : (ordering.drop (ordering.length - 1 - k)).Nodup :=
+    hnodup.sublist (List.drop_sublist _ ordering)
+  apply le_trans (buildHook_weight_le n stab _ hdrop)
+  simp [List.length_drop]
+  omega
 
 /-- Every hook in the computed back-action set has weight ≤ computeR. -/
 theorem backAction_weight_bound (spec : CodeSpec)
@@ -110,7 +139,12 @@ theorem backAction_weight_bound (spec : CodeSpec)
     (s : Fin spec.numStab) (e : ErrorVec spec.n)
     (he : e ∈ computeBackActionSet spec s) :
     ErrorVec.weight e ≤ computeR spec := by
-  sorry -- follows from allHooks_weight_bound + Finset.le_sup
+  have hwt := allHooks_weight_bound spec.n (spec.stabilizers s)
+    (spec.gateOrdering s) (hnodup s) e
+    (by simp only [computeBackActionSet, Set.mem_setOf_eq] at he; exact he)
+  apply le_trans hwt
+  unfold computeR
+  exact Finset.le_sup (f := fun s => (spec.gateOrdering s).length - 1) (Finset.mem_univ s)
 
 /-! ## The Compiler -/
 
@@ -193,11 +227,18 @@ theorem compile_hook_complete (spec : CodeSpec) (s : Fin spec.numStab)
   simp only [computeBackActionSet, Set.mem_setOf_eq]
   unfold allHooks
   simp only [List.mem_map, List.mem_range]
-  -- The hook at position j corresponds to k = (length - 1) - (j + 1) in the range
-  -- Actually, let's find the right k such that drop(length - 1 - k) = drop(j + 1)
-  -- We need: length - 1 - k = j + 1, i.e., k = length - 2 - j
-  sorry -- definitional: the hook at gate position j corresponds to
-        -- suffix drop(j+1), which is in allHooks by construction
+  -- We need k such that: k < length - 1 AND drop(length - 1 - k) = drop(j + 1)
+  -- So: length - 1 - k = j + 1, i.e., k = length - 2 - j
+  -- And k < length - 1 follows from j < length - 1
+  set len := (spec.gateOrdering s).length with hlen_def
+  have hlen2 : 2 ≤ len := by omega  -- from hj : j < len - 1, so len - 1 ≥ 1, so len ≥ 2
+  -- k = len - 2 - j satisfies both conditions
+  refine ⟨len - 2 - j, ?_, ?_⟩
+  · -- k < len - 1: since j ≥ 0 and len ≥ 2, len - 2 - j < len - 1
+    omega
+  · -- Need: drop(len - 1 - (len - 2 - j)) = drop(j + 1)
+    suffices h : len - 1 - (len - 2 - j) = j + 1 by rw [h]
+    omega
 
 /-! ## Stim Output (untrusted pretty-printer)
 
