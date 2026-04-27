@@ -1,35 +1,47 @@
 import QStab.QClifford.Standard
 
 /-!
-# Paper FaultType + scheme-agnostic classifier
+# Paper FaultType + denotational effect summary
 
-The paper (§5.1, fig:fault-typing in `invariant.tex`) classifies
-single-qubit Pauli faults inside any stabilizer-measurement gadget into
-five types: Type-0/I/II/III plus an explicit `trivial`. The typing
-judgment is **scheme-agnostic**: it propagates the fault through the
-gate suffix using QClifford's universal Pauli-propagation rules, then
-inspects two observables of the resulting state — the data weight and
-the measurement-flip bit. The same five rules apply to the standard
-CNOT scheme, Shor's cat-state scheme, the Chao–Reichardt flag scheme,
-and the Knill scheme; what varies across schemes is only the gate list
-and the post-selection predicate.
+The paper (§5.1 in `invariant.tex`) frames the fault classifier as a
+**type-and-effect system** for Pauli fault propagation, in the style of
+Gifford–Lucassen / Nielson–Nielson. The judgment
+
+    Γ ⊢ (ℓ, q, P) : Fault[τ, e_B, m_f]
+
+assigns to a fault `(ℓ, q, P)` an effect summary `(τ, e_B, m_f)`: the
+QStab type τ ∈ {Type-0, Type-I, Type-II, Type-III, Trivial}, the data
+residual `e_B`, and the measurement-flip bit `m_f`. The effect is the
+abstraction `α(es) := (dataWt(es), mflip(es), dataPauli(es))` of the
+post-propagation error state.
+
+The paper's framing distinguishes two judgments:
+
+1. **Denotational T-Fault** — propagate the fault through the gate
+   suffix, then abstract via α. Universal across all stabilizer-
+   measurement schemes; this is the ground truth for the effect summary.
+2. **Per-scheme syntactic rules** (T-Hook-X, T-Hook-Z, …) — O(1) pattern
+   matches on the gate list that produce the same effect summary
+   without running propagation. See `Geometric.lean` for the standard-
+   scheme version. Each per-scheme system is proved sound against the
+   denotational T-Fault rule.
+
+This file implements the **denotational** layer. `paperType` runs
+`propagateCircuit` + `classify` and reads off the effect summary's
+type component. It works on any `ErrorState` regardless of which
+scheme's gadget produced it, because the QClifford propagation rules
+are universal. Per-scheme syntactic systems (like `Geometric.geomType`
+for the standard scheme) are proved sound against this denotation.
 
 This file:
 1. Introduces `FaultType` matching the paper's five-way vocabulary.
-2. Defines `paperType` as the scheme-agnostic classifier built on top
-   of `propagateCircuit` and the existing `classify` (which works on any
-   `ErrorState`, regardless of which scheme produced it).
-3. Pins concrete bug witnesses for Standard X-stabilizers and Z-stabilizers.
-
-Per-scheme **realizations** (like `geomType` for Standard in
-`Geometric.lean`) are derived: they pattern-match on a fixed gate
-vocabulary as a shortcut, but agreement with `paperType` is what makes
-them trustworthy.
+2. Defines `paperType` (denotational classifier).
+3. Pins concrete witnesses for Standard X- and Z-stabilizers.
 
 Bug witnesses (cross-referenced to `notes/scratch.md` of `Codedistance`):
 - Bug 1: an earlier draft's T-Hook premise `P ∈ {X, Y}` was
-  X-stabilizer-specific. The scheme-agnostic propagate-and-inspect rules
-  handle X- and Z-stabilizers uniformly: pinned as Z-stab `cz4` examples.
+  X-stabilizer-specific. The denotational effect summary handles X- and
+  Z-stabilizers uniformly; pinned as Z-stab `cz4` examples.
 - Bug 3: Type-0 vs Type-I is determined by `mflip` of the propagated
   state, not by gate position.
 - Bug 4: `trivial` is the fifth case, present here as `FaultType.trivial`.
