@@ -2,18 +2,28 @@ import QStab.QClifford.Standard
 import QStab.Paper.Bridge
 
 /-!
-# Geometric typing rules for single-qubit Pauli faults
+# Geometric typing rules — standard-scheme realization
 
-Expresses the paper's §5.1 typing rules as a function pattern-matching on
-the gate suffix following a fault location, the ancilla qubit, and the
-fault Pauli — in the spirit of John's suggestion: "the type-checking
-should just be a geometric argument — if an X-fault on the syndrome qubit
-is followed by CNOTs(syn, data_i), then it has hook type with shape XX...X."
+`geomType` is the **standard CNOT scheme** realization of the
+scheme-agnostic typing rules in invariant.tex §5.1, fig:fault-typing.
+It pattern-matches on the gate suffix immediately following the fault,
+the ancilla qubit, and the fault Pauli, and returns the paper's
+`FaultType`. The function exists to demonstrate that, for one scheme,
+the typing decision can be derived from a small finite enumeration of
+gate-suffix shapes without simulating Pauli propagation.
 
-`geomType` reads the gate suffix, classifies the fault by which gate first
-touches the fault qubit and whether the qubit is the designated ancilla,
-and returns the paper's `FaultType`. We pin agreement with the
-`classify`-based `paperType` on representative faults via `native_decide`.
+The **scheme-agnostic** classifier `paperType` (in `Bridge.lean`) is
+built on top of `propagateCircuit` and `classify`, and applies to every
+scheme — Standard, Shor, Chao–Reichardt flag, Knill — without
+modification. Per-scheme realizations like `geomType` here are
+optional: they specialize the abstract rules to a fixed gate vocabulary
+for inspection-time efficiency, but `paperType` is the canonical
+classifier the paper's typing judgment refers to.
+
+We prove `geomType` agrees with `paperType` on representative standard-
+scheme faults via `native_decide`. Analogous functions for Shor / Flag /
+Knill would substitute their respective gate patterns; their agreement
+with `paperType` likewise reduces to gate-by-gate propagation.
 -/
 
 namespace QStab.Paper.Geometric

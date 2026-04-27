@@ -1,25 +1,38 @@
 import QStab.QClifford.Standard
 
 /-!
-# Bridge between the paper's typing terminology and the Lean QType
+# Paper FaultType + scheme-agnostic classifier
 
-The paper (§5.1, fig:fault-typing in invariant.tex) classifies single-qubit
-Pauli faults inside a stabilizer-measurement gadget into four types:
-Type-0/I/II/III. The existing Lean formalization in
-`QStab/QClifford/Standard.lean` uses a slightly different vocabulary
-`QType := data | hook | measOnly | trivial`, where `data` merges Type-0
-and Type-I and `trivial` is an extra case the paper does not name.
+The paper (§5.1, fig:fault-typing in `invariant.tex`) classifies
+single-qubit Pauli faults inside any stabilizer-measurement gadget into
+five types: Type-0/I/II/III plus an explicit `trivial`. The typing
+judgment is **scheme-agnostic**: it propagates the fault through the
+gate suffix using QClifford's universal Pauli-propagation rules, then
+inspects two observables of the resulting state — the data weight and
+the measurement-flip bit. The same five rules apply to the standard
+CNOT scheme, Shor's cat-state scheme, the Chao–Reichardt flag scheme,
+and the Knill scheme; what varies across schemes is only the gate list
+and the post-selection predicate.
 
 This file:
-1. Introduces `FaultType` matching the paper's vocabulary.
-2. Defines `paperType` as a derived classifier built on top of `classify`.
-3. Pins concrete bug witnesses found while auditing the paper definitions.
+1. Introduces `FaultType` matching the paper's five-way vocabulary.
+2. Defines `paperType` as the scheme-agnostic classifier built on top
+   of `propagateCircuit` and the existing `classify` (which works on any
+   `ErrorState`, regardless of which scheme produced it).
+3. Pins concrete bug witnesses for Standard X-stabilizers and Z-stabilizers.
+
+Per-scheme **realizations** (like `geomType` for Standard in
+`Geometric.lean`) are derived: they pattern-match on a fixed gate
+vocabulary as a shortcut, but agreement with `paperType` is what makes
+them trustworthy.
 
 Bug witnesses (cross-referenced to `notes/scratch.md` of `Codedistance`):
-- Bug 1: T-Hook `P ∈ {X, Y}` is X-stabilizer-specific. For Z-stabilizers
-  the dangerous Pauli is Z (or Y).
-- Bug 3: Type-0 vs Type-I is determined by `mflip`, not by gate position.
-- Bug 4: `trivial` is a fifth case missing from the paper's enumeration.
+- Bug 1: an earlier draft's T-Hook premise `P ∈ {X, Y}` was
+  X-stabilizer-specific. The scheme-agnostic propagate-and-inspect rules
+  handle X- and Z-stabilizers uniformly: pinned as Z-stab `cz4` examples.
+- Bug 3: Type-0 vs Type-I is determined by `mflip` of the propagated
+  state, not by gate position.
+- Bug 4: `trivial` is the fifth case, present here as `FaultType.trivial`.
 -/
 
 namespace QStab.Paper
