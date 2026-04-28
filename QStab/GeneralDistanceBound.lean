@@ -57,12 +57,12 @@ theorem weightedInv_preserve (m : ErrorMeasure P)
     exact error_step_bound (m.ω (ErrorVec.update s.E_tilde i p)) (m.ω s.E_tilde)
       m.c_data m.c_max s.C P.C_budget
       (m.ω_single_qubit s.E_tilde i p hp) (Nat.le_max_left _ _) hinv hC
-  | type1 _ i p hp hC =>
+  | type1 _ i p hp _ hC =>
     show m.ω (ErrorVec.update s.E_tilde i p) + m.c_max * (s.C - 1) ≤ m.c_max * P.C_budget
     exact error_step_bound (m.ω (ErrorVec.update s.E_tilde i p)) (m.ω s.E_tilde)
       m.c_data m.c_max s.C P.C_budget
       (m.ω_single_qubit s.E_tilde i p hp) (Nat.le_max_left _ _) hinv hC
-  | type2 _ e he hC =>
+  | type2 _ e he _ hC =>
     show m.ω (ErrorVec.mul e s.E_tilde) + m.c_max * (s.C - 1) ≤ m.c_max * P.C_budget
     have hω := m.ω_hook s.coord.x s.E_tilde e he
     exact error_step_bound _ (m.ω s.E_tilde) m.c_hook m.c_max s.C P.C_budget
@@ -117,7 +117,7 @@ theorem simpleInv_preserve (m : ErrorMeasure P) (hcd : m.c_data ≤ 1) (hch : m.
     have : ∀ a b c bd : Nat, a ≤ b + 1 → b + c ≤ bd → 1 ≤ c →
         a + (c - 1) ≤ bd := by omega
     exact this _ _ _ _ (by omega) hinv hC
-  | type1 _ i p hp hC =>
+  | type1 _ i p hp _ hC =>
     have hω := m.ω_single_qubit s.E_tilde i p hp
     show m.ω (ErrorVec.update s.E_tilde i p) + (s.C - 1) ≤ P.C_budget
     have : ∀ a b c bd : Nat, a ≤ b + 1 → b + c ≤ bd → 1 ≤ c →

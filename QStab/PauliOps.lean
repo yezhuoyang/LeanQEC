@@ -43,4 +43,21 @@ def parity {n : Nat} (stabilizer : ErrorVec n) (err : ErrorVec n) : Bool :=
 def update {n : Nat} (e : ErrorVec n) (i : Fin n) (p : Pauli) : ErrorVec n :=
   Function.update e i (Pauli.mul p (e i))
 
+/-- Anticommuting with the identity is always false. -/
+theorem Pauli.anticommutes_identity_right (p : Pauli) :
+    Pauli.anticommutes p .I = false := by
+  cases p <;> rfl
+
+/-- Parity of any stabilizer with the identity error vector is false.
+    Since every position is Pauli.I, no anticommutation occurs. -/
+theorem parity_identity {n : Nat} (stabilizer : ErrorVec n) :
+    parity stabilizer (identity n) = false := by
+  unfold parity identity
+  suffices h : (Finset.univ.filter fun i => Pauli.anticommutes (stabilizer i) Pauli.I).card = 0 by
+    rw [h]; rfl
+  apply Finset.card_eq_zero.mpr
+  apply Finset.filter_eq_empty_iff.mpr
+  intro i _
+  simp [Pauli.anticommutes_identity_right]
+
 end ErrorVec

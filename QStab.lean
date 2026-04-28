@@ -13,6 +13,9 @@ import QStab.Invariants.ConstantErrorFlow
 import QStab.Invariants.SyndromeCorrectness
 import QStab.Invariants.ErrorPropagation
 import QStab.Invariants.RoundInconsistency
+import QStab.Invariants.GFresh
 import QStab.Theorem
 import QStab.Simulate
 import QStab.Examples.RepetitionCode
+import QStab.Examples.SurfaceCode
+import QStab.Examples.SurfaceGeometry

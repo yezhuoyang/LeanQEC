@@ -21,23 +21,44 @@ structure Invariant (P : QECParams) where
 
 namespace Invariant
 
+/-- Helper: an invariant holds for the underlying state of any ExecState
+    reachable from init. -/
+private theorem holds_of_reachable_aux {P : QECParams} (inv : Invariant P)
+    (e : ExecState P)
+    (hrun : MultiStep P (.active (State.init P)) e) :
+    inv.holds e.state := by
+  induction hrun with
+  | refl => exact inv.holds_init
+  | tail _ step ih =>
+    cases step with
+    | type0 s i p' hp hC => exact inv.preservation _ _ ih (Step.type0 s i p' hp hC)
+    | type1 s i p' hp mf hC => exact inv.preservation _ _ ih (Step.type1 s i p' hp mf hC)
+    | type2 s ev he mf hC => exact inv.preservation _ _ ih (Step.type2 s ev he mf hC)
+    | type3 s hC => exact inv.preservation _ _ ih (Step.type3 s hC)
+    | measure s nc hN => exact inv.preservation _ _ ih (Step.measure s nc hN)
+    | halt s _ => exact ih
+    | budget_exhausted s _ => exact ih
+
 /-- An invariant holds for any active state reachable from init. -/
 theorem holds_of_reachable {P : QECParams} (inv : Invariant P)
     (s : State P)
     (hrun : MultiStep P (.active (State.init P)) (.active s)) :
-    inv.holds s := sorry
+    inv.holds s :=
+  holds_of_reachable_aux inv (.active s) hrun
 
 /-- An invariant holds for the underlying state of any done state reachable from init. -/
 theorem holds_at_done {P : QECParams} (inv : Invariant P)
     (s : State P)
     (hrun : Run P (.done s)) :
-    inv.holds s := sorry
+    inv.holds s :=
+  holds_of_reachable_aux inv (.done s) hrun
 
 /-- An invariant holds for the underlying state of any error state reachable from init. -/
 theorem holds_at_error {P : QECParams} (inv : Invariant P)
     (s : State P)
     (hrun : Run P (.error s)) :
-    inv.holds s := sorry
+    inv.holds s :=
+  holds_of_reachable_aux inv (.error s) hrun
 
 /-- Conjunction of two invariants is an invariant. -/
 def conj {P : QECParams} (inv₁ inv₂ : Invariant P) : Invariant P where
@@ -51,7 +72,8 @@ def conj {P : QECParams} (inv₁ inv₂ : Invariant P) : Invariant P where
 theorem holds_of_implies {P : QECParams} (inv₁ : Invariant P) (p : State P → Prop)
     (h : ∀ s, inv₁.holds s → p s) (s : State P)
     (hrun : MultiStep P (.active (State.init P)) (.active s)) :
-    p s := sorry
+    p s :=
+  h s (inv₁.holds_of_reachable s hrun)
 
 end Invariant
 

@@ -30,26 +30,39 @@ open QECParams Pauli
 Extends the done state with final data measurements. -/
 
 /-- The result of measuring data qubit q in the Z basis.
-    In the Heisenberg picture: the measurement outcome is determined by
-    whether the error flow E_tilde has a Z-component at qubit q.
-    hasZComponent: I→false, X→false, Y→true, Z→true. -/
-def dataMeasurement {n : Nat} (E : ErrorVec n) (q : Fin n) : Bool :=
-  hasZComponent (E q)
+    The data qubit starts in |0⟩ (code space). In the Heisenberg picture,
+    the measurement outcome is FLIPPED iff the accumulated error E[q] has
+    an X-component: X and Y anticommute with Z (flip the outcome), while
+    I and Z commute with Z (don't flip).
 
-/-- The final data measurement record: Z-basis measurement of each data qubit,
-    possibly corrupted by noise (Type-0 errors before the final measurement).
-    M_data[q] = hasZComponent(E_final[q]) where E_final includes any
-    noise errors injected before the final measurement. -/
+    So: Z-basis measurement of qubit q = hasXComponent(E[q]).
+    NOT hasZComponent — a Z error on a |0⟩ qubit does not flip the Z-measurement. -/
+def dataMeasurement {n : Nat} (E : ErrorVec n) (q : Fin n) : Bool :=
+  hasXComponent (E q)
+
+/-- The final data measurement record: Z-basis measurement of each data qubit.
+    M_data[q] = hasXComponent(E_final[q]) where E_final is the error flow
+    AFTER all faults (syndrome rounds + final-measurement noise).
+
+    In the QStab execution, final-measurement noise is modeled as Type-0
+    errors that fire after the last syndrome round but before the halt
+    transition. These consume error budget just like syndrome-round faults. -/
 def finalMeasRecord {n : Nat} (E : ErrorVec n) : Fin n → Bool :=
   fun q => dataMeasurement E q
 
-/-- The logical observable for the memory_z experiment:
-    parity of Z-measurements on the support of the logical X-bar operator.
-    logicalX is a Pauli vector; the support is where logicalX[q] ∈ {X, Y}.
-    The observable = XOR of M_data[q] for q in supp(X-bar).
+/-- The logical observable for the memory_z experiment.
+    Observable = parity of Z-measurements on the support of logical X-bar.
 
-    This matches Stim's OBSERVABLE_INCLUDE: XOR of measurement records
-    on the qubits where X-bar acts. -/
+    logicalX is a Pauli vector representing X-bar. The support of X-bar
+    is where logicalX[q] ∈ {X, Y}. The observable is the XOR of
+    M_data[q] = hasXComponent(E[q]) for q in supp(X-bar).
+
+    Matches Stim: OBSERVABLE_INCLUDE(0) rec[support of X-bar].
+
+    The observable flips (= true) iff E has an odd number of X-component
+    errors on the X-bar support qubits — i.e., E anticommutes with Z-bar
+    restricted to the X-bar support. This is the physical definition of
+    "a logical X error occurred". -/
 def observable {n : Nat} (E : ErrorVec n) (logicalX : ErrorVec n) : Bool :=
   (Finset.univ.filter fun q : Fin n =>
     hasXComponent (logicalX q) && dataMeasurement E q).card % 2 == 1
