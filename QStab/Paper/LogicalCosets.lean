@@ -256,4 +256,297 @@ theorem normalizer_decomposition {P : QECParams} (L : LogicalOps P)
     · -- parity Z̄ (X̄·Z̄·E) = true ⊕ false ⊕ true = false
       rw [parity_mul_right, parity_mul_right, h_Z_X, h_Z_Z, ← ha_def, ha]; rfl
 
+/-! # General k case: [[n, k]] codes
+
+Same structural argument as the k=1 case, but with 2k logical operators
+indexed by `Fin k`. The corrected operator is a list-product over `Fin k`
+of `X̄_i^{a_i}` and `Z̄_i^{b_i}` factors. -/
+
+namespace General
+
+/-! ## Generic helper: XOR-fold of constant `false` -/
+
+private theorem foldr_xor_const_false {α : Type*} (l : List α) :
+    l.foldr (fun (_ : α) acc => xor false acc) false = false := by
+  induction l with
+  | nil => rfl
+  | cons _ tl ih =>
+    rw [List.foldr_cons]
+    show xor false _ = false
+    rw [Bool.false_xor, ih]
+
+/-! ## Singleton-XOR over `Fin k` -/
+
+/-- Key lemma: for `j : Fin k` and `g : Fin k → Bool`, the XOR over the
+    list `List.finRange k` of `if i = j then g i else false` is exactly `g j`. -/
+private theorem foldr_xor_singleton {k : Nat} (j : Fin k) (g : Fin k → Bool) :
+    (List.finRange k).foldr
+      (fun i acc => xor (if i = j then g i else false) acc) false = g j := by
+  induction k with
+  | zero => exact j.elim0
+  | succ m ih =>
+    rw [List.finRange_succ_eq_map, List.foldr_cons]
+    by_cases hj : j = 0
+    · -- Case j = 0: head contributes g 0 = g j; tail is identically false.
+      subst hj
+      simp only [if_pos rfl]
+      have h_tail :
+          ((List.finRange m).map Fin.succ).foldr
+            (fun i acc => xor (if i = (0 : Fin (m+1)) then g i else false) acc) false = false := by
+        rw [List.foldr_map]
+        rw [show (fun (i : Fin m) acc =>
+                xor (if i.succ = (0 : Fin (m+1)) then g i.succ else false) acc) =
+                (fun (_ : Fin m) acc => xor false acc) from ?_]
+        · exact foldr_xor_const_false (List.finRange m)
+        · funext i acc
+          have h_ne : i.succ ≠ (0 : Fin (m+1)) := Fin.succ_ne_zero i
+          simp [h_ne]
+      rw [h_tail]
+      show xor (g 0) false = g 0
+      rw [Bool.xor_false]
+    · -- Case j ≠ 0: head doesn't match (0 ≠ j); recurse on tail with j' such that j = j'.succ.
+      obtain ⟨j', rfl⟩ := Fin.eq_succ_of_ne_zero hj
+      have h0_ne : (0 : Fin (m+1)) ≠ j'.succ := (Fin.succ_ne_zero j').symm
+      simp only [if_neg h0_ne]
+      rw [Bool.false_xor, List.foldr_map]
+      rw [show (fun (i : Fin m) acc =>
+              xor (if i.succ = j'.succ then g i.succ else false) acc) =
+              (fun (i : Fin m) acc =>
+              xor (if i = j' then (g ∘ Fin.succ) i else false) acc) from ?_]
+      · exact ih j' (g ∘ Fin.succ)
+      · funext i acc
+        congr 2
+        rw [show (i.succ = j'.succ) = (i = j') from by
+          simp [Fin.succ_inj]]
+
+/-! ## Logical operator system for general k -/
+
+/-- A logical-operator system for an [[n, k]] stabilizer code: 2k logical
+    operators X̄_i, Z̄_i (i ∈ Fin k) satisfying the standard Pauli-group
+    commutation table plus the maximal-isotropic axiom. -/
+structure LogicalOps (P : QECParams) (k : Nat) where
+  Xbar : Fin k → ErrorVec P.n
+  Zbar : Fin k → ErrorVec P.n
+  Xbar_comm_stab : ∀ (i : Fin k) (s : Fin P.numStab),
+    ErrorVec.parity (P.stabilizers s) (Xbar i) = false
+  Zbar_comm_stab : ∀ (i : Fin k) (s : Fin P.numStab),
+    ErrorVec.parity (P.stabilizers s) (Zbar i) = false
+  Xbar_anticomm_Zbar : ∀ (i j : Fin k),
+    ErrorVec.parity (Xbar i) (Zbar j) = decide (i = j)
+  Xbar_comm_Xbar : ∀ (i j : Fin k),
+    ErrorVec.parity (Xbar i) (Xbar j) = false
+  Zbar_comm_Zbar : ∀ (i j : Fin k),
+    ErrorVec.parity (Zbar i) (Zbar j) = false
+  /-- Maximal-isotropic axiom: any operator commuting with all stabilizers
+      and with every X̄_i and Z̄_i is in S. -/
+  maximal_isotropic : ∀ E : ErrorVec P.n,
+    (∀ s, ErrorVec.parity (P.stabilizers s) E = false) →
+    (∀ i, ErrorVec.parity (Xbar i) E = false) →
+    (∀ i, ErrorVec.parity (Zbar i) E = false) →
+    InStab P E
+
+/-! ## List-based iterated product -/
+
+def listProd {n : Nat} : List (ErrorVec n) → ErrorVec n
+  | [] => ErrorVec.identity n
+  | a :: l => ErrorVec.mul a (listProd l)
+
+private theorem parity_identity_right' {n : Nat} (F : ErrorVec n) :
+    ErrorVec.parity F (ErrorVec.identity n) = false := by
+  unfold ErrorVec.parity ErrorVec.identity
+  have : (Finset.univ.filter
+      fun i : Fin n => ErrorVec.Pauli.anticommutes (F i) Pauli.I).card = 0 := by
+    apply Finset.card_eq_zero.mpr
+    apply Finset.filter_eq_empty_iff.mpr
+    intro i _
+    cases F i <;> decide
+  rw [this]; rfl
+
+theorem parity_listProd {n : Nat} (F : ErrorVec n) (l : List (ErrorVec n)) :
+    ErrorVec.parity F (listProd l) =
+    l.foldr (fun G acc => xor (ErrorVec.parity F G) acc) false := by
+  induction l with
+  | nil => simp [listProd, parity_identity_right']
+  | cons G l ih => simp [listProd, parity_mul_right, ih]
+
+/-! ## Logical product representations -/
+
+private def listXFactors {P : QECParams} {k : Nat} (L : LogicalOps P k) (a : Fin k → Bool) :
+    List (ErrorVec P.n) :=
+  (List.finRange k).map (fun i => if a i then L.Xbar i else ErrorVec.identity P.n)
+
+private def listZFactors {P : QECParams} {k : Nat} (L : LogicalOps P k) (b : Fin k → Bool) :
+    List (ErrorVec P.n) :=
+  (List.finRange k).map (fun i => if b i then L.Zbar i else ErrorVec.identity P.n)
+
+/-- The corrected product: ∏_i X̄_i^{a_i} · ∏_i Z̄_i^{b_i}. -/
+def correctOp {P : QECParams} {k : Nat} (L : LogicalOps P k)
+    (a b : Fin k → Bool) : ErrorVec P.n :=
+  ErrorVec.mul (listProd (listXFactors L a)) (listProd (listZFactors L b))
+
+/-! ## Parity of correctOp at logical operators
+
+We use the singleton-XOR lemma above to compute parities cleanly. -/
+
+variable {P : QECParams} {k : Nat} (L : LogicalOps P k)
+
+/-- ∏_i X̄_i^{a_i} commutes with every X̄_j (X̄'s pairwise commute). -/
+private theorem parity_Xbar_listX (a : Fin k → Bool) (j : Fin k) :
+    ErrorVec.parity (L.Xbar j) (listProd (listXFactors L a)) = false := by
+  rw [parity_listProd]
+  unfold listXFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (L.Xbar j)
+            (if a i then L.Xbar i else ErrorVec.identity P.n)) acc) =
+          (fun (_ : Fin k) acc => xor false acc) from ?_]
+  · exact foldr_xor_const_false (List.finRange k)
+  · funext i acc
+    by_cases ha : a i
+    · simp [ha, L.Xbar_comm_Xbar]
+    · simp [ha, parity_identity_right']
+
+/-- ∏_i Z̄_i^{b_i} has parity `b j` against X̄_j (only the i=j term contributes b j). -/
+private theorem parity_Xbar_listZ (b : Fin k → Bool) (j : Fin k) :
+    ErrorVec.parity (L.Xbar j) (listProd (listZFactors L b)) = b j := by
+  rw [parity_listProd]
+  unfold listZFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (L.Xbar j)
+            (if b i then L.Zbar i else ErrorVec.identity P.n)) acc) =
+          (fun (i : Fin k) acc =>
+          xor (if i = j then b i else false) acc) from ?_]
+  · exact foldr_xor_singleton j b
+  · funext i acc
+    congr 1
+    cases hb_val : b i with
+    | true =>
+      simp only [if_true]
+      rw [L.Xbar_anticomm_Zbar]
+      by_cases hij : i = j
+      · subst hij; simp
+      · have h_ji : j ≠ i := fun h => hij h.symm
+        simp [h_ji, hij]
+    | false =>
+      -- Goal: parity X̄_j (if false = true then Z̄_i else I) = if i = j then false else false
+      simp only [Bool.false_eq_true, if_false]
+      rw [parity_identity_right']
+      by_cases hij : i = j <;> simp [hij]
+
+/-- ∏_i Z̄_i^{b_i} commutes with every Z̄_j. -/
+private theorem parity_Zbar_listZ (b : Fin k → Bool) (j : Fin k) :
+    ErrorVec.parity (L.Zbar j) (listProd (listZFactors L b)) = false := by
+  rw [parity_listProd]
+  unfold listZFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (L.Zbar j)
+            (if b i then L.Zbar i else ErrorVec.identity P.n)) acc) =
+          (fun (_ : Fin k) acc => xor false acc) from ?_]
+  · exact foldr_xor_const_false (List.finRange k)
+  · funext i acc
+    by_cases hb : b i
+    · simp [hb, L.Zbar_comm_Zbar]
+    · simp [hb, parity_identity_right']
+
+/-- ∏_i X̄_i^{a_i} has parity `a j` against Z̄_j. -/
+private theorem parity_Zbar_listX (a : Fin k → Bool) (j : Fin k) :
+    ErrorVec.parity (L.Zbar j) (listProd (listXFactors L a)) = a j := by
+  rw [parity_listProd]
+  unfold listXFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (L.Zbar j)
+            (if a i then L.Xbar i else ErrorVec.identity P.n)) acc) =
+          (fun (i : Fin k) acc =>
+          xor (if i = j then a i else false) acc) from ?_]
+  · exact foldr_xor_singleton j a
+  · funext i acc
+    congr 1
+    cases ha_val : a i with
+    | true =>
+      simp only [if_true]
+      rw [parity_symm, L.Xbar_anticomm_Zbar]
+      by_cases hij : i = j
+      · subst hij; simp
+      · simp [hij]
+    | false =>
+      simp only [Bool.false_eq_true, if_false]
+      rw [parity_identity_right']
+      by_cases hij : i = j <;> simp [hij]
+
+/-- ∏_i X̄_i^{a_i} commutes with every stabilizer. -/
+private theorem parity_stab_listX (a : Fin k → Bool) (s : Fin P.numStab) :
+    ErrorVec.parity (P.stabilizers s) (listProd (listXFactors L a)) = false := by
+  rw [parity_listProd]
+  unfold listXFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (P.stabilizers s)
+            (if a i then L.Xbar i else ErrorVec.identity P.n)) acc) =
+          (fun (_ : Fin k) acc => xor false acc) from ?_]
+  · exact foldr_xor_const_false (List.finRange k)
+  · funext i acc
+    by_cases ha : a i
+    · simp [ha, L.Xbar_comm_stab]
+    · simp [ha, parity_identity_right']
+
+/-- ∏_i Z̄_i^{b_i} commutes with every stabilizer. -/
+private theorem parity_stab_listZ (b : Fin k → Bool) (s : Fin P.numStab) :
+    ErrorVec.parity (P.stabilizers s) (listProd (listZFactors L b)) = false := by
+  rw [parity_listProd]
+  unfold listZFactors
+  rw [List.foldr_map]
+  rw [show (fun (i : Fin k) acc =>
+          xor (ErrorVec.parity (P.stabilizers s)
+            (if b i then L.Zbar i else ErrorVec.identity P.n)) acc) =
+          (fun (_ : Fin k) acc => xor false acc) from ?_]
+  · exact foldr_xor_const_false (List.finRange k)
+  · funext i acc
+    by_cases hb : b i
+    · simp [hb, L.Zbar_comm_stab]
+    · simp [hb, parity_identity_right']
+
+/-! ## Main theorem: arbitrary k -/
+
+/-- **Main theorem (general k)**: for any [[n, k]] stabilizer code with k
+    pairs of logical operators (Definition `LogicalOps`), every Pauli E
+    that commutes with every stabilizer is in some logical coset
+    `(X̄^a · Z̄^b) · S`, where `(a, b) ∈ (F₂^k)²`. There are 4^k cosets,
+    exhausting N(S). -/
+theorem normalizer_decomposition_general {P : QECParams} {k : Nat}
+    (L : LogicalOps P k) (E : ErrorVec P.n)
+    (hE : ∀ s, ErrorVec.parity (P.stabilizers s) E = false) :
+    ∃ a b : Fin k → Bool, InStab P (ErrorVec.mul (correctOp L a b) E) := by
+  refine ⟨fun i => ErrorVec.parity (L.Zbar i) E,
+          fun i => ErrorVec.parity (L.Xbar i) E, ?_⟩
+  set a := fun i => ErrorVec.parity (L.Zbar i) E with ha_def
+  set b := fun i => ErrorVec.parity (L.Xbar i) E with hb_def
+  apply L.maximal_isotropic
+  -- (i) commutes with all stabilizers.
+  · intro s
+    unfold correctOp
+    rw [parity_mul_right, parity_mul_right]
+    rw [parity_stab_listX L a s, parity_stab_listZ L b s, hE s]
+    rfl
+  -- (ii) commutes with every X̄_j.
+  · intro j
+    unfold correctOp
+    rw [parity_mul_right, parity_mul_right]
+    rw [parity_Xbar_listX L a j, parity_Xbar_listZ L b j]
+    -- Goal: xor (xor false (b j)) (parity X̄_j E) = false
+    -- Use parity X̄_j E = b j by definition of b.
+    rw [show ErrorVec.parity (L.Xbar j) E = b j from rfl]
+    cases b j <;> rfl
+  -- (iii) commutes with every Z̄_j.
+  · intro j
+    unfold correctOp
+    rw [parity_mul_right, parity_mul_right]
+    rw [parity_Zbar_listX L a j, parity_Zbar_listZ L b j]
+    rw [show ErrorVec.parity (L.Zbar j) E = a j from rfl]
+    cases a j <;> rfl
+
+end General
+
 end QStab.Paper.LogicalCosets
