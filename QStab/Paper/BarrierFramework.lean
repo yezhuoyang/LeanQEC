@@ -5,16 +5,25 @@ import QStab.Examples.SurfaceGeometry
 /-!
 # Logical barrier potential framework (paper §6.5)
 
-Formalisation of the invariant framework introduced in §6.5 of the paper:
-the *logical barrier* μ_L(Ẽ) measures the Pauli distance from the
-accumulated error Ẽ to the closest nontrivial logical operator of type L.
-Under an "L-aligned" schedule, the quantity Φ_L(σ) := μ_L(Ẽ) +
+Formalisation of the invariant framework introduced in §6.5 of the paper.
+A *barrier function* β for logical class L is any nonneg-valued function
+on Pauli errors satisfying the four properties of Definition
+`def:GenericBarrier`: β(I) = d_L, β vanishes on L (one direction only),
+the triangle inequality, and stabilizer-invariance.
+
+Under an "L-aligned" schedule, the quantity Φ_L(σ) := β(Ẽ) +
 (C_budget − C) is a QStab invariant lower-bounded by d_L, which directly
 yields d_circ ≥ d.
 
+The canonical barrier is μ_L(Ẽ) := min{|F| : Ẽ · F ∈ L} (Lemma
+`lem:MuProperties`). Code-specific surrogates such as the perpendicular
+spread `d − ω⊥^X` (surface code) and the column spread `d − ω_col`
+(HGP code) are alternative instances tighter than μ_L for codes with
+weight-≥ 2 hooks.
+
 Goals of this file:
 1. Define the abstract logical-class structure and the barrier-function
-   interface so the framework is code-agnostic.
+   interface (one-direction property (ii)) so the framework is code-agnostic.
 2. Define L-alignment as a predicate on QStab programs.
 3. Prove the main barrier invariant (Theorem `BarrierInv` in the paper)
    from the alignment hypothesis and the QStab transition rules. **Zero
@@ -47,21 +56,25 @@ structure LogicalClass (P : QECParams) where
   /-- Every member has weight at least d_L. -/
   d_L_min : ∀ E, contains E → ErrorVec.weight E ≥ d_L
 
-/-- A *barrier function* `μ` for logical class `L`. Bundles the
-    quantity μ_L(Ẽ) := min{|F| : Ẽ · F ∈ L} together with the four
-    properties that make it useful as an invariant.
+/-- A *barrier function* `μ` for logical class `L`. Matches paper
+    Definition `def:GenericBarrier` (§6.5).
 
-    We do not construct `μ` from the `min` definition explicitly; we
-    take it as an abstract input with its properties as axioms. A
-    concrete instance is provided by code-specific witnesses (e.g.\ the
-    perpendicular-spread function for the surface code). -/
+    Property (ii) is the one-direction relaxation `E ∈ L → μ E = 0`,
+    not the original biconditional `μ E = 0 ↔ E ∈ L`. The relaxation
+    is essential for code-specific surrogates: e.g. the surface code's
+    `β_Z̄ := max(0, d − ω⊥^X)` has `β_Z̄(E) = 0` whenever the
+    perpendicular spread reaches `d`, even when `E` is not actually a
+    logical operator. The full biconditional fails for such surrogates
+    but is not required by either `barrierInvariant` or
+    `distance_preservation` (only the `→` direction is used). -/
 structure BarrierFunction (P : QECParams) (L : LogicalClass P) where
   /-- The barrier value on each error. -/
   mu : ErrorVec P.n → Nat
   /-- Property (i): μ_L(I) = d_L. -/
   mu_identity : mu (ErrorVec.identity P.n) = L.d_L
-  /-- Property (ii): μ_L(E) = 0 iff E ∈ L. -/
-  mu_zero_iff : ∀ E, mu E = 0 ↔ L.contains E
+  /-- Property (ii) (one-direction): if `E` is in the logical class `L`,
+      then the barrier vanishes. The converse is *not* required. -/
+  mu_at_logical : ∀ E, L.contains E → mu E = 0
   /-- Property (iii): triangle inequality.
       μ_L(E · F) ≥ μ_L(E) − |F|, equivalently μ_L(E · F) + |F| ≥ μ_L(E). -/
   mu_triangle : ∀ E F : ErrorVec P.n,
@@ -215,7 +228,7 @@ theorem distance_preservation
   have h_inv : BarrierInvPred μ s :=
     (barrierInvariant μ h_aligned).holds_at_done s hrun
   obtain ⟨h_phi, _h_C⟩ := h_inv
-  have h_mu_zero : μ.mu s.E_tilde = 0 := (μ.mu_zero_iff s.E_tilde).mpr h_in_L
+  have h_mu_zero : μ.mu s.E_tilde = 0 := μ.mu_at_logical s.E_tilde h_in_L
   unfold Phi at h_phi
   rw [h_mu_zero] at h_phi
   omega
@@ -352,7 +365,7 @@ theorem record_aware_distance_preservation
   have h_inv := (cleanRecordInvariant μ spec).holds_at_done s hrun
   obtain ⟨h_phi, _h_C⟩ := h_inv
   have h_D_zero : spec.D s = 0 := spec.D_done_clean s hrun h_clean
-  have h_mu_zero : μ.mu s.E_tilde = 0 := (μ.mu_zero_iff s.E_tilde).mpr h_in_L
+  have h_mu_zero : μ.mu s.E_tilde = 0 := μ.mu_at_logical s.E_tilde h_in_L
   rw [h_mu_zero, h_D_zero] at h_phi
   omega
 
