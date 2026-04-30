@@ -1,27 +1,32 @@
 import QStab.Paper.SurfaceD3Classification
 import QStab.MultiStep
+import QStab.Invariant
 import QStab.Examples.SurfaceCode
 import Mathlib.Tactic.FinCases
+import Mathlib.Tactic.IntervalCases
 
 /-!
-# CleanRecord scheduling: building blocks for `d_circ ≥ 3` (Surface d=3)
+# Operational `d_circ ≥ 3` for a CleanRecord scheduling (Surface d=3)
 
-For a concrete CleanRecord-class scheduling on the [[9,1,3]] surface
-code, this file establishes structural building blocks toward the
-operational lower bound `d_circ ≥ 3`:
+This file completes the d=3 surface scheduling pipeline:
 
-  * a CleanRecord-class QECParams instance `cr_code` whose only
-    Type-II mechanism is a row-spanning bad hook with no matching
-    Type-0/II counterpart;
-  * the verified property `hook_1_5_in_B0`;
-  * a finite-check lemma `cr_no_two_mech_success` showing that no XOR
-    product of ≤ 2 X-only mechanisms (the bad hook plus 9 single-qubit
-    Type-0 X errors) yields a success state.
+  1. `Paper/SurfaceD3Classification.lean` — structural classification.
+  2. `Paper/SurfaceD3OperationalIff.lean` — operational `d_circ ≤ 2` for
+     a Failing instance.
+  3. **This file** — operational `d_circ ≥ 3` for a CleanRecord
+     instance via structural induction over `MultiStep`.
 
-The full operational `d_circ ≥ 3` requires structural induction over
-`MultiStep` plus tracking of E_tilde as a Pauli product of mechanisms
-along the trajectory. That induction is mechanical but requires more
-infrastructure than fits in a single short file.
+## Strategy
+
+  * `cr_code`: a concrete CleanRecord-class QECParams.
+  * `reachableE n`: list of E_tildes reachable in ≤ n budget-consuming
+     Steps (recursive enumeration).
+  * **Bridge invariant** `crReachInv`: every reachable active state has
+    `E_tilde ∈ reachableE (C_budget − C)`. Proved by `Invariant`-style
+    induction with case analysis on each Step constructor.
+  * **Finite check**: no element of `reachableE 2` is a success state.
+  * **Headline**: any 2-fault Run has `E_tilde ∈ reachableE 2` by
+    bridge + monotonicity, hence cannot be a success.
 
 **Zero `sorry`. Standard axioms only.**
 -/
@@ -31,35 +36,22 @@ namespace QStab.Paper.SurfaceD3CleanRecordLowerBound
 open QStab QStab.Examples QStab.Examples.SurfaceD3
      QStab.Paper.SurfaceD3Classification
 
-/-! ## CleanRecord QECParams instance
-
-The bad hook `X_1 X_5` from `s2 = X{1,2,4,5}`:
-  - qubits 1 (row 0) and 5 (row 1) span 2 rows ⇒ bad.
-  - syndrome footprint = (1, 1, 1, 0) (parity vs Z-stabs s1, s4, s6, s7).
-  - L_Z parity = 1 (qubit 1 ∈ {0, 1, 2}).
-
-For Failing membership: would need a Type-0/II mechanism with
-footprint (1, 1, 1, 0) AND L_Z parity 0. No single-qubit Type-0
-in surface d=3 has popcount-3 syndrome footprint. With our minimal
-back-action set (only `hook_1_5`), no Type-II match either.
-
-Hence `cr_code` is in the CleanRecord class. -/
+/-! ## CleanRecord QECParams -/
 
 def hook_1_5 : ErrorVec 9 := ofList [(1, .X), (5, .X)]
 
 def cr_stabilizers : Fin 8 → ErrorVec 9
   | ⟨0, _⟩ => SurfaceD3.s2  -- X-bulk: X{1,2,4,5}
-  | ⟨1, _⟩ => SurfaceD3.s1  -- Z-bulk: Z{0,1,3,4}
-  | ⟨2, _⟩ => SurfaceD3.s3  -- X-bulk: X{3,4,6,7}
-  | ⟨3, _⟩ => SurfaceD3.s4  -- Z-bulk: Z{4,5,7,8}
-  | ⟨4, _⟩ => SurfaceD3.s5  -- X-boundary: X{0,1}
-  | ⟨5, _⟩ => SurfaceD3.s6  -- Z-boundary: Z{2,5}
-  | ⟨6, _⟩ => SurfaceD3.s7  -- Z-boundary: Z{3,6}
-  | ⟨7, _⟩ => SurfaceD3.s8  -- X-boundary: X{7,8}
+  | ⟨1, _⟩ => SurfaceD3.s1
+  | ⟨2, _⟩ => SurfaceD3.s3
+  | ⟨3, _⟩ => SurfaceD3.s4
+  | ⟨4, _⟩ => SurfaceD3.s5
+  | ⟨5, _⟩ => SurfaceD3.s6
+  | ⟨6, _⟩ => SurfaceD3.s7
+  | ⟨7, _⟩ => SurfaceD3.s8
 
-def cr_backActionSet : Fin 8 → Set (ErrorVec 9)
-  | ⟨0, _⟩ => {hook_1_5}
-  | _ => ∅
+def cr_backActionSet (s : Fin 8) : Set (ErrorVec 9) :=
+  if s.val = 0 then {hook_1_5} else ∅
 
 def cr_code : QECParams where
   n := 9; k := 1; d := 3; R := 1; numStab := 8
@@ -77,106 +69,247 @@ def cr_code : QECParams where
   hns := by omega
   hR := by omega
 
-theorem hook_1_5_in_B0 : hook_1_5 ∈ cr_code.backActionSet ⟨0, by decide⟩ := by
-  show hook_1_5 ∈ cr_backActionSet ⟨0, by decide⟩
-  simp [cr_backActionSet]
+/-! ## Reachable E_tilde enumeration -/
 
-/-! ## The bad hook's QStab-level signature
+/-- All E_tildes reachable from identity after up to `n` budget-consuming
+    Steps. Steps that don't change E_tilde (Type-3, measure) leave the
+    set unchanged. Type-0/1 update one qubit; Type-2 multiplies by the
+    hook (the only Type-II mech in `cr_code`). -/
+def reachableE : Nat → List (ErrorVec 9)
+  | 0 => [ErrorVec.identity 9]
+  | n+1 =>
+    let prev := reachableE n
+    let t01_ext : List (ErrorVec 9) :=
+      (List.finRange 9).flatMap fun i =>
+        [Pauli.X, Pauli.Y, Pauli.Z].flatMap fun p =>
+          prev.map fun e => ErrorVec.update e i p
+    let t2_ext : List (ErrorVec 9) :=
+      prev.map fun e => ErrorVec.mul hook_1_5 e
+    prev ++ t01_ext ++ t2_ext
 
-We verify the syndrome footprint and L_Z parity of `hook_1_5` against
-the stabilisers of `cr_code` directly. -/
+/-- Identity is always reachable. -/
+theorem identity_in_reachableE (n : Nat) :
+    ErrorVec.identity 9 ∈ reachableE n := by
+  induction n with
+  | zero => simp [reachableE]
+  | succ n ih =>
+    show ErrorVec.identity 9 ∈ reachableE (n+1)
+    simp only [reachableE, List.mem_append]
+    left; left; exact ih
 
-theorem hook_1_5_syndrome_at_s1 :
-    ErrorVec.parity (cr_stabilizers ⟨1, by decide⟩) hook_1_5 = true := by
-  native_decide
+/-- Monotonicity: `reachableE n ⊆ reachableE (n+1)`. -/
+theorem reachableE_mono (n : Nat) (e : ErrorVec 9)
+    (h : e ∈ reachableE n) : e ∈ reachableE (n+1) := by
+  show e ∈ reachableE (n+1)
+  simp only [reachableE, List.mem_append]
+  left; left; exact h
 
-theorem hook_1_5_syndrome_at_s4 :
-    ErrorVec.parity (cr_stabilizers ⟨3, by decide⟩) hook_1_5 = true := by
-  native_decide
+/-- Type-0/1 extension: for any prev e in reachableE n and any qubit i
+    and any non-identity Pauli p, `update e i p ∈ reachableE (n+1)`. -/
+theorem reachableE_t01 (n : Nat) (e : ErrorVec 9) (i : Fin 9) (p : Pauli)
+    (h : e ∈ reachableE n) (hp : p = .X ∨ p = .Y ∨ p = .Z) :
+    ErrorVec.update e i p ∈ reachableE (n+1) := by
+  show ErrorVec.update e i p ∈ reachableE (n+1)
+  simp only [reachableE, List.mem_append]
+  left; right
+  apply List.mem_flatMap.mpr
+  refine ⟨i, List.mem_finRange i, ?_⟩
+  apply List.mem_flatMap.mpr
+  refine ⟨p, ?_, ?_⟩
+  · rcases hp with hp | hp | hp <;> subst hp <;> simp
+  · apply List.mem_map.mpr
+    exact ⟨e, h, rfl⟩
 
-theorem hook_1_5_syndrome_at_s6 :
-    ErrorVec.parity (cr_stabilizers ⟨5, by decide⟩) hook_1_5 = true := by
-  native_decide
+/-- Type-2 extension: `mul hook_1_5 e ∈ reachableE (n+1)`. -/
+theorem reachableE_t2 (n : Nat) (e : ErrorVec 9)
+    (h : e ∈ reachableE n) :
+    ErrorVec.mul hook_1_5 e ∈ reachableE (n+1) := by
+  show ErrorVec.mul hook_1_5 e ∈ reachableE (n+1)
+  simp only [reachableE, List.mem_append]
+  right
+  apply List.mem_map.mpr
+  exact ⟨e, h, rfl⟩
 
-theorem hook_1_5_lz_parity :
-    ErrorVec.parity SurfaceD3.logicalZ hook_1_5 = true := by
-  native_decide
+/-! ## The bridge invariant -/
 
-/-! ## CleanRecord property: no two-mechanism XOR is success
+/-- Predicate: `s.E_tilde` is in the reachable set for the budget
+    consumed so far. -/
+def crReachInvPred (s : State cr_code) : Prop :=
+  s.E_tilde ∈ reachableE (cr_code.C_budget - s.C) ∧ s.C ≤ cr_code.C_budget
 
-The QStab fault mechanisms relevant for `cr_code`'s `E_tilde`:
-  * Type-0 single-qubit X on qubit 0..8 (9 mechanisms).
-  * Type-II hook `hook_1_5` (1 mechanism).
+/-- Initial state satisfies the invariant. -/
+theorem crReachInv_init :
+    crReachInvPred (State.init cr_code) := by
+  refine ⟨?_, ?_⟩
+  · show (State.init cr_code).E_tilde ∈
+          reachableE (cr_code.C_budget - (State.init cr_code).C)
+    have h1 : (State.init cr_code).E_tilde = ErrorVec.identity 9 := rfl
+    have h2 : cr_code.C_budget - (State.init cr_code).C = 0 := by
+      show cr_code.C_budget - cr_code.C_budget = 0; omega
+    rw [h1, h2]
+    show ErrorVec.identity 9 ∈ reachableE 0
+    simp [reachableE]
+  · show (State.init cr_code).C ≤ cr_code.C_budget
+    show cr_code.C_budget ≤ cr_code.C_budget
+    omega
 
-(Type-III doesn't change `E_tilde`, so doesn't contribute to
-mechanism counting. Y/Z faults DO contribute X-component as well as
-Z-component, but for the L_Z-flipping question only X-component
-matters; Y is treated as "X with extra Z baggage" that only adds
-syndrome constraints.)
+/-- Step preservation: if `s` satisfies the invariant and Step takes
+    `s → s'`, then `s'` satisfies the invariant. -/
+theorem crReachInv_preserve (s s' : State cr_code)
+    (h_inv : crReachInvPred s)
+    (hstep : Step cr_code (.active s) (.active s')) :
+    crReachInvPred s' := by
+  obtain ⟨h_in, h_C⟩ := h_inv
+  set n := cr_code.C_budget - s.C
+  cases hstep with
+  | type0 _ i p hp _ =>
+    refine ⟨?_, ?_⟩
+    · -- s'.E_tilde = update s.E_tilde i p, s'.C = s.C - 1
+      -- New budget consumed = n + 1
+      have h_n' : cr_code.C_budget - (s.C - 1) = n + 1 := by
+        show cr_code.C_budget - (s.C - 1) = (cr_code.C_budget - s.C) + 1
+        omega
+      show ErrorVec.update s.E_tilde i p ∈ reachableE (cr_code.C_budget - (s.C - 1))
+      rw [h_n']
+      have hp_cases : p = .X ∨ p = .Y ∨ p = .Z := by
+        cases p with
+        | I => exact absurd rfl hp
+        | X => left; rfl
+        | Y => right; left; rfl
+        | Z => right; right; rfl
+      exact reachableE_t01 n s.E_tilde i p h_in hp_cases
+    · show s.C - 1 ≤ cr_code.C_budget; omega
+  | type1 _ i p hp _ _ =>
+    refine ⟨?_, ?_⟩
+    · have h_n' : cr_code.C_budget - (s.C - 1) = n + 1 := by
+        show cr_code.C_budget - (s.C - 1) = (cr_code.C_budget - s.C) + 1
+        omega
+      show ErrorVec.update s.E_tilde i p ∈ reachableE (cr_code.C_budget - (s.C - 1))
+      rw [h_n']
+      have hp_cases : p = .X ∨ p = .Y ∨ p = .Z := by
+        cases p with
+        | I => exact absurd rfl hp
+        | X => left; rfl
+        | Y => right; left; rfl
+        | Z => right; right; rfl
+      exact reachableE_t01 n s.E_tilde i p h_in hp_cases
+    · show s.C - 1 ≤ cr_code.C_budget; omega
+  | type2 _ e he _ _ =>
+    refine ⟨?_, ?_⟩
+    · -- e ∈ cr_backActionSet s.coord.x. For coord.x = 0: e = hook_1_5.
+      -- For coord.x ≠ 0: contradiction.
+      have h_n' : cr_code.C_budget - (s.C - 1) = n + 1 := by
+        show cr_code.C_budget - (s.C - 1) = (cr_code.C_budget - s.C) + 1
+        omega
+      show ErrorVec.mul e s.E_tilde ∈ reachableE (cr_code.C_budget - (s.C - 1))
+      rw [h_n']
+      -- Case analysis on s.coord.x: backActionSet is non-empty only at coord.x = 0.
+      have h_e : e = hook_1_5 := by
+        change e ∈ cr_backActionSet s.coord.x at he
+        unfold cr_backActionSet at he
+        by_cases h_x : s.coord.x.val = 0
+        · rw [if_pos h_x] at he
+          exact he
+        · exfalso
+          rw [if_neg h_x] at he
+          exact he
+      rw [h_e]
+      exact reachableE_t2 n s.E_tilde h_in
+    · show s.C - 1 ≤ cr_code.C_budget; omega
+  | type3 _ _ =>
+    refine ⟨?_, ?_⟩
+    · -- E_tilde unchanged, but budget consumed grows by 1.
+      have h_n' : cr_code.C_budget - (s.C - 1) = n + 1 := by
+        show cr_code.C_budget - (s.C - 1) = (cr_code.C_budget - s.C) + 1
+        omega
+      show s.E_tilde ∈ reachableE (cr_code.C_budget - (s.C - 1))
+      rw [h_n']
+      exact reachableE_mono n s.E_tilde h_in
+    · show s.C - 1 ≤ cr_code.C_budget; omega
+  | measure _ nc _ =>
+    refine ⟨?_, ?_⟩
+    · -- E_tilde unchanged, C unchanged.
+      show (measureStep cr_code s nc).E_tilde ∈
+            reachableE (cr_code.C_budget - (measureStep cr_code s nc).C)
+      rw [measureStep_E_tilde, measureStep_C]
+      exact h_in
+    · show (measureStep cr_code s nc).C ≤ cr_code.C_budget
+      rw [measureStep_C]; exact h_C
 
-The CleanRecord property: no XOR product of ≤ 2 X-component mechanisms
-yields a success state. Verified by `decide` over the finite list. -/
+/-- The bridge invariant. -/
+def crReachInv : Invariant cr_code where
+  holds := crReachInvPred
+  holds_init := crReachInv_init
+  preservation := crReachInv_preserve
 
-/-- Type-0 X on qubit `q`: an `ErrorVec` with X at `q`, identity
-    elsewhere. -/
-def t0_X (q : Fin 9) : ErrorVec 9 :=
-  ErrorVec.update (ErrorVec.identity 9) q .X
+/-- Bridge: every reachable active state's `E_tilde` is in
+    `reachableE (C_budget − C)`. -/
+theorem cr_etilde_in_reachableE (s : State cr_code)
+    (hreach : MultiStep cr_code (.active (State.init cr_code)) (.active s)) :
+    s.E_tilde ∈ reachableE (cr_code.C_budget - s.C) :=
+  (crReachInv.holds_of_reachable s hreach).1
 
-/-- The 10 X-component fault mechanisms for `cr_code`: 9 Type-0 X
-    errors + the bad hook. -/
-def cr_x_mechs : List (ErrorVec 9) :=
-  hook_1_5 ::
-    [t0_X ⟨0, by decide⟩, t0_X ⟨1, by decide⟩, t0_X ⟨2, by decide⟩,
-     t0_X ⟨3, by decide⟩, t0_X ⟨4, by decide⟩, t0_X ⟨5, by decide⟩,
-     t0_X ⟨6, by decide⟩, t0_X ⟨7, by decide⟩, t0_X ⟨8, by decide⟩]
+/-! ## Finite check: no element of reachableE 2 is success -/
 
-/-- Success state: zero syndrome with all 8 stabs, non-trivial L_Z. -/
 def isSuccessState (E : ErrorVec 9) : Bool :=
   ((List.finRange 8).all fun i =>
     ErrorVec.parity (cr_stabilizers i) E = false) &&
   ErrorVec.parity SurfaceD3.logicalZ E
 
-theorem cr_identity_not_success :
-    isSuccessState (ErrorVec.identity 9) = false := by native_decide
-
-theorem cr_no_one_fault_success :
-    cr_x_mechs.all (fun m => !(isSuccessState m)) = true := by
+theorem reachableE_2_not_success :
+    (reachableE 2).all (fun E => !(isSuccessState E)) = true := by
   native_decide
 
-theorem cr_no_two_fault_success :
-    cr_x_mechs.all (fun m1 =>
-      cr_x_mechs.all (fun m2 =>
-        !(isSuccessState (ErrorVec.mul m1 m2)))) = true := by
-  native_decide
+/-! ## Headline: operational d_circ ≥ 3 -/
 
-/-! ## Summary
+/-- **Operational `d_circ ≥ 3` for our concrete CleanRecord scheduling.**
 
-This file establishes:
+    For any QStab `MultiStep` Run from `σ_init` reaching an active state
+    `s` with budget consumed ≤ 2, `s.E_tilde` is NOT a success state
+    (zero syndrome with all stabs AND non-trivial L_Z parity).
 
-  * `cr_code` is a concrete CleanRecord-class QECParams instance.
-  * `hook_1_5_in_B0`: the bad hook is in the back-action set.
-  * `hook_1_5_syndrome_*`, `hook_1_5_lz_parity`: the bad hook's QStab
-    parities against Z-stabs and L_Z (matches the structural-classifier
-    expectation: footprint = (1,1,1,0), L_Z parity = 1).
-  * `cr_no_one_fault_success`, `cr_no_two_fault_success`: the finite
-    check ruling out 1- or 2-mechanism XOR success products.
+    Equivalently: every successful Run consumes ≥ 3 budget.
 
-These are the QStab-level building blocks for proving operational
-`d_circ ≥ 3` for `cr_code`. The remaining work — a structural
-induction over `MultiStep` showing that any reachable state's
-`E_tilde` is a ≤k-mechanism XOR product (k = budget consumed) — is
-mechanical and is left to a follow-up file.
-
-When the induction is in place, the operational lower bound follows:
-
-  ∀ s : State cr_code,
-    MultiStep cr_code (.active (State.init cr_code)) (.active s) →
-    cr_code.C_budget - s.C ≤ 2 →
-    isSuccessState s.E_tilde = false
-
-i.e., operational `d_circ(cr_code) ≥ 3`. Combined with the Failing-class
-2-fault witness in `Paper/SurfaceD3OperationalIff.lean`, this completes
-the operational iff classification at the level required.
--/
+    This is the QStab-native operational lower bound for the
+    CleanRecord-class scheduling. Pure code geometry (L-aligned barrier
+    `μ_L`) cannot give this bound because the bad hook breaks
+    L-alignment. The proof uses QStab's measurement-aware semantics
+    plus a finite enumeration of reachable E_tildes — exactly the
+    QStab-vs-geometry distinction at the operational level. -/
+theorem cr_op_d_circ_ge_3 :
+    ∀ (s : State cr_code),
+      MultiStep cr_code (.active (State.init cr_code)) (.active s) →
+      cr_code.C_budget - s.C ≤ 2 →
+      isSuccessState s.E_tilde = false := by
+  intro s hreach hbudget
+  -- Bridge: s.E_tilde ∈ reachableE (C_budget - s.C).
+  have h_in : s.E_tilde ∈ reachableE (cr_code.C_budget - s.C) :=
+    cr_etilde_in_reachableE s hreach
+  -- Lift to reachableE 2 via monotonicity.
+  have h_in_2 : s.E_tilde ∈ reachableE 2 := by
+    -- C_budget - s.C ≤ 2, so reachableE (C_budget - s.C) ⊆ reachableE 2.
+    have h_le : cr_code.C_budget - s.C ≤ 2 := hbudget
+    -- Apply reachableE_mono (2 - (C_budget - s.C)) times.
+    rcases Nat.lt_or_ge (cr_code.C_budget - s.C) 2 with hlt | hge
+    · -- < 2: apply mono 2 - (C_budget - s.C) times. We do 1 or 2 lifts.
+      rcases Nat.lt_or_ge (cr_code.C_budget - s.C) 1 with hlt' | hge'
+      · -- = 0: lift twice.
+        have : cr_code.C_budget - s.C = 0 := by omega
+        rw [this] at h_in
+        exact reachableE_mono _ _ (reachableE_mono _ _ h_in)
+      · -- = 1: lift once.
+        have : cr_code.C_budget - s.C = 1 := by omega
+        rw [this] at h_in
+        exact reachableE_mono _ _ h_in
+    · -- = 2: already in.
+      have : cr_code.C_budget - s.C = 2 := by omega
+      rw [this] at h_in
+      exact h_in
+  -- Combine with finite check.
+  have h_all := reachableE_2_not_success
+  rw [List.all_eq_true] at h_all
+  have h_check := h_all s.E_tilde h_in_2
+  simp at h_check
+  exact h_check
 
 end QStab.Paper.SurfaceD3CleanRecordLowerBound
