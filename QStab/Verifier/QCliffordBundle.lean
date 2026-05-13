@@ -195,4 +195,31 @@ theorem QCliffordFTBundle.runFinal_no_failure (b : QCliffordFTBundle)
 example : ¬ cnotPairBundle.failure cnotPairBundle.runFinal :=
   cnotPairBundle.runFinal_no_failure cnotPair_verified
 
+/-! ## Phase 4 placeholder: `compileBundle`
+
+`compileBundle : QStabFTBundle → QCliffordFTBundle` is the TAL-style
+proof-preserving compilation: take a source-level (QStab) bundle and
+produce a gate-level (QClifford) bundle that the QClifford verifier
+accepts.
+
+**Status (iter 15)**: stub. The signature is fixed but the body
+returns `trivialQCliffordBundle` for any input — i.e., this is a
+non-informative compilation. Future iters refine the body:
+
+  * Iter 16: connect `nq := source.P.n` and lift `failure` from
+    `ErrorVec source.P.n → Prop` to `ErrorState source.P.n → Prop`.
+  * Iter 17 (deferred per iter 13 finding): bridge `invHolds` via a
+    QStab Step ↔ QClifford Gate correspondence — requires building
+    or formalizing a verified QStab-to-QClifford circuit translation
+    that doesn't currently exist in `QStab.Compiler`.
+
+The `compileBundle_preserves_verify` theorem (final TAL deliverable)
+is also deferred until iter 17's lifting is in place. -/
+
+/-- Stub: `compileBundle` returning the trivial QClifford bundle for
+    any input. This pins the type signature; iters 16+ refine the
+    body. -/
+def compileBundle (_ : QStabFTBundle) : QCliffordFTBundle :=
+  trivialQCliffordBundle
+
 end QStab.Verifier
