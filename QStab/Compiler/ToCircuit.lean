@@ -1,0 +1,97 @@
+import QStab.Compiler
+import QStab.QClifford.Standard
+import QStab.Paper.Bridge
+import QStab.Paper.Soundness
+
+/-! # QStab.Compiler.ToCircuit — single-stabilizer gate-level compilation
+
+Session 2 / Phase A2 entry point. Provides
+`toCircuitStabilizerX : (spec : CodeSpec) → Fin spec.numStab → Circuit (spec.n + 1)`
+which produces the standard CNOT syndrome-extraction circuit
+(`Standard.xCircuit`) for one X-stabilizer of `spec`.
+
+## Design choice (iter A2)
+
+`xCircuit n support : Circuit (n + 1)` operates on **n data qubits + 1
+ancilla** at index `n`. Per-stabilizer compilation therefore uses one
+shared ancilla slot. Multi-stabilizer composition (iter A4+) will run
+each per-stabilizer gadget back-to-back, relying on the fact that each
+gadget starts with `prepPlus`/`prepZero` on the ancilla, which resets
+any leftover ancilla state.
+
+The number of qubits in the compiled bundle is therefore `spec.n + 1`,
+not `spec.n`. The existing `compileBundle` in
+`QStab/Verifier/QCliffordBundle.lean` uses `nq := b.P.n`; that field
+will be updated to `nq := b.P.n + 1` in Phase C (iter C1).
+
+## Connection to `qstab_sound`
+
+For each single-stabilizer compilation, `qstab_sound` (in
+`Paper/Soundness.lean`) gives a fault-classification guarantee
+**provided** the resulting circuit satisfies `SchemeCorrect`. We do not
+yet prove `SchemeCorrect (toCircuitStabilizerX spec s) T_s r` — that is
+the work of iters A3 (proving C1: parityFaithful), A4 (C2:
+noBackAction), and the existing `Standard.weight_bounded` already
+discharges C3. The statement-level corollary
+`toCircuitStabilizerX_qstab_sound` here records the *contract* under
+that future hypothesis.
+-/
+
+namespace QStab.Compiler
+
+open QStab QStab.QClifford QStab.QClifford.Standard QStab.Paper QStab.Paper.Soundness
+
+/-- The X-side syndrome-extraction circuit for stabilizer `s` of
+    `spec`. Thin wrapper over `Standard.xCircuit` applied to the
+    stabilizer's gate ordering. Ancilla is at qubit index `spec.n`. -/
+def toCircuitStabilizerX (spec : CodeSpec) (s : Fin spec.numStab) :
+    Circuit (spec.n + 1) :=
+  xCircuit spec.n (spec.gateOrdering s)
+
+/-- The Z-side syndrome-extraction circuit for stabilizer `s` of
+    `spec`. Symmetric to `toCircuitStabilizerX` but with CNOTs reversed
+    (data → ancilla). -/
+def toCircuitStabilizerZ (spec : CodeSpec) (s : Fin spec.numStab) :
+    Circuit (spec.n + 1) :=
+  zCircuit spec.n (spec.gateOrdering s)
+
+/-- **Length smoke-check (X-side)**: a single X-stabilizer's circuit
+    has exactly `|gateOrdering s| + 3` gates — one `prepPlus`,
+    `|gateOrdering|` CNOTs, one `hadamard`, one `measZ`. -/
+theorem toCircuitStabilizerX_length (spec : CodeSpec) (s : Fin spec.numStab) :
+    (toCircuitStabilizerX spec s).length = (spec.gateOrdering s).length + 3 := by
+  unfold toCircuitStabilizerX xCircuit
+  simp [List.length_append, List.length_map]
+
+/-- **Length smoke-check (Z-side)**: similar but no `hadamard`, so
+    `|gateOrdering s| + 2`. -/
+theorem toCircuitStabilizerZ_length (spec : CodeSpec) (s : Fin spec.numStab) :
+    (toCircuitStabilizerZ spec s).length = (spec.gateOrdering s).length + 2 := by
+  unfold toCircuitStabilizerZ zCircuit
+  simp [List.length_append, List.length_map]
+
+/-- **Conditional fault-classification corollary (X-side)**: if the
+    per-stabilizer circuit satisfies `SchemeCorrect` for measuring
+    `T_s` with hook-weight bound `r`, then every single fault classifies
+    via `paperType` into a QStab transition `matchesQStab`-compatible
+    with the observed data error and measurement flip. This is
+    `qstab_sound` instantiated at our `toCircuitStabilizerX`.
+
+    The `SchemeCorrect` hypothesis is discharged in iters A3/A4
+    (parityFaithful + noBackAction); C3 follows from
+    `Standard.weight_bounded`. -/
+theorem toCircuitStabilizerX_qstab_sound (spec : CodeSpec) (s : Fin spec.numStab)
+    (r : Nat)
+    (h_correct : SchemeCorrect (toCircuitStabilizerX spec s) (spec.stabilizers s) r)
+    (fault : Fault (spec.n + 1)) :
+    matchesQStab
+      (paperType spec.n (computeFaultEffect (toCircuitStabilizerX spec s) fault))
+      (dataPauli (computeFaultEffect (toCircuitStabilizerX spec s) fault))
+      (measFlipped spec.n (computeFaultEffect (toCircuitStabilizerX spec s) fault))
+    ∧
+    (paperType spec.n (computeFaultEffect (toCircuitStabilizerX spec s) fault) = .type2 →
+      ErrorVec.weight
+        (dataPauli (computeFaultEffect (toCircuitStabilizerX spec s) fault)) ≤ r) :=
+  qstab_sound (toCircuitStabilizerX spec s) (spec.stabilizers s) r h_correct fault
+
+end QStab.Compiler
