@@ -539,4 +539,35 @@ theorem parity_Xstabilizer_nil {n : Nat} [NeZero n] (E : ErrorVec n) :
     simp [Pauli.anticommutes]
   rw [h]; rfl
 
+/-- The filter set for `Xstab (q :: rest)` decomposes as a disjoint
+    union of the rest's filter set and a (possibly empty) singleton
+    `{q}` — under the hypothesis `q ∉ rest`. -/
+theorem Xstabilizer_filter_cons {n : Nat} (q : Fin n) (rest : List (Fin n))
+    (h_nm : q ∉ rest) (E : ErrorVec n) :
+    (Finset.univ.filter
+      (fun i : Fin n => Pauli.anticommutes (Xstabilizer (q :: rest) i) (E i))) =
+    (Finset.univ.filter
+      (fun i : Fin n => Pauli.anticommutes (Xstabilizer rest i) (E i)))
+    ∪ (if zPart (E q) = Pauli.Z then ({q} : Finset (Fin n)) else ∅) := by
+  ext i
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_union,
+             Finset.mem_singleton]
+  rw [anticommutes_Xstabilizer_eq, anticommutes_Xstabilizer_eq]
+  by_cases hiq : i = q
+  · subst hiq
+    simp [h_nm]
+    by_cases hz : zPart (E i) = Pauli.Z
+    · simp [hz]
+    · simp [hz]
+  · have hir : (i ∈ q :: rest) ↔ (i ∈ rest) := by
+      simp [hiq]
+    simp [hir, hiq]
+    by_cases himem : i ∈ rest
+    · by_cases hz : zPart (E i) = Pauli.Z
+      · simp [himem, hz]
+      · simp [himem, hz]
+        split_ifs <;> simp [hiq]
+    · simp [himem]
+      split_ifs <;> simp [hiq]
+
 end QStab.Compiler.SchemeCorrectStandard
