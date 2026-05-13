@@ -59,35 +59,71 @@ namespace QStab.Verifier
 
 open QStab QStab.QClifford
 
-/-- Gate-level fault-tolerance certificate (Phase 3 sketch — to be
-    refined as we work out the per-gate annotation discipline). -/
+/-- Gate-level fault-tolerance certificate.
+
+    Mirrors `QStabFTBundle` exactly but at the QClifford layer:
+    the state is `ErrorState nq` (per-qubit Pauli + measurement
+    flips) instead of `State P`, and the dynamic invariant is given
+    by `invHolds` (a single predicate preserved by every gate
+    transition, analog of `Invariant.holds`).
+
+    The `preservation` field is the TAL-style per-instruction typing
+    rule: for any gate `g` and pre-state `es` satisfying `invHolds`,
+    the post-state `propagateGate g es` also satisfies `invHolds`.
+    The verifier can then walk the circuit and inductively conclude
+    that `invHolds` survives to the post-circuit state. -/
 structure QCliffordFTBundle where
   /-- Number of qubits the circuit operates on. -/
   nq      : Nat
   /-- The gate-level circuit. -/
   circuit : Circuit nq
-  /-- Failure predicate on the final accumulated error. -/
-  failure : ErrorVec nq → Prop
-  /-- Per-gate-location annotation. `gateInv 0` holds at the
-      circuit's input (identity error); `gateInv circuit.length`
-      holds after the final gate. -/
-  gateInv : ∀ (i : Fin (circuit.length + 1)), ErrorVec nq → Prop
+  /-- Failure predicate on the final accumulated error state. -/
+  failure : ErrorState nq → Prop
+  /-- Dynamic gate-level invariant (single predicate, preserved by
+      every Pauli-propagation step). -/
+  invHolds : ErrorState nq → Prop
+  /-- Holds for the initial clean error state. -/
+  init    : invHolds (ErrorState.clean nq)
+  /-- Preserved by every gate's Pauli propagation. -/
+  preservation : ∀ (g : Gate nq) (es : ErrorState nq),
+                   invHolds es → invHolds (propagateGate g es)
   /-- Decidable side-condition. -/
   static  : Bool
-  /-- The bridge: static + post-circuit invariant ⇒ no failure on
-      the final accumulated error.
-
-      (Per-gate preservation will be a separate field once we settle
-      the gate-level Pauli propagation API in iters 11+.) -/
+  /-- The bridge: static + invariant on the final state ⇒ no failure. -/
   bridge  : static = true →
-            ∀ E : ErrorVec nq,
-              gateInv ⟨circuit.length, Nat.lt_succ_self _⟩ E →
-              ¬ failure E
+            ∀ es : ErrorState nq, invHolds es → ¬ failure es
 
-/-- The verifier (Phase 3 sketch — currently just returns `static`).
-    A full per-gate check pass will be added once the annotation
-    preservation rule is defined. -/
+/-- The verifier currently returns `static`. A full per-gate walk is
+    unnecessary in the bundle's metatheory because `preservation` is
+    a structural field — its mere existence as a Lean term proves the
+    per-gate check. (A `walk` function returning `Bool` will be added
+    for the *standalone tool* in Phase 5; it's just for ergonomics,
+    not metatheory.) -/
 def verifyQClifford (b : QCliffordFTBundle) : Bool := b.static
+
+/-- The invariant survives the entire circuit: if `b.invHolds` holds
+    at the start, it holds after propagating through any prefix of
+    the circuit. This is the inductive lift of `preservation` to
+    multi-gate sequences. -/
+theorem QCliffordFTBundle.invHolds_propagate (b : QCliffordFTBundle)
+    (gs : Circuit b.nq) (es : ErrorState b.nq) :
+    b.invHolds es → b.invHolds (propagateCircuit gs es) := by
+  induction gs generalizing es with
+  | nil => intro h; exact h
+  | cons g gs ih => intro h; exact ih _ (b.preservation g es h)
+
+/-- **Generic soundness theorem** at the QClifford layer. If the
+    verifier accepts the bundle, then for any prefix of the circuit
+    starting from the clean state, the failure predicate fails on
+    the propagated error state. -/
+theorem verifyQClifford_sound (b : QCliffordFTBundle)
+    (h : verifyQClifford b = true) :
+    ∀ gs : Circuit b.nq,
+      ¬ b.failure (propagateCircuit gs (ErrorState.clean b.nq)) := by
+  intro gs
+  have hinv : b.invHolds (propagateCircuit gs (ErrorState.clean b.nq)) :=
+    b.invHolds_propagate gs _ b.init
+  exact b.bridge h _ hinv
 
 /-- Trivial bundle: no qubits, empty circuit, no failure. Sanity
     check that the structure compiles. -/
@@ -95,7 +131,9 @@ def trivialQCliffordBundle : QCliffordFTBundle where
   nq      := 0
   circuit := []
   failure := fun _ => False
-  gateInv := fun _ _ => True
+  invHolds := fun _ => True
+  init    := trivial
+  preservation := fun _ _ _ => trivial
   static  := true
   bridge  := fun _ _ _ hf => hf
 
