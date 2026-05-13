@@ -1,6 +1,7 @@
 import QStab.Invariant
 import QStab.MultiStep
 import QStab.PauliOps
+import QStab.Paper.GenericReachableBridge
 
 /-!
 # Fault-tolerance verifier (QStab level)
@@ -121,5 +122,53 @@ example (P : QECParams) (s : State P)
     (hreach : MultiStep P (.active (State.init P)) (.active s)) :
     ¬ (trivialBundle P).failure s.E_tilde :=
   verifyQStab_sound (trivialBundle P) rfl s hreach
+
+/-! ## Generic bundle constructor: reachable-set + static finite check
+
+A reusable constructor that packages any QECParams equipped with:
+  * a hook-upper-bound list (`allHooks`);
+  * a `hooksUpperBound` proof;
+  * a `Bool`-valued failure predicate;
+  * a static finite check `∀ E ∈ reachableE allHooks C_budget, isSuccess E = false`
+into a `QStabFTBundle`. The dynamic invariant is the generic `reachInv` from
+`GenericReachableBridge`; the bridge composes mono-lifting of the depth with
+the finite check.
+
+This is the canonical packaging for all codes whose distance proof factors
+through `nonSuccess_op_d_circ_ge_d` (BB72 SE X-side, surface code, HGP code,
+etc.). Code-specific bundles become one-liners.
+-/
+
+open QStab.Paper.GenericReachableBridge in
+/-- Package any (QECParams, allHooks, hooks-upper-bound, isSuccess, finite-check)
+    tuple into a `QStabFTBundle`. -/
+def QStabFTBundle.ofReachInv
+    (P : QECParams)
+    (allHooks : List (ErrorVec P.n))
+    (h_bound : hooksUpperBound P allHooks)
+    (isSuccess : ErrorVec P.n → Bool)
+    (h_finite : ∀ E ∈ reachableE allHooks P.C_budget, isSuccess E = false) :
+    QStabFTBundle where
+  P       := P
+  failure := fun E => isSuccess E = true
+  inv     := reachInv P allHooks h_bound
+  static  := true
+  bridge  := fun _ s hinv hfail => by
+    obtain ⟨h_in, _h_C⟩ := hinv
+    have h_le : P.C_budget - s.C ≤ P.C_budget := Nat.sub_le _ _
+    have h_in_full : s.E_tilde ∈ reachableE allHooks P.C_budget :=
+      reachableE_mono_le allHooks h_le _ h_in
+    have h_no : isSuccess s.E_tilde = false := h_finite s.E_tilde h_in_full
+    rw [h_no] at hfail
+    exact Bool.false_ne_true hfail
+
+open QStab.Paper.GenericReachableBridge in
+theorem QStabFTBundle.ofReachInv_verified
+    (P : QECParams)
+    (allHooks : List (ErrorVec P.n))
+    (h_bound : hooksUpperBound P allHooks)
+    (isSuccess : ErrorVec P.n → Bool)
+    (h_finite : ∀ E ∈ reachableE allHooks P.C_budget, isSuccess E = false) :
+    verifyQStab (QStabFTBundle.ofReachInv P allHooks h_bound isSuccess h_finite) = true := rfl
 
 end QStab.Verifier
