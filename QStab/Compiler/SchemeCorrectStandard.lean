@@ -182,4 +182,82 @@ theorem cnot_anc_to_data_anc_paulis {n : Nat} (q : Fin n)
   rw [if_neg h_ne]
   simp
 
+/-- Symbolic accumulation of zPart contributions across a list of
+    support qubits. Inner CNOTs in the chain multiply the ancilla by
+    `zPart (E q)` for each `q ∈ qs`. We use `foldr` (right-fold): for
+    `qs = [q₀, q₁, q₂]`, the result is
+    `pauliMul (zPart (E q₀)) (pauliMul (zPart (E q₁)) (pauliMul (zPart (E q₂)) I))`.
+    Since `zPart` values are in `{I, Z}` and these commute, the
+    associativity order doesn't matter. -/
+def productZPart {n : Nat} (qs : List (Fin n)) (E : ErrorVec n) : Pauli :=
+  qs.foldr (fun q acc => pauliMul (zPart (E q)) acc) Pauli.I
+
+@[simp] theorem productZPart_nil {n : Nat} (E : ErrorVec n) :
+    productZPart ([] : List (Fin n)) E = Pauli.I := rfl
+
+@[simp] theorem productZPart_cons {n : Nat} (q : Fin n) (qs : List (Fin n))
+    (E : ErrorVec n) :
+    productZPart (q :: qs) E = pauliMul (zPart (E q)) (productZPart qs E) := rfl
+
+/-! ### Auxiliary: pauliMul commutativity on the `{I, Z}` × `{I, Z}` subgroup -/
+
+private theorem pauliMul_zPart_zPart_assoc (p q r : Pauli) :
+    pauliMul (zPart p) (pauliMul (zPart q) r) =
+    pauliMul (zPart q) (pauliMul (zPart p) r) := by
+  cases p <;> cases q <;> cases r <;>
+    simp [zPart, pauliMul]
+
+/-- **Key C1 step**: after propagating the CNOT chain from an
+    ancHasNoX + dataMatches state, the ancilla Pauli equals the
+    `productZPart` accumulator multiplied with the initial ancilla
+    Pauli. Body: induction on `qs`, using `cnot_anc_to_data_anc_paulis`
+    and the inductive `ancHasNoX_dataMatches_cnotChain` to maintain
+    both invariants. -/
+theorem cnotChain_anc_paulis {n : Nat} (qs : List (Fin n)) (E : ErrorVec n)
+    (es : ErrorState (n+1)) (hdm : dataMatches E es) (hax : ancHasNoX n es) :
+    (propagateCircuit
+      (qs.map fun q => Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es).paulis
+      (ancQubit n)
+    = pauliMul (productZPart qs E) (es.paulis (ancQubit n)) := by
+  induction qs generalizing es with
+  | nil =>
+    simp [productZPart, propagateCircuit]
+  | cons q rest ih =>
+    simp only [List.map, propagateCircuit, productZPart_cons]
+    -- Step 1: After CNOT(anc, q), anc.paulis = pauliMul (zPart (es.paulis (data q))) (es.paulis anc).
+    --         By dataMatches, es.paulis (data q) = E q.
+    set es1 := propagateGate (Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es
+    have h_es1_anc : es1.paulis (ancQubit n) =
+        pauliMul (zPart (E q)) (es.paulis (ancQubit n)) := by
+      have := cnot_anc_to_data_anc_paulis q es hax
+      rw [this]
+      congr 1
+      exact congrArg zPart (hdm q)
+    -- Step 2: After the chain on rest, by IH (with updated dataMatches and ancHasNoX).
+    have hax1 : ancHasNoX n es1 := (cnot_anc_ancNoX n q es hax).1
+    have hdm1 : dataMatches E es1 := dataMatches_cnot_anc_to_data E q es hdm hax
+    have ih1 := ih es1 hdm1 hax1
+    rw [ih1, h_es1_anc]
+    -- Goal:
+    --   pauliMul (productZPart rest E) (pauliMul (zPart (E q)) (es.paulis anc))
+    -- = pauliMul (pauliMul (zPart (E q)) (productZPart rest E)) (es.paulis anc)
+    -- These should be equal via associativity + commutativity over {I, Z}.
+    -- Reduce by induction on rest: productZPart rest E is built from zParts, so commutes with zPart (E q).
+    clear ih ih1
+    induction rest with
+    | nil =>
+      simp [productZPart]
+    | cons q' rest' ih' =>
+      simp only [productZPart_cons]
+      -- LHS: pauliMul (pauliMul (zPart (E q')) (productZPart rest' E))
+      --                (pauliMul (zPart (E q)) (es.paulis (ancQubit n)))
+      -- RHS: pauliMul (pauliMul (zPart (E q))
+      --                (pauliMul (zPart (E q')) (productZPart rest' E)))
+      --                (es.paulis (ancQubit n))
+      -- Strategy: case-split on the relevant Paulis. Brute force.
+      set A := es.paulis (ancQubit n)
+      set PX := productZPart rest' E
+      cases hq : zPart (E q) <;> cases hq' : zPart (E q') <;>
+        cases hx : PX <;> cases hA : A <;> simp_all [pauliMul]
+
 end QStab.Compiler.SchemeCorrectStandard
