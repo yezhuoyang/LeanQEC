@@ -141,4 +141,44 @@ theorem toCircuitZRound_length (spec : CodeSpec) :
   intro s _
   exact toCircuitStabilizerZ_length spec s
 
+/-! ## Multi-round assembly (iters A5–A7)
+
+`spec.R` rounds of syndrome extraction, X-side and Z-side separately.
+Multi-round just replicates the round circuit and flattens — between
+rounds, every gadget's leading `prepPlus`/`prepZero` resets the ancilla,
+so no inter-round bookkeeping is required.
+
+CSS-code-aware composition (mix X-stab and Z-stab indices per real
+protocol) is deferred to iter A8+ — current `CodeSpec` doesn't tag each
+stabilizer X-or-Z, so `toCircuitX` produces every stabilizer's X-side
+gadget (correct only when all stabilizers are intended X-type for the
+purpose of compilation). A future field `stabType : Fin numStab → Bool`
+on `CodeSpec` (or a parameter) will let us assemble a real CSS round. -/
+
+/-- Full X-side circuit: `spec.R` rounds of all-stabilizer X-side
+    syndrome extraction, concatenated. -/
+def toCircuitX (spec : CodeSpec) : Circuit (spec.n + 1) :=
+  (List.replicate spec.R (toCircuitXRound spec)).flatten
+
+/-- Full Z-side circuit. -/
+def toCircuitZ (spec : CodeSpec) : Circuit (spec.n + 1) :=
+  (List.replicate spec.R (toCircuitZRound spec)).flatten
+
+/-- **Multi-round length lemma (X)**: total gates = `spec.R * round-length`. -/
+private theorem replicate_flatten_length {α} (n : Nat) (l : List α) :
+    (List.replicate n l).flatten.length = n * l.length := by
+  induction n with
+  | zero => simp
+  | succ k ih =>
+    rw [List.replicate_succ, List.flatten_cons, List.length_append, ih,
+        Nat.succ_mul, Nat.add_comm]
+
+theorem toCircuitX_length (spec : CodeSpec) :
+    (toCircuitX spec).length = spec.R * (toCircuitXRound spec).length :=
+  replicate_flatten_length spec.R (toCircuitXRound spec)
+
+theorem toCircuitZ_length (spec : CodeSpec) :
+    (toCircuitZ spec).length = spec.R * (toCircuitZRound spec).length :=
+  replicate_flatten_length spec.R (toCircuitZRound spec)
+
 end QStab.Compiler
