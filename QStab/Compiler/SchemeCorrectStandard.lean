@@ -523,4 +523,20 @@ theorem anticommutes_Xstabilizer_eq {n : Nat} (support : List (Fin n))
   · rw [Xstabilizer_anticommutes_not_mem support i h (E i)]
     simp [h]
 
+/-- Empty support: `parity (Xstabilizer []) E = false`. The base case
+    of the bridge induction. -/
+theorem parity_Xstabilizer_nil {n : Nat} [NeZero n] (E : ErrorVec n) :
+    ErrorVec.parity (Xstabilizer ([] : List (Fin n))) E = false := by
+  unfold ErrorVec.parity
+  have h : (Finset.univ.filter
+      (fun i : Fin n => Pauli.anticommutes (Xstabilizer ([] : List (Fin n)) i) (E i))).card = 0 := by
+    apply Finset.card_eq_zero.mpr
+    apply Finset.filter_eq_empty_iff.mpr
+    intro i _
+    have : Xstabilizer ([] : List (Fin n)) i = Pauli.I := by
+      simp [Xstabilizer]
+    rw [this]
+    simp [Pauli.anticommutes]
+  rw [h]; rfl
+
 end QStab.Compiler.SchemeCorrectStandard
