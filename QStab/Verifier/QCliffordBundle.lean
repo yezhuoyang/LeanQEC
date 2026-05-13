@@ -219,14 +219,12 @@ is also deferred until iter 17's lifting is in place. -/
 /-- `compileBundle`: TAL-style proof-preserving compilation from a
     QStab bundle to a QClifford bundle.
 
-    **Status (iter 16)**: minimal informative body. The qubit count
-    `nq` is now wired from `b.P.n` (so the compiled bundle's circuit
-    space matches the source's qubit count). The circuit is still
-    empty and `invHolds`/`failure`/preservation are trivial — the
-    QStab→QClifford circuit translation and the `invHolds` lift
-    require infrastructure (Step ↔ Gate correspondence) that does
-    not yet exist in `QStab.Compiler`. Iter 17 (deferred) will
-    address this. -/
+    **Status (iter 17)**: `static` now flows from source — the
+    TAL-style preservation theorem `compileBundle_preserves_verify`
+    has a non-trivial dependency on `b.static`. Qubit count wired
+    from `b.P.n`. Other fields (circuit, failure, invHolds,
+    preservation) remain trivial pending QStab→QClifford bridge
+    infrastructure not in `QStab.Compiler`. -/
 def compileBundle (b : QStabFTBundle) : QCliffordFTBundle where
   nq      := b.P.n
   circuit := []
@@ -234,18 +232,32 @@ def compileBundle (b : QStabFTBundle) : QCliffordFTBundle where
   invHolds := fun _ => True
   init    := trivial
   preservation := fun _ _ _ => trivial
-  static  := true
+  static  := b.static
   bridge  := fun _ _ _ hf => hf
 
 /-- The compiled bundle preserves the source's qubit count. -/
 theorem compileBundle_nq_eq (b : QStabFTBundle) :
     (compileBundle b).nq = b.P.n := rfl
 
-/-- The compiled bundle is always verified (trivial body). Once iter 17
-    refines the body, this theorem will require `b.static = true` as a
-    hypothesis (the TAL-style proof preservation). For now, both sides
-    are trivially `true`. -/
-theorem compileBundle_verified (b : QStabFTBundle) :
-    verifyQClifford (compileBundle b) = true := rfl
+/-- The compiled bundle preserves the source's static side-condition. -/
+theorem compileBundle_static_eq (b : QStabFTBundle) :
+    (compileBundle b).static = b.static := rfl
+
+/-- **TAL-style proof preservation theorem.** The QStab verifier
+    accepting the source bundle implies the QClifford verifier accepts
+    the compiled bundle. This is the structural analog of Morrisett et
+    al.'s TAL type-preservation under code compilation.
+
+    With the current trivial circuit/invHolds/failure compilation,
+    the theorem reduces to a `Bool` equality. Once the QStab→QClifford
+    bridge is built (a future research phase), the body of
+    `compileBundle` will carry real content and this theorem will
+    require structural Pauli-propagation reasoning. -/
+theorem compileBundle_preserves_verify (b : QStabFTBundle)
+    (h : verifyQStab b = true) :
+    verifyQClifford (compileBundle b) = true := by
+  show (compileBundle b).static = true
+  rw [compileBundle_static_eq]
+  exact h
 
 end QStab.Verifier
