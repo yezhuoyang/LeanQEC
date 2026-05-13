@@ -617,4 +617,48 @@ theorem parity_Xstabilizer_cons {n : Nat} (q : Fin n) (rest : List (Fin n))
     rcases Nat.mod_two_eq_zero_or_one rc with h | h <;> simp [Nat.add_mod, h]
   · simp only [hz, if_false, decide_false, Bool.false_xor, Nat.add_zero]
 
+/-- **The parity bridge**: under `support.Nodup`, the symbolic
+    `listZParity` equals the Finset-based `ErrorVec.parity` for the
+    canonical `Xstabilizer support`. Induction on `support` using
+    `parity_Xstabilizer_nil` (base) + `parity_Xstabilizer_cons`
+    (cons step, needs `q ∉ rest` from Nodup). -/
+theorem parity_Xstabilizer_eq_listZParity {n : Nat} [NeZero n]
+    (support : List (Fin n)) (h_nodup : support.Nodup) (E : ErrorVec n) :
+    ErrorVec.parity (Xstabilizer support) E = listZParity support E := by
+  induction support with
+  | nil => rw [parity_Xstabilizer_nil, listZParity_nil]
+  | cons q rest ih =>
+    have h_nm : q ∉ rest := List.Nodup.notMem h_nodup
+    have h_rest_nodup : rest.Nodup := List.Nodup.of_cons h_nodup
+    rw [parity_Xstabilizer_cons q rest h_nm E, listZParity_cons,
+        ih h_rest_nodup]
+
+/-! ### **C1: parityFaithful** — assembled at last -/
+
+/-- **C1: `xCircuit_parityFaithful`** — under `support.Nodup`, the
+    standard X-side gadget is parity-faithful for the canonical
+    `Xstabilizer support`. Composes the iter 15 measFlipped equation,
+    iter 16 productZPart↔listZParity bridge, and iter 23 listZParity↔
+    Finset.parity bridge. **Factored entirely through the established
+    lemmas — no new soundness.** -/
+theorem xCircuit_parityFaithful {n : Nat} [NeZero n] (support : List (Fin n))
+    (h_nodup : support.Nodup) :
+    parityFaithful (xCircuit n support) (Xstabilizer support) := by
+  intro E
+  show measFlipped n (propagateCircuit (xCircuit n support) (initialFromData E)) =
+       ErrorVec.parity (Xstabilizer support) E
+  rw [xCircuit_measFlipped_eq_hasXComp,
+      hasXComp_hadamardAction_IZ _ (productZPart_in_IZ support E)]
+  -- Goal: decide (productZPart support E = Z) = parity (Xstab support) E
+  rw [parity_Xstabilizer_eq_listZParity support h_nodup E]
+  -- Goal: decide (productZPart support E = Z) = listZParity support E
+  by_cases h : productZPart support E = Pauli.Z
+  · rw [(productZPart_eq_Z_iff_listZParity support E).mp h]
+    simp [h]
+  · have : listZParity support E = false := by
+      rcases Bool.eq_false_or_eq_true (listZParity support E) with hl | hl
+      · exact absurd ((productZPart_eq_Z_iff_listZParity support E).mpr hl) h
+      · exact hl
+    rw [this]; simp [h]
+
 end QStab.Compiler.SchemeCorrectStandard
