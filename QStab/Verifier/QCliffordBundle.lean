@@ -165,4 +165,34 @@ theorem cnotPair_no_failure :
       ¬ cnotPairBundle.failure (propagateCircuit gs (ErrorState.clean 2)) :=
   verifyQClifford_sound cnotPairBundle cnotPair_verified
 
+/-! ## Operational view: `runFinal` for the standalone tool
+
+`runFinal b` evaluates the bundle's circuit on the clean error
+state and returns the final `ErrorState`. This is what a standalone
+verifier executable would compute. The associated soundness
+corollary `runFinal_no_failure` connects this operational view
+back to the bundle's failure predicate via the generic
+`verifyQClifford_sound` theorem.
+
+Phase 5 of the verifier project (standalone CLI tool) consumes
+`runFinal` + `verifyQClifford` together: print the final state
+and the pass/fail status. -/
+
+/-- Operational entry point: propagate the bundle's circuit on the
+    clean input. -/
+def QCliffordFTBundle.runFinal (b : QCliffordFTBundle) : ErrorState b.nq :=
+  propagateCircuit b.circuit (ErrorState.clean b.nq)
+
+/-- **Operational soundness**: if the bundle verifies, the failure
+    predicate fails on the result of executing the bundle's circuit
+    on clean input. Specialization of `verifyQClifford_sound` to the
+    bundle's own `circuit`. -/
+theorem QCliffordFTBundle.runFinal_no_failure (b : QCliffordFTBundle)
+    (h : verifyQClifford b = true) : ¬ b.failure b.runFinal :=
+  verifyQClifford_sound b h b.circuit
+
+/-- Smoke test on the CNOT-pair bundle. -/
+example : ¬ cnotPairBundle.failure cnotPairBundle.runFinal :=
+  cnotPairBundle.runFinal_no_failure cnotPair_verified
+
 end QStab.Verifier
