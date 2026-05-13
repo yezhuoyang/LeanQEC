@@ -297,4 +297,130 @@ theorem prep_cnotChain_anc_paulis {n : Nat} (support : List (Fin n))
   -- pauliMul (productZPart support E) Pauli.I = productZPart support E
   cases h : productZPart support E <;> simp [pauliMul]
 
+/-! ## Hadamard + measZ: measFlipped formula -/
+
+/-- `zPart` always returns `I` or `Z`. -/
+private theorem zPart_in_IZ (p : Pauli) : zPart p = Pauli.I ∨ zPart p = Pauli.Z := by
+  cases p <;> simp [zPart]
+
+/-- `productZPart support E` is always in `{I, Z}` (built from `zPart`
+    values via `pauliMul`). -/
+theorem productZPart_in_IZ {n : Nat} (qs : List (Fin n)) (E : ErrorVec n) :
+    productZPart qs E = Pauli.I ∨ productZPart qs E = Pauli.Z := by
+  induction qs with
+  | nil => left; rfl
+  | cons q rest ih =>
+    simp only [productZPart_cons]
+    rcases ih with hI | hZ
+    · rw [hI]
+      rcases zPart_in_IZ (E q) with h | h
+      · rw [h]; left; rfl
+      · rw [h]; right; rfl
+    · rw [hZ]
+      rcases zPart_in_IZ (E q) with h | h
+      · rw [h]; right; rfl
+      · rw [h]; left; rfl
+
+/-- prepPlus, CNOT, and hadamard all preserve the `measFlips` field
+    (only `measZ` modifies measFlips). -/
+private theorem prepPlus_preserves_measFlips {n : Nat} (q : Fin (n+1))
+    (es : ErrorState (n+1)) :
+    (propagateGate (Gate.prepPlus q) es).measFlips = es.measFlips := by
+  simp [propagateGate]
+
+private theorem cnot_preserves_measFlips {n : Nat} (c t : Fin (n+1)) (hne : c ≠ t)
+    (es : ErrorState (n+1)) :
+    (propagateGate (Gate.cnot c t hne) es).measFlips = es.measFlips := by
+  simp [propagateGate]
+
+private theorem hadamard_preserves_measFlips {n : Nat} (q : Fin (n+1))
+    (es : ErrorState (n+1)) :
+    (propagateGate (Gate.hadamard q) es).measFlips = es.measFlips := by
+  simp [propagateGate]
+
+/-- After the CNOT chain, none of the gates have touched the
+    ancilla's measFlips bit yet (none of prepPlus, CNOT, hadamard
+    write to measFlips). So measFlips at anc is still `false`. -/
+theorem prep_cnotChain_hadamard_measFlips {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) :
+    (propagateCircuit
+      ([Gate.prepPlus (ancQubit n)] ++
+        (support.map fun q =>
+          Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) ++
+        [Gate.hadamard (ancQubit n)]) (initialFromData E)).measFlips
+      (ancQubit n) = false := by
+  rw [propagateCircuit_append, propagateCircuit_append]
+  -- After prepPlus: measFlips unchanged.
+  simp only [propagateCircuit, hadamard_preserves_measFlips]
+  -- After CNOT chain: measFlips unchanged.
+  suffices h : ∀ (qs : List (Fin n)) (es : ErrorState (n+1)),
+      (propagateCircuit (qs.map fun q =>
+        Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es).measFlips =
+      es.measFlips by
+    rw [h]
+    simp [propagateGate, initialFromData]
+  intro qs
+  induction qs with
+  | nil => intro _; simp [propagateCircuit]
+  | cons q rest ih =>
+    intro es
+    simp only [List.map, propagateCircuit]
+    rw [ih]
+    exact cnot_preserves_measFlips _ _ _ es
+
+/-- **C1 ancilla measFlipped equation**: after the full `xCircuit n
+    support`, `measFlipped` at the ancilla equals
+    `hasXComp (hadamardAction (productZPart support E))`. -/
+theorem xCircuit_measFlipped_eq_hasXComp {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) :
+    measFlipped n (propagateCircuit (xCircuit n support) (initialFromData E))
+    = hasXComp (hadamardAction (productZPart support E)) := by
+  unfold xCircuit measFlipped
+  -- xCircuit = prepPlus ++ cnots ++ [hadamard, measZ] =
+  --           ([prepPlus] ++ cnots ++ [hadamard]) ++ [measZ]
+  rw [show ([Gate.prepPlus (ancQubit n)] ++
+            (support.map fun q =>
+              Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) ++
+            [Gate.hadamard (ancQubit n), Gate.measZ (ancQubit n)]) =
+         ([Gate.prepPlus (ancQubit n)] ++
+            (support.map fun q =>
+              Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) ++
+            [Gate.hadamard (ancQubit n)]) ++ [Gate.measZ (ancQubit n)]
+        from by simp [List.append_assoc]]
+  rw [propagateCircuit_append]
+  -- After [...] (everything except measZ): anc.paulis = hadamardAction (productZPart support E);
+  --                                       anc.measFlips = false.
+  set body := [Gate.prepPlus (ancQubit n)] ++
+              (support.map fun q =>
+                Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) ++
+              [Gate.hadamard (ancQubit n)]
+  set esmid := propagateCircuit body (initialFromData E)
+  have h_mf : esmid.measFlips (ancQubit n) = false :=
+    prep_cnotChain_hadamard_measFlips support E
+  -- Compute anc.paulis of esmid: it's hadamardAction (productZPart support E).
+  have h_paulis : esmid.paulis (ancQubit n) = hadamardAction (productZPart support E) := by
+    show (propagateCircuit ([_] ++ _ ++ [_]) (initialFromData E)).paulis (ancQubit n) = _
+    rw [propagateCircuit_append, propagateCircuit_append]
+    simp only [propagateCircuit]
+    -- After prepPlus + chain: anc.paulis = productZPart support E (iter 14).
+    set es1 := propagateGate (Gate.prepPlus (ancQubit n)) (initialFromData E)
+    have hps : (propagateCircuit
+                  (support.map fun q =>
+                    Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es1).paulis
+                  (ancQubit n) = productZPart support E :=
+      prep_cnotChain_anc_paulis support E
+    -- After hadamard:
+    set es2 := propagateCircuit (support.map _) es1
+    have hes2 : es2.paulis (ancQubit n) = productZPart support E := hps
+    simp only [propagateGate]
+    rw [hes2]
+    simp
+  -- Now apply measZ: measFlips at anc = xor false (hasXComp anc.paulis).
+  simp only [propagateCircuit, propagateGate]
+  show (if ancQubit n = ancQubit n then _ else _) = _
+  rw [if_pos rfl, h_paulis]
+  show xor (esmid.measFlips (ancQubit n)) _ = _
+  rw [h_mf]
+  simp
+
 end QStab.Compiler.SchemeCorrectStandard
