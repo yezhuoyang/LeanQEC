@@ -44,7 +44,7 @@ inductive Gate (nq : Nat) where
   | measZ (q : Fin nq)
 
 /-- A circuit is a list of gates. -/
-def Circuit (nq : Nat) := List (Gate nq)
+abbrev Circuit (nq : Nat) := List (Gate nq)
 
 /-! ### Pauli error propagation through gates (Heisenberg picture)
 

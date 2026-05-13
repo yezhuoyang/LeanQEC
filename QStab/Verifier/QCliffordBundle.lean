@@ -84,9 +84,14 @@ structure QCliffordFTBundle where
   invHolds : ErrorState nq → Prop
   /-- Holds for the initial clean error state. -/
   init    : invHolds (ErrorState.clean nq)
-  /-- Preserved by every gate's Pauli propagation. -/
-  preservation : ∀ (g : Gate nq) (es : ErrorState nq),
-                   invHolds es → invHolds (propagateGate g es)
+  /-- Preserved by every gate's Pauli propagation, RESTRICTED to gates
+      that appear in this bundle's `circuit`. (Iter 7: weakened from
+      universal `∀ g` so that `liftReach`-style invHolds can satisfy
+      the field — applying an arbitrary off-circuit gate would
+      generally break circuit-prefix-reachability.) -/
+  preservation : ∀ (g : Gate nq), g ∈ circuit →
+                   ∀ (es : ErrorState nq),
+                     invHolds es → invHolds (propagateGate g es)
   /-- Decidable side-condition. -/
   static  : Bool
   /-- The bridge: static + invariant on the final state ⇒ no failure. -/
@@ -101,28 +106,36 @@ structure QCliffordFTBundle where
     not metatheory.) -/
 def verifyQClifford (b : QCliffordFTBundle) : Bool := b.static
 
-/-- The invariant survives the entire circuit: if `b.invHolds` holds
-    at the start, it holds after propagating through any prefix of
-    the circuit. This is the inductive lift of `preservation` to
-    multi-gate sequences. -/
+/-- The invariant survives any sequence of gates drawn from
+    `b.circuit`. Iter 7: weakened to require every propagated gate be
+    a member of `b.circuit`; this is the natural shape needed by
+    `liftReach`-style invariants. The original universal claim no
+    longer holds when `invHolds` depends on circuit identity. -/
 theorem QCliffordFTBundle.invHolds_propagate (b : QCliffordFTBundle)
-    (gs : Circuit b.nq) (es : ErrorState b.nq) :
+    (gs : Circuit b.nq)
+    (hgs : ∀ (g : Gate b.nq), g ∈ gs → g ∈ b.circuit)
+    (es : ErrorState b.nq) :
     b.invHolds es → b.invHolds (propagateCircuit gs es) := by
   induction gs generalizing es with
   | nil => intro h; exact h
-  | cons g gs ih => intro h; exact ih _ (b.preservation g es h)
+  | cons g gs ih =>
+    intro h
+    have hg : g ∈ b.circuit := hgs g List.mem_cons_self
+    have hgs' : ∀ (g' : Gate b.nq), g' ∈ gs → g' ∈ b.circuit :=
+      fun g' hg' => hgs g' (List.mem_cons_of_mem g hg')
+    exact ih hgs' _ (b.preservation g hg es h)
 
 /-- **Generic soundness theorem** at the QClifford layer. If the
-    verifier accepts the bundle, then for any prefix of the circuit
-    starting from the clean state, the failure predicate fails on
-    the propagated error state. -/
+    verifier accepts the bundle, then for any sequence of gates `gs`
+    drawn from `b.circuit`, propagating them from clean does not
+    trigger `b.failure`. -/
 theorem verifyQClifford_sound (b : QCliffordFTBundle)
-    (h : verifyQClifford b = true) :
-    ∀ gs : Circuit b.nq,
-      ¬ b.failure (propagateCircuit gs (ErrorState.clean b.nq)) := by
-  intro gs
+    (h : verifyQClifford b = true)
+    (gs : Circuit b.nq)
+    (hgs : ∀ (g : Gate b.nq), g ∈ gs → g ∈ b.circuit) :
+    ¬ b.failure (propagateCircuit gs (ErrorState.clean b.nq)) := by
   have hinv : b.invHolds (propagateCircuit gs (ErrorState.clean b.nq)) :=
-    b.invHolds_propagate gs _ b.init
+    b.invHolds_propagate gs hgs _ b.init
   exact b.bridge h _ hinv
 
 /-- Trivial bundle: no qubits, empty circuit, no failure. Sanity
@@ -133,7 +146,7 @@ def trivialQCliffordBundle : QCliffordFTBundle where
   failure := fun _ => False
   invHolds := fun _ => True
   init    := trivial
-  preservation := fun _ _ _ => trivial
+  preservation := fun _ _ _ _ => trivial
   static  := true
   bridge  := fun _ _ _ hf => hf
 
@@ -148,7 +161,7 @@ def cnotPairBundle : QCliffordFTBundle where
   failure := fun _ => False
   invHolds := fun _ => True
   init    := trivial
-  preservation := fun _ _ _ => trivial
+  preservation := fun _ _ _ _ => trivial
   static  := true
   bridge  := fun _ _ _ hf => hf
 
@@ -161,9 +174,10 @@ theorem cnotPair_verified : verifyQClifford cnotPairBundle = true := rfl
     here, so this is trivially true — but the chain of typeclass +
     propagation reasoning is real and exercises `propagateCircuit`.) -/
 theorem cnotPair_no_failure :
-    ∀ gs : Circuit cnotPairBundle.nq,
-      ¬ cnotPairBundle.failure (propagateCircuit gs (ErrorState.clean 2)) :=
+    ¬ cnotPairBundle.failure (propagateCircuit cnotPairBundle.circuit
+                                                (ErrorState.clean 2)) :=
   verifyQClifford_sound cnotPairBundle cnotPair_verified
+    cnotPairBundle.circuit (fun _ hg => hg)
 
 /-! ## Operational view: `runFinal` for the standalone tool
 
@@ -189,7 +203,7 @@ def QCliffordFTBundle.runFinal (b : QCliffordFTBundle) : ErrorState b.nq :=
     bundle's own `circuit`. -/
 theorem QCliffordFTBundle.runFinal_no_failure (b : QCliffordFTBundle)
     (h : verifyQClifford b = true) : ¬ b.failure b.runFinal :=
-  verifyQClifford_sound b h b.circuit
+  verifyQClifford_sound b h b.circuit (fun _ hg => hg)
 
 /-- Smoke test on the CNOT-pair bundle. -/
 example : ¬ cnotPairBundle.failure cnotPairBundle.runFinal :=
@@ -231,7 +245,7 @@ def compileBundle (b : QStabFTBundle) : QCliffordFTBundle where
   failure := fun _ => False
   invHolds := fun _ => True
   init    := trivial
-  preservation := fun _ _ _ => trivial
+  preservation := fun _ _ _ _ => trivial
   static  := b.static
   bridge  := fun _ _ _ hf => hf
 
