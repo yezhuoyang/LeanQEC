@@ -94,4 +94,51 @@ theorem toCircuitStabilizerX_qstab_sound (spec : CodeSpec) (s : Fin spec.numStab
         (dataPauli (computeFaultEffect (toCircuitStabilizerX spec s) fault)) ≤ r) :=
   qstab_sound (toCircuitStabilizerX spec s) (spec.stabilizers s) r h_correct fault
 
+/-! ## Round assembly (iter A4)
+
+A single measurement round runs every stabilizer's per-gadget circuit
+back-to-back. Each gadget begins with `prepPlus`/`prepZero` on the
+shared ancilla (qubit `spec.n`), so the ancilla is reset at the start
+of every gadget independently of leftover state.
+
+The X-side round and Z-side round are separated: a real CSS code
+schedules them as two halves of a round (or alternates). We provide
+both as flat list concatenations; multi-round composition (Phase A7+)
+will sequence them per `spec.R`. -/
+
+/-- One round of all X-side syndrome extractions, concatenated by
+    stabilizer index `0, 1, ..., numStab-1`. -/
+def toCircuitXRound (spec : CodeSpec) : Circuit (spec.n + 1) :=
+  (List.finRange spec.numStab).flatMap (toCircuitStabilizerX spec)
+
+/-- One round of all Z-side syndrome extractions. -/
+def toCircuitZRound (spec : CodeSpec) : Circuit (spec.n + 1) :=
+  (List.finRange spec.numStab).flatMap (toCircuitStabilizerZ spec)
+
+/-- **Length lemma (X-side round)**: total gates = sum over stabilizers
+    of `(|gateOrdering s| + 3)`. -/
+theorem toCircuitXRound_length (spec : CodeSpec) :
+    (toCircuitXRound spec).length =
+      ((List.finRange spec.numStab).map
+        fun s => (spec.gateOrdering s).length + 3).sum := by
+  unfold toCircuitXRound
+  rw [List.length_flatMap]
+  congr 1
+  apply List.map_congr_left
+  intro s _
+  exact toCircuitStabilizerX_length spec s
+
+/-- **Length lemma (Z-side round)**: total gates = sum over stabilizers
+    of `(|gateOrdering s| + 2)`. -/
+theorem toCircuitZRound_length (spec : CodeSpec) :
+    (toCircuitZRound spec).length =
+      ((List.finRange spec.numStab).map
+        fun s => (spec.gateOrdering s).length + 2).sum := by
+  unfold toCircuitZRound
+  rw [List.length_flatMap]
+  congr 1
+  apply List.map_congr_left
+  intro s _
+  exact toCircuitStabilizerZ_length spec s
+
 end QStab.Compiler
