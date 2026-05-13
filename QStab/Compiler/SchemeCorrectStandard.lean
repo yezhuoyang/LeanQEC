@@ -423,4 +423,62 @@ theorem xCircuit_measFlipped_eq_hasXComp {n : Nat} (support : List (Fin n))
   rw [h_mf]
   simp
 
+/-! ## Connection between `productZPart` / `hadamardAction` and
+   `ErrorVec.parity` — full C1 -/
+
+/-- `hadamardAction p` for `p ∈ {I, Z}`: I → I, Z → X. -/
+private theorem hadamardAction_of_IZ (p : Pauli) (hp : p = .I ∨ p = .Z) :
+    hadamardAction p = if p = .Z then Pauli.X else Pauli.I := by
+  rcases hp with rfl | rfl <;> simp [hadamardAction]
+
+/-- `hasXComp (hadamardAction p)` for `p ∈ {I, Z}`. -/
+private theorem hasXComp_hadamardAction_IZ (p : Pauli) (hp : p = .I ∨ p = .Z) :
+    hasXComp (hadamardAction p) = decide (p = .Z) := by
+  rcases hp with rfl | rfl <;> simp [hadamardAction, hasXComp]
+
+/-- Boolean parity over a list: xor over a predicate. -/
+def listZParity {n : Nat} (qs : List (Fin n)) (E : ErrorVec n) : Bool :=
+  qs.foldr (fun q b => xor (decide (zPart (E q) = .Z)) b) false
+
+@[simp] theorem listZParity_nil {n : Nat} (E : ErrorVec n) :
+    listZParity ([] : List (Fin n)) E = false := rfl
+
+@[simp] theorem listZParity_cons {n : Nat} (q : Fin n) (qs : List (Fin n))
+    (E : ErrorVec n) :
+    listZParity (q :: qs) E = xor (decide (zPart (E q) = .Z)) (listZParity qs E) := rfl
+
+theorem productZPart_eq_Z_iff_listZParity {n : Nat}
+    (qs : List (Fin n)) (E : ErrorVec n) :
+    productZPart qs E = Pauli.Z ↔ listZParity qs E = true := by
+  induction qs with
+  | nil => simp [productZPart, listZParity]
+  | cons q rest ih =>
+    simp only [productZPart_cons, listZParity_cons]
+    rcases zPart_in_IZ (E q) with hzq | hzq <;>
+      rcases productZPart_in_IZ rest E with hp | hp
+    · -- zPart (E q) = I, productZPart rest = I
+      rw [hzq, hp]
+      have hl : listZParity rest E = false := by
+        rcases Bool.eq_false_or_eq_true (listZParity rest E) with h | h
+        · exfalso
+          have := ih.mpr h; rw [this] at hp; exact Pauli.noConfusion hp
+        · exact h
+      simp [pauliMul, hl]
+    · -- zPart (E q) = I, productZPart rest = Z
+      rw [hzq, hp]
+      have hl : listZParity rest E = true := ih.mp hp
+      simp [pauliMul, hl]
+    · -- zPart (E q) = Z, productZPart rest = I
+      rw [hzq, hp]
+      have hl : listZParity rest E = false := by
+        rcases Bool.eq_false_or_eq_true (listZParity rest E) with h | h
+        · exfalso
+          have := ih.mpr h; rw [this] at hp; exact Pauli.noConfusion hp
+        · exact h
+      simp [pauliMul, hl]
+    · -- zPart (E q) = Z, productZPart rest = Z
+      rw [hzq, hp]
+      have hl : listZParity rest E = true := ih.mp hp
+      simp [pauliMul, hl]
+
 end QStab.Compiler.SchemeCorrectStandard
