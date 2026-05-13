@@ -216,10 +216,36 @@ non-informative compilation. Future iters refine the body:
 The `compileBundle_preserves_verify` theorem (final TAL deliverable)
 is also deferred until iter 17's lifting is in place. -/
 
-/-- Stub: `compileBundle` returning the trivial QClifford bundle for
-    any input. This pins the type signature; iters 16+ refine the
-    body. -/
-def compileBundle (_ : QStabFTBundle) : QCliffordFTBundle :=
-  trivialQCliffordBundle
+/-- `compileBundle`: TAL-style proof-preserving compilation from a
+    QStab bundle to a QClifford bundle.
+
+    **Status (iter 16)**: minimal informative body. The qubit count
+    `nq` is now wired from `b.P.n` (so the compiled bundle's circuit
+    space matches the source's qubit count). The circuit is still
+    empty and `invHolds`/`failure`/preservation are trivial — the
+    QStab→QClifford circuit translation and the `invHolds` lift
+    require infrastructure (Step ↔ Gate correspondence) that does
+    not yet exist in `QStab.Compiler`. Iter 17 (deferred) will
+    address this. -/
+def compileBundle (b : QStabFTBundle) : QCliffordFTBundle where
+  nq      := b.P.n
+  circuit := []
+  failure := fun _ => False
+  invHolds := fun _ => True
+  init    := trivial
+  preservation := fun _ _ _ => trivial
+  static  := true
+  bridge  := fun _ _ _ hf => hf
+
+/-- The compiled bundle preserves the source's qubit count. -/
+theorem compileBundle_nq_eq (b : QStabFTBundle) :
+    (compileBundle b).nq = b.P.n := rfl
+
+/-- The compiled bundle is always verified (trivial body). Once iter 17
+    refines the body, this theorem will require `b.static = true` as a
+    hypothesis (the TAL-style proof preservation). For now, both sides
+    are trivially `true`. -/
+theorem compileBundle_verified (b : QStabFTBundle) :
+    verifyQClifford (compileBundle b) = true := rfl
 
 end QStab.Verifier
