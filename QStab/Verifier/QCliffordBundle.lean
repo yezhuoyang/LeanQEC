@@ -260,4 +260,13 @@ theorem compileBundle_preserves_verify (b : QStabFTBundle)
   rw [compileBundle_static_eq]
   exact h
 
+/-- End-to-end operational corollary: running the compiled bundle's
+    circuit on a clean error state returns a clean error state (since
+    the current `compileBundle` body produces an empty circuit). -/
+theorem compileBundle_runFinal_clean (b : QStabFTBundle) :
+    (compileBundle b).runFinal = ErrorState.clean b.P.n := by
+  show propagateCircuit (compileBundle b).circuit
+         (ErrorState.clean (compileBundle b).nq) = ErrorState.clean b.P.n
+  rfl
+
 end QStab.Verifier
