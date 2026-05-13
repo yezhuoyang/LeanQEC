@@ -506,13 +506,21 @@ theorem Xstabilizer_anticommutes_mem {n : Nat} (support : List (Fin n))
   rw [if_pos h]
   exact anticommutes_X_iff_zPart_Z p
 
--- **Filter set decomposition** (cons case) is the planned next step
--- toward `parity_Xstabilizer_eq_listZParity`. The decomposition splits
--- the anticommutes-filter set for `q :: rest` into the rest's filter
--- plus the singleton `{q}` (conditioned on whether `anticommutes X (E q)`).
--- Initial attempt in iter 17 hit Finset.mem_filter / if-then-else
--- elaboration issues for the `i ≠ q ∧ i ∈ rest` case. Deferring to
--- iter 18 with a different proof strategy (direct cardinality via
--- `Finset.card_filter` and `Finset.sum_ite`).
+/-! ### Bridge from list-parity to Finset-parity (Mathlib API)
+
+`ErrorVec.parity (Xstabilizer support) E` is defined via Finset.card.
+This bridges to our recursive `listZParity` under `support.Nodup`. -/
+
+/-- The anticommutes predicate for `Xstabilizer support` equals
+    `i ∈ support ∧ zPart (E i) = .Z` (as a Bool). -/
+theorem anticommutes_Xstabilizer_eq {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) (i : Fin n) :
+    Pauli.anticommutes (Xstabilizer support i) (E i) =
+      (decide (i ∈ support) && decide (zPart (E i) = Pauli.Z)) := by
+  by_cases h : i ∈ support
+  · rw [Xstabilizer_anticommutes_mem support i h (E i)]
+    simp [h]
+  · rw [Xstabilizer_anticommutes_not_mem support i h (E i)]
+    simp [h]
 
 end QStab.Compiler.SchemeCorrectStandard
