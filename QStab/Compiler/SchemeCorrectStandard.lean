@@ -17,7 +17,7 @@ boundedHook Γ r` where:
 
 namespace QStab.Compiler.SchemeCorrectStandard
 
-open QStab QStab.QClifford QStab.QClifford.Standard QStab.Paper.Soundness
+open QStab QStab.QClifford QStab.QClifford.Standard QStab.Paper.Soundness ErrorVec
 
 /-! ## `dataMatches`: each data qubit equals an externally fixed input -/
 
@@ -480,5 +480,39 @@ theorem productZPart_eq_Z_iff_listZParity {n : Nat}
       rw [hzq, hp]
       have hl : listZParity rest E = true := ih.mp hp
       simp [pauliMul, hl]
+
+/-! ## ErrorVec.parity ↔ listZParity (under Nodup support) -/
+
+/-- The "anticommutes with X" predicate is equivalent to "has Z-component". -/
+private theorem anticommutes_X_iff_zPart_Z (p : Pauli) :
+    Pauli.anticommutes Pauli.X p = decide (zPart p = Pauli.Z) := by
+  cases p <;> decide
+
+/-- For `i ∉ support`, `Xstabilizer support i = .I` and so it commutes
+    with anything. -/
+theorem Xstabilizer_anticommutes_not_mem {n : Nat} (support : List (Fin n))
+    (i : Fin n) (h : i ∉ support) (p : Pauli) :
+    Pauli.anticommutes (Xstabilizer support i) p = false := by
+  unfold Xstabilizer
+  rw [if_neg h]
+  simp [Pauli.anticommutes]
+
+/-- For `i ∈ support`, `Xstabilizer support i = .X` so anticommutes
+    with `p` iff `p` has Z-component. -/
+theorem Xstabilizer_anticommutes_mem {n : Nat} (support : List (Fin n))
+    (i : Fin n) (h : i ∈ support) (p : Pauli) :
+    Pauli.anticommutes (Xstabilizer support i) p = decide (zPart p = Pauli.Z) := by
+  unfold Xstabilizer
+  rw [if_pos h]
+  exact anticommutes_X_iff_zPart_Z p
+
+-- **Filter set decomposition** (cons case) is the planned next step
+-- toward `parity_Xstabilizer_eq_listZParity`. The decomposition splits
+-- the anticommutes-filter set for `q :: rest` into the rest's filter
+-- plus the singleton `{q}` (conditioned on whether `anticommutes X (E q)`).
+-- Initial attempt in iter 17 hit Finset.mem_filter / if-then-else
+-- elaboration issues for the `i ≠ q ∧ i ∈ rest` case. Deferring to
+-- iter 18 with a different proof strategy (direct cardinality via
+-- `Finset.card_filter` and `Finset.sum_ite`).
 
 end QStab.Compiler.SchemeCorrectStandard
