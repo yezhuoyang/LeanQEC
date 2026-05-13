@@ -570,4 +570,51 @@ theorem Xstabilizer_filter_cons {n : Nat} (q : Fin n) (rest : List (Fin n))
     · simp [himem]
       split_ifs <;> simp [hiq]
 
+/-- The cons-side singleton set is disjoint from the `rest` filter
+    when `q ∉ rest` — because `Xstab rest q = I` so `q` is never
+    in the `rest` filter. -/
+theorem Xstabilizer_filter_disjoint {n : Nat} (q : Fin n) (rest : List (Fin n))
+    (h_nm : q ∉ rest) (E : ErrorVec n) :
+    Disjoint
+      (Finset.univ.filter
+        (fun i : Fin n => Pauli.anticommutes (Xstabilizer rest i) (E i)))
+      (if zPart (E q) = Pauli.Z then ({q} : Finset (Fin n)) else ∅) := by
+  rw [Finset.disjoint_left]
+  intro i hi_rest hi_sing
+  split_ifs at hi_sing with h_z
+  · -- hi_sing : i ∈ {q}, so i = q
+    rw [Finset.mem_singleton] at hi_sing
+    -- hi_rest : anticommutes (Xstab rest i) (E i), but i = q and Xstab rest q = I
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hi_rest
+    rw [hi_sing] at hi_rest
+    rw [Xstabilizer_anticommutes_not_mem rest q h_nm (E q)] at hi_rest
+    exact (Bool.false_ne_true hi_rest).elim
+  · cases hi_sing
+
+/-- **Cons step of the parity bridge**: under `q ∉ rest`, the parity
+    of `Xstabilizer (q :: rest)` equals the XOR of "does E q have a
+    Z-component" with the parity of `Xstabilizer rest`. -/
+theorem parity_Xstabilizer_cons {n : Nat} (q : Fin n) (rest : List (Fin n))
+    (h_nm : q ∉ rest) (E : ErrorVec n) :
+    ErrorVec.parity (Xstabilizer (q :: rest)) E =
+      (decide (zPart (E q) = Pauli.Z) ^^ ErrorVec.parity (Xstabilizer rest) E) := by
+  unfold ErrorVec.parity
+  rw [Xstabilizer_filter_cons q rest h_nm E]
+  rw [Finset.card_union_eq_card_add_card.mpr
+        (Xstabilizer_filter_disjoint q rest h_nm E)]
+  -- Now: (rest_card + sing_card) % 2 == 1 = decide (zPart (E q) = Z) ^^ (rest_card % 2 == 1)
+  set rc := (Finset.univ.filter
+              (fun i : Fin n => Pauli.anticommutes (Xstabilizer rest i) (E i))).card
+  have h_sing_card :
+      (if zPart (E q) = Pauli.Z then ({q} : Finset (Fin n)) else ∅).card =
+      (if zPart (E q) = Pauli.Z then 1 else 0) := by
+    split_ifs <;> simp
+  rw [h_sing_card]
+  -- (rc + (if hz then 1 else 0)) % 2 == 1 = decide hz ^^ (rc % 2 == 1)
+  by_cases hz : zPart (E q) = Pauli.Z
+  · simp only [hz, if_true, decide_true, Bool.true_xor]
+    -- Goal: (rc + 1) % 2 == 1 = ¬ (rc % 2 == 1)
+    rcases Nat.mod_two_eq_zero_or_one rc with h | h <;> simp [Nat.add_mod, h]
+  · simp only [hz, if_false, decide_false, Bool.false_xor, Nat.add_zero]
+
 end QStab.Compiler.SchemeCorrectStandard
