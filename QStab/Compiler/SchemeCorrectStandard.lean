@@ -260,4 +260,41 @@ theorem cnotChain_anc_paulis {n : Nat} (qs : List (Fin n)) (E : ErrorVec n)
       cases hq : zPart (E q) <;> cases hq' : zPart (E q') <;>
         cases hx : PX <;> cases hA : A <;> simp_all [pauliMul]
 
+/-! ## Canonical X-stabilizer over a support, and the
+    anc-after-prepPlus-then-CNOTchain identity -/
+
+/-- The canonical X-stabilizer indexed by `support`: `Pauli.X` on
+    qubits in `support`, `Pauli.I` elsewhere. This is the `T_s` for
+    which `xCircuit n support` is the parity-measurement gadget. -/
+def Xstabilizer {n : Nat} (support : List (Fin n)) : ErrorVec n :=
+  fun i => if i ∈ support then Pauli.X else Pauli.I
+
+/-- After `prepPlus(anc)` from `initialFromData E`, the ancilla Pauli
+    is `Pauli.I` (the prepPlus reset). -/
+theorem prepPlus_anc_paulis {n : Nat} (E : ErrorVec n) :
+    (propagateGate (Gate.prepPlus (ancQubit n)) (initialFromData E)).paulis
+      (ancQubit n) = Pauli.I := by
+  simp [propagateGate]
+
+/-- **C1 step 2**: after `prepPlus + CNOT chain`, the ancilla Pauli
+    equals `productZPart support E` (with `pauliMul I` already
+    simplified). -/
+theorem prep_cnotChain_anc_paulis {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) :
+    (propagateCircuit
+      ((support.map fun q =>
+          Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)))
+      (propagateGate (Gate.prepPlus (ancQubit n)) (initialFromData E))).paulis
+      (ancQubit n) = productZPart support E := by
+  set es1 := propagateGate (Gate.prepPlus (ancQubit n)) (initialFromData E)
+  have h_ax : ancHasNoX n es1 := ancHasNoX_prepPlus_anc (initialFromData E)
+  have h_dm : dataMatches E es1 :=
+    dataMatches_prepPlus_anc E (initialFromData E) (dataMatches_init E)
+  have h_chain := cnotChain_anc_paulis support E es1 h_dm h_ax
+  rw [h_chain]
+  -- anc.paulis of es1 = I (from prepPlus_anc_paulis)
+  rw [prepPlus_anc_paulis]
+  -- pauliMul (productZPart support E) Pauli.I = productZPart support E
+  cases h : productZPart support E <;> simp [pauliMul]
+
 end QStab.Compiler.SchemeCorrectStandard
