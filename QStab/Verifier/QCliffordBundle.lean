@@ -137,4 +137,32 @@ def trivialQCliffordBundle : QCliffordFTBundle where
   static  := true
   bridge  := fun _ _ _ hf => hf
 
+/-- A small non-trivial bundle: 2 qubits, a single CNOT(0, 1) gate.
+    Demonstrates the bundle structure works for circuits with actual
+    Pauli propagation (not just empty lists). `invHolds` is still the
+    trivial `True` predicate — the point of this example is to
+    exercise the *structure*, not test rich invariants. -/
+def cnotPairBundle : QCliffordFTBundle where
+  nq      := 2
+  circuit := [Gate.cnot 0 1 (by decide)]
+  failure := fun _ => False
+  invHolds := fun _ => True
+  init    := trivial
+  preservation := fun _ _ _ => trivial
+  static  := true
+  bridge  := fun _ _ _ hf => hf
+
+/-- The CNOT-pair bundle's verifier accepts. -/
+theorem cnotPair_verified : verifyQClifford cnotPairBundle = true := rfl
+
+/-- The corollary of generic soundness applied to `cnotPairBundle`:
+    no list of gates `gs` can produce a failure state when prepended
+    to (well, propagated from) the clean state. (Failure is `False`
+    here, so this is trivially true — but the chain of typeclass +
+    propagation reasoning is real and exercises `propagateCircuit`.) -/
+theorem cnotPair_no_failure :
+    ∀ gs : Circuit cnotPairBundle.nq,
+      ¬ cnotPairBundle.failure (propagateCircuit gs (ErrorState.clean 2)) :=
+  verifyQClifford_sound cnotPairBundle cnotPair_verified
+
 end QStab.Verifier
