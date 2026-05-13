@@ -118,7 +118,7 @@ theorem ancHasNoX_prepPlus_anc {n : Nat} (es : ErrorState (n+1)) :
 theorem ancHasNoX_initialFromData {n : Nat} (E : ErrorVec n) :
     ancHasNoX n (initialFromData E) := by
   show xPart _ = .I
-  simp [initialFromData, ancQubit, xPart, Nat.lt_irrefl]
+  simp [initialFromData, ancQubit, xPart]
 
 /-- The bedrock dataMatches lemma: full xCircuit preserves data
     qubits. -/
@@ -153,7 +153,33 @@ theorem xCircuit_noBackAction {n : Nat} (support : List (Fin n)) :
   intro E i
   show dataErr n (propagateCircuit (xCircuit n support) (initialFromData E)) i = E i
   simp only [dataErr]
-  -- mkDataQubit n i = ⟨i.val, _⟩
   exact xCircuit_dataMatches_preserved support E i
+
+/-! ## Towards C1 (parityFaithful) — ancilla Pauli accumulation
+
+For C1, we need to track what Pauli the ancilla carries after the
+CNOT chain. Initial ancilla = I (after prepPlus). Each CNOT(anc, q)
+accumulates `pauliMul (zPart (E q)) (anc.paulis)` onto the ancilla,
+because the Z-component of the target qubit propagates back to the
+control. After the chain, anc.paulis is a product of `zPart` values
+over support qubits.
+
+After Hadamard: paulis swap X↔Z; after measZ: hasXComp flips
+measFlips. So the measurement-flip parity equals the parity of
+Z-components of `E` over `support`. -/
+
+/-- After `CNOT(anc, q)`: if the ancilla had no X-component, the new
+    ancilla Pauli is `pauliMul (zPart (es.paulis q-data)) (es.paulis anc)`.
+    Data qubits are unchanged (when ancNoX holds — see
+    `dataMatches_cnot_anc_to_data`). -/
+theorem cnot_anc_to_data_anc_paulis {n : Nat} (q : Fin n)
+    (es : ErrorState (n+1)) (_hax : ancHasNoX n es) :
+    (propagateGate (Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es).paulis
+      (ancQubit n)
+    = pauliMul (zPart (es.paulis (mkDataQubit n q))) (es.paulis (ancQubit n)) := by
+  simp only [propagateGate]
+  have h_ne : ancQubit n ≠ mkDataQubit n q := anc_ne_data n q
+  rw [if_neg h_ne]
+  simp
 
 end QStab.Compiler.SchemeCorrectStandard
