@@ -16,17 +16,17 @@ open QStab.QClifford
 
 /-- Build standard X-type circuit: prep+(anc), CNOT(anc,q_i), H(anc), measZ(anc).
     support = gate ordering of data qubits. Ancilla = qubit n. -/
-private def mkDataQubit (n : Nat) (q : Fin n) : Fin (n + 1) :=
+def mkDataQubit (n : Nat) (q : Fin n) : Fin (n + 1) :=
   ⟨q.val, Nat.lt_succ_of_lt q.isLt⟩
 
-private def ancQubit (n : Nat) : Fin (n + 1) :=
+def ancQubit (n : Nat) : Fin (n + 1) :=
   ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩
 
-private theorem anc_ne_data (n : Nat) (q : Fin n) :
+theorem anc_ne_data (n : Nat) (q : Fin n) :
     ancQubit n ≠ mkDataQubit n q := by
   simp [ancQubit, mkDataQubit, Fin.ext_iff]; omega
 
-private theorem data_ne_anc (n : Nat) (q : Fin n) :
+theorem data_ne_anc (n : Nat) (q : Fin n) :
     mkDataQubit n q ≠ ancQubit n := by
   simp [ancQubit, mkDataQubit, Fin.ext_iff]; omega
 
@@ -178,10 +178,10 @@ private theorem zPart_xPart_pauliMul (P Q : Pauli) (h : zPart Q = .I) :
 -- Key invariants
 -- ============================================================
 
-private def ancHasNoX (n : Nat) (es : ErrorState (n + 1)) : Prop :=
+def ancHasNoX (n : Nat) (es : ErrorState (n + 1)) : Prop :=
   xPart (es.paulis (ancQubit n)) = .I
 
-private def ancHasNoZ (n : Nat) (es : ErrorState (n + 1)) : Prop :=
+def ancHasNoZ (n : Nat) (es : ErrorState (n + 1)) : Prop :=
   zPart (es.paulis (ancQubit n)) = .I
 
 private theorem data_ne_anc_idx (n : Nat) (j : Fin n) :
@@ -205,7 +205,7 @@ private theorem dataWt_congr (n : Nat) (es1 es2 : ErrorState (n + 1))
 -- Invariant: ancHasNoX preserved by CNOT(anc→q), dataWt unchanged
 -- ============================================================
 
-private theorem cnot_anc_ancNoX (n : Nat) (q : Fin n)
+theorem cnot_anc_ancNoX (n : Nat) (q : Fin n)
     (es : ErrorState (n + 1)) (h : ancHasNoX n es) :
     ancHasNoX n (propagateGate (Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es) ∧
     dataWt n (propagateGate (Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es) =
@@ -230,7 +230,7 @@ private theorem cnot_anc_ancNoX (n : Nat) (q : Fin n)
         simp [Fin.ext_iff]; omega
       simp only [hjq_ne, hjn_ne, ite_false]
 
-private theorem propagate_cnotAnc_ancNoX (n : Nat) (qs : List (Fin n))
+theorem propagate_cnotAnc_ancNoX (n : Nat) (qs : List (Fin n))
     (es : ErrorState (n + 1)) (h : ancHasNoX n es) :
     ancHasNoX n (propagateCircuit
       (qs.map fun q => Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es) ∧
@@ -525,7 +525,7 @@ private theorem non_cnot_circuit_dataWt_unchanged (n : Nat) (c : List (Gate (n +
     rw [ih (fun g' hg' => hc g' (List.mem_cons_of_mem g hg')) (propagateGate g es),
         non_cnot_gate_dataWt_unchanged n g (hc g (List.mem_cons.mpr (Or.inl rfl))) es]
 
-private theorem propagateCircuit_append (c1 c2 : List (Gate nq)) (es : ErrorState nq) :
+theorem propagateCircuit_append (c1 c2 : List (Gate nq)) (es : ErrorState nq) :
     propagateCircuit (c1 ++ c2) es = propagateCircuit c2 (propagateCircuit c1 es) := by
   induction c1 generalizing es with
   | nil => simp [propagateCircuit]

@@ -3,122 +3,157 @@ import QStab.Paper.Soundness
 
 /-! # `SchemeCorrect` for the standard CNOT scheme
 
-Phase B (session 2, iter 9). Discharges the `SchemeCorrect` hypothesis
-that `qstab_sound` requires (and that `toCircuitStabilizerX_qstab_sound`
-in iter 2 took as a parameter), at least partially.
+Phase B (session 2, iter 9-10). Discharges the `SchemeCorrect`
+hypothesis that `qstab_sound` requires.
 
 `SchemeCorrect Γ T_s r := parityFaithful Γ T_s ∧ noBackAction Γ ∧
 boundedHook Γ r` where:
-- **C1 (parityFaithful)**: `measFlipped (runClean Γ E) = parity T_s E`.
-  *Iter 10 task.*
 - **C2 (noBackAction)**: `dataPauli (runClean Γ E) i = E i`.
-  *This file (iter 9).*
+  *This file (iter 10): full assembly for xCircuit.*
+- **C1 (parityFaithful)**: `measFlipped (runClean Γ E) = parity T_s E`.
+  *Iter 11 task.*
 - **C3 (boundedHook)**: already proven by `Standard.weight_bounded`.
-
-This file establishes C2 for `Standard.xCircuit`. C1 + Z-side analogs
-are deferred to iter 10. -/
+-/
 
 namespace QStab.Compiler.SchemeCorrectStandard
 
 open QStab QStab.QClifford QStab.QClifford.Standard QStab.Paper.Soundness
 
-/-! ## Helper invariant: each data qubit equals an externally fixed input -/
+/-! ## `dataMatches`: each data qubit equals an externally fixed input -/
 
 /-- `dataMatches E es`: each data qubit of `es` (indices `0..n-1`)
-    carries Pauli `E i`. Independent of the ancilla state. -/
+    carries Pauli `E i`. -/
 def dataMatches {n : Nat} (E : ErrorVec n) (es : ErrorState (n + 1)) : Prop :=
-  ∀ i : Fin n, es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ = E i
+  ∀ i : Fin n, es.paulis (mkDataQubit n i) = E i
 
 /-- The clean state with `E` injected satisfies `dataMatches E`. -/
 theorem dataMatches_init {n : Nat} (E : ErrorVec n) :
     dataMatches E (initialFromData E) := by
   intro i
-  simp only [initialFromData]
+  simp only [initialFromData, mkDataQubit]
   have h_lt : i.val < n := i.isLt
   simp [h_lt]
-
-/-- Local copy of Standard.lean's private `ancHasNoX`: the ancilla
-    has no X-component. -/
-def ancNoX {n : Nat} (es : ErrorState (n + 1)) : Prop :=
-  xPart (es.paulis ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩) = .I
-
-/-- The ancilla of `initialFromData E` is identity (so `ancNoX` holds
-    initially). -/
-theorem initialFromData_anc_I {n : Nat} (E : ErrorVec n) :
-    (initialFromData E).paulis ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩ = .I := by
-  simp only [initialFromData]
-  have h_not : ¬ n < n := Nat.lt_irrefl n
-  simp
-
-/-- The initial state has no ancilla X-component. -/
-theorem ancNoX_init {n : Nat} (E : ErrorVec n) : ancNoX (initialFromData E) := by
-  show xPart _ = .I
-  rw [initialFromData_anc_I]
-  rfl
-
-/-! ## Gate-by-gate dataMatches preservation -/
-
-private theorem data_ne_anc' (n : Nat) (i : Fin n) :
-    (⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ : Fin (n+1)) ≠
-      ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩ := by
-  simp [Fin.ext_iff]; omega
 
 /-- `prepPlus` on the ancilla preserves `dataMatches`. -/
 theorem dataMatches_prepPlus_anc {n : Nat} (E : ErrorVec n)
     (es : ErrorState (n+1)) (h : dataMatches E es) :
-    dataMatches E (propagateGate (Gate.prepPlus ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩) es) := by
+    dataMatches E (propagateGate (Gate.prepPlus (ancQubit n)) es) := by
   intro i
   simp only [propagateGate]
-  rw [if_neg (data_ne_anc' n i)]
+  rw [if_neg (Ne.symm (anc_ne_data n i))]
   exact h i
 
 /-- `Hadamard` on the ancilla preserves `dataMatches`. -/
 theorem dataMatches_hadamard_anc {n : Nat} (E : ErrorVec n)
     (es : ErrorState (n+1)) (h : dataMatches E es) :
-    dataMatches E (propagateGate (Gate.hadamard ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩) es) := by
+    dataMatches E (propagateGate (Gate.hadamard (ancQubit n)) es) := by
   intro i
   simp only [propagateGate]
-  rw [if_neg (data_ne_anc' n i)]
+  rw [if_neg (Ne.symm (anc_ne_data n i))]
   exact h i
 
 /-- `measZ` on the ancilla preserves `dataMatches`. -/
 theorem dataMatches_measZ_anc {n : Nat} (E : ErrorVec n)
     (es : ErrorState (n+1)) (h : dataMatches E es) :
-    dataMatches E (propagateGate (Gate.measZ ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩) es) := by
+    dataMatches E (propagateGate (Gate.measZ (ancQubit n)) es) := by
   intro i
-  -- propagateGate measZ only changes measFlips, not paulis
   simp only [propagateGate]
   exact h i
 
-/-- `CNOT(anc, q)` preserves `dataMatches` *if* the ancilla has no X
-    component (so the X-from-control contribution to the target is
-    identity). -/
+/-- `CNOT(anc, q)` preserves `dataMatches` if the ancilla has no
+    X-component. The proof: at target `q`, the contribution from
+    control is `xPart anc = I`, so the target is unchanged
+    (`pauliMul I E = E`); other data qubits are untouched. -/
 theorem dataMatches_cnot_anc_to_data {n : Nat} (E : ErrorVec n)
     (q : Fin n) (es : ErrorState (n+1))
-    (h : dataMatches E es) (hax : ancNoX es) :
+    (h : dataMatches E es) (hax : ancHasNoX n es) :
     dataMatches E (propagateGate
-      (Gate.cnot ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩
-                  ⟨q.val, Nat.lt_succ_of_lt q.isLt⟩
-                  (by simp [Fin.ext_iff]; omega)) es) := by
+      (Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es) := by
   intro i
   simp only [propagateGate]
   by_cases hiq : i = q
-  · -- i = q: this is the CNOT target; gets xPart(anc) · es.paulis i.
+  · -- i = q: target qubit. X-from-control is I, so pauliMul I (es.paulis t) = es.paulis t.
     subst hiq
     rw [if_pos rfl]
-    -- xPart anc = I (from ancHasNoX), so result = pauliMul I (es.paulis i.target) = es.paulis i
-    have : xPart (es.paulis ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩) = .I := hax
-    rw [this]
+    have hax' : xPart (es.paulis (ancQubit n)) = .I := hax
+    rw [hax']
     show pauliMul Pauli.I _ = E i
-    simp [pauliMul_I_left]
+    rw [pauliMul_I_left]
     exact h i
-  · -- i ≠ q: gate doesn't touch this qubit (and i ≠ anc since i is a data index)
-    have h1 : (⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ : Fin (n+1)) ≠
-              ⟨q.val, Nat.lt_succ_of_lt q.isLt⟩ := by
-      simp [Fin.ext_iff]; intro h'; exact hiq (Fin.ext h')
-    have h2 : (⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ : Fin (n+1)) ≠
-              ⟨n, Nat.lt_succ_of_le (Nat.le_refl n)⟩ := data_ne_anc' n i
+  · -- i ≠ q: not the target. Also i is a data index, not the ancilla.
+    have h1 : mkDataQubit n i ≠ mkDataQubit n q := by
+      simp [mkDataQubit, Fin.ext_iff]
+      intro h'; exact hiq (Fin.ext h')
+    have h2 : mkDataQubit n i ≠ ancQubit n := data_ne_anc n i
     rw [if_neg h1, if_neg h2]
     exact h i
+
+/-! ## Assembly: induct over the CNOT support list -/
+
+/-- Induction: the CNOT-chain (anc → each data qubit in `qs`) preserves
+    both `ancHasNoX` and `dataMatches E`. -/
+theorem ancHasNoX_dataMatches_cnotChain {n : Nat} (E : ErrorVec n)
+    (qs : List (Fin n)) (es : ErrorState (n+1))
+    (hax : ancHasNoX n es) (hdm : dataMatches E es) :
+    ancHasNoX n (propagateCircuit
+      (qs.map fun q => Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es)
+    ∧ dataMatches E (propagateCircuit
+      (qs.map fun q => Gate.cnot (ancQubit n) (mkDataQubit n q) (anc_ne_data n q)) es) := by
+  induction qs generalizing es with
+  | nil => exact ⟨hax, hdm⟩
+  | cons q rest ih =>
+    simp only [List.map, propagateCircuit]
+    obtain ⟨hax', _⟩ := cnot_anc_ancNoX n q es hax
+    have hdm' : dataMatches E (propagateGate _ es) :=
+      dataMatches_cnot_anc_to_data E q es hdm hax
+    exact ih _ hax' hdm'
+
+/-- `prepPlus` on the ancilla yields `ancHasNoX` regardless of input. -/
+theorem ancHasNoX_prepPlus_anc {n : Nat} (es : ErrorState (n+1)) :
+    ancHasNoX n (propagateGate (Gate.prepPlus (ancQubit n)) es) := by
+  show xPart _ = .I
+  simp [propagateGate, xPart]
+
+/-- The initial state with E injected has `ancHasNoX` (ancilla = I). -/
+theorem ancHasNoX_initialFromData {n : Nat} (E : ErrorVec n) :
+    ancHasNoX n (initialFromData E) := by
+  show xPart _ = .I
+  simp [initialFromData, ancQubit, xPart, Nat.lt_irrefl]
+
+/-- The bedrock dataMatches lemma: full xCircuit preserves data
+    qubits. -/
+theorem xCircuit_dataMatches_preserved {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) :
+    dataMatches E (propagateCircuit (xCircuit n support) (initialFromData E)) := by
+  unfold xCircuit
+  rw [propagateCircuit_append, propagateCircuit_append]
+  -- After prepPlus block: ancHasNoX + dataMatches preserved (dataMatches via prepPlus, ancHasNoX strengthens)
+  set es0 := initialFromData E
+  -- propagateCircuit [prepPlus] es0 = propagateGate prepPlus es0
+  have hpc1 : propagateCircuit [Gate.prepPlus (ancQubit n)] es0 =
+              propagateGate (Gate.prepPlus (ancQubit n)) es0 := by
+    simp [propagateCircuit]
+  rw [hpc1]
+  set es1 := propagateGate (Gate.prepPlus (ancQubit n)) es0
+  have h_ax1 : ancHasNoX n es1 := ancHasNoX_prepPlus_anc es0
+  have h_dm1 : dataMatches E es1 :=
+    dataMatches_prepPlus_anc E es0 (dataMatches_init E)
+  -- After CNOT chain: dataMatches preserved (ancHasNoX also preserved but not needed downstream)
+  obtain ⟨_, h_dm2⟩ := ancHasNoX_dataMatches_cnotChain E support es1 h_ax1 h_dm1
+  set es2 := propagateCircuit (support.map _) es1
+  -- After [hadamard, measZ]: dataMatches preserved (neither gate touches data).
+  simp only [propagateCircuit]
+  have h_dm3 := dataMatches_hadamard_anc E es2 h_dm2
+  exact dataMatches_measZ_anc E _ h_dm3
+
+/-- **C2 noBackAction for `xCircuit`**: the standard X-side gadget
+    leaves data qubits unchanged on a fault-free run. -/
+theorem xCircuit_noBackAction {n : Nat} (support : List (Fin n)) :
+    noBackAction (xCircuit n support) := by
+  intro E i
+  show dataErr n (propagateCircuit (xCircuit n support) (initialFromData E)) i = E i
+  simp only [dataErr]
+  -- mkDataQubit n i = ⟨i.val, _⟩
+  exact xCircuit_dataMatches_preserved support E i
 
 end QStab.Compiler.SchemeCorrectStandard
