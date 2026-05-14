@@ -1,6 +1,7 @@
 import QStab.Verifier
 import QStab.QClifford.Gate
 import QStab.Compiler.ToCircuit
+import QStab.Compiler.LiftInvariant
 
 /-!
 # QCliffordFTBundle: gate-level fault-tolerance certificate (Phase 3 sketch)
@@ -303,17 +304,29 @@ open QStab.Compiler
 
 /-- **Real compiler** (X-side first): given a source bundle `b` and
     a matching code spec `spec`, produce the QClifford bundle with
-    real gate-level circuit. `failure` and `invHolds` are still
-    placeholders this iter; preservation/bridge will be wired in
-    iter 30+. -/
+    real gate-level circuit AND real `invHolds`/`init`/`preservation`
+    fields via `liftReach`.
+
+    `liftReach c` says "es is reachable from clean by propagating
+    some sequence of gates drawn from `c`" — preserved by every gate
+    `g ∈ c` (extend the witness by appending `g`). Iter 33 wires:
+
+      * `invHolds := liftReach (toCircuitX spec)`
+      * `init := liftReach_clean ...`
+      * `preservation := liftReach_preserve ...`
+
+    `failure` and `bridge` remain placeholders pending the real
+    failure-lift design (Phase D fault-tolerance proofs). -/
 def compileBundleSpec (b : QStabFTBundle) (spec : CodeSpec)
     (h_n : spec.n = b.P.n) : QCliffordFTBundle where
   nq       := b.P.n + 1
   circuit  := h_n ▸ (toCircuitX spec : Circuit (spec.n + 1))
   failure  := fun _ => False
-  invHolds := fun _ => True
-  init     := trivial
-  preservation := fun _ _ _ _ => trivial
+  invHolds := QStab.Compiler.liftReach
+                (h_n ▸ (toCircuitX spec : Circuit (spec.n + 1)))
+  init     := QStab.Compiler.liftReach_clean _
+  preservation := fun g hg es h =>
+                    QStab.Compiler.liftReach_preserve _ g hg es h
   static   := b.static
   bridge   := fun _ _ _ hf => hf
 
