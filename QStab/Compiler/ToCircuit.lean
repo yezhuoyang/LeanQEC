@@ -2,6 +2,7 @@ import QStab.Compiler
 import QStab.QClifford.Standard
 import QStab.Paper.Bridge
 import QStab.Paper.Soundness
+import QStab.Compiler.SchemeCorrectStandard
 
 /-! # QStab.Compiler.ToCircuit — single-stabilizer gate-level compilation
 
@@ -40,6 +41,7 @@ that future hypothesis.
 namespace QStab.Compiler
 
 open QStab QStab.QClifford QStab.QClifford.Standard QStab.Paper QStab.Paper.Soundness
+open QStab.Compiler.SchemeCorrectStandard
 
 /-- The X-side syndrome-extraction circuit for stabilizer `s` of
     `spec`. Thin wrapper over `Standard.xCircuit` applied to the
@@ -180,5 +182,69 @@ theorem toCircuitX_length (spec : CodeSpec) :
 theorem toCircuitZ_length (spec : CodeSpec) :
     (toCircuitZ spec).length = spec.R * (toCircuitZRound spec).length :=
   replicate_flatten_length spec.R (toCircuitZRound spec)
+
+/-! ## Multi-gadget data preservation
+
+Composes iter 31's `xCircuit_dataPauli_preserved` over `flatMap` and
+`flatten . replicate` to give the full-circuit data-preservation
+result needed by `compileBundleSpec`'s real `invHolds`/`preservation`
+wiring (iters 33-34). -/
+
+/-- Auxiliary: through any list of stabilizers compiled to X-side
+    gadgets and concatenated, data Paulis are preserved. -/
+theorem flatMap_xGadgets_data_preserved (spec : CodeSpec)
+    (lst : List (Fin spec.numStab)) (es : ErrorState (spec.n + 1))
+    (i : Fin spec.n) :
+    (propagateCircuit (lst.flatMap (toCircuitStabilizerX spec)) es).paulis
+      ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ =
+    es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ := by
+  induction lst generalizing es with
+  | nil =>
+    simp [List.flatMap, propagateCircuit]
+  | cons s rest ih =>
+    rw [show (s :: rest).flatMap (toCircuitStabilizerX spec) =
+            toCircuitStabilizerX spec s ++ rest.flatMap (toCircuitStabilizerX spec)
+        from rfl,
+        propagateCircuit_append]
+    have h_one := xCircuit_dataPauli_preserved (spec.gateOrdering s) es i
+    -- h_one : prop (xCircuit ...) es .paulis i = es.paulis i
+    -- toCircuitStabilizerX spec s = xCircuit spec.n (spec.gateOrdering s)
+    rw [ih]
+    exact h_one
+
+/-- **One X-side round preserves data**. -/
+theorem toCircuitXRound_data_preserved (spec : CodeSpec)
+    (es : ErrorState (spec.n + 1)) (i : Fin spec.n) :
+    (propagateCircuit (toCircuitXRound spec) es).paulis
+      ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ =
+    es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ := by
+  unfold toCircuitXRound
+  exact flatMap_xGadgets_data_preserved spec _ es i
+
+/-- Auxiliary: replicate-flatten over rounds preserves data. -/
+theorem replicate_round_data_preserved (spec : CodeSpec) (R : Nat)
+    (es : ErrorState (spec.n + 1)) (i : Fin spec.n) :
+    (propagateCircuit (List.replicate R (toCircuitXRound spec)).flatten es).paulis
+      ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ =
+    es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ := by
+  induction R generalizing es with
+  | zero => simp [List.replicate, List.flatten, propagateCircuit]
+  | succ k ih =>
+    rw [List.replicate_succ, List.flatten_cons, propagateCircuit_append]
+    rw [ih]
+    exact toCircuitXRound_data_preserved spec es i
+
+/-- **Full X-side circuit preserves data**: through `spec.R` rounds
+    of all-stabilizer X-side syndrome extraction, the data qubits
+    are unchanged regardless of input state. This is what
+    `compileBundleSpec` needs to argue that `liftInvariant` is
+    preserved by every gate in the compiled circuit. -/
+theorem toCircuitX_data_preserved (spec : CodeSpec)
+    (es : ErrorState (spec.n + 1)) (i : Fin spec.n) :
+    (propagateCircuit (toCircuitX spec) es).paulis
+      ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ =
+    es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ := by
+  unfold toCircuitX
+  exact replicate_round_data_preserved spec spec.R es i
 
 end QStab.Compiler
