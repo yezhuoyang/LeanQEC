@@ -266,4 +266,21 @@ theorem toCircuitStabilizerX_fault_weight_bound (spec : CodeSpec)
   rw [dataPauli_weight_eq]
   exact weight_bounded spec.n (spec.gateOrdering s) fault h_pos
 
+/-- **dataPauli equality after toCircuitX** (corollary of iter 32):
+    propagating the full multi-round circuit on any initial state
+    preserves the data Pauli vector as a function. This is the
+    function-level lift of iter 32's pointwise `toCircuitX_data_preserved`. -/
+theorem toCircuitX_dataPauli_eq (spec : CodeSpec) (es : ErrorState (spec.n + 1)) :
+    dataPauli (propagateCircuit (toCircuitX spec) es) = dataPauli es := by
+  funext i
+  show (propagateCircuit (toCircuitX spec) es).paulis ⟨i.val, _⟩
+       = es.paulis ⟨i.val, _⟩
+  exact toCircuitX_data_preserved spec es i
+
+/-- Weight of data preserved through the full circuit. -/
+theorem toCircuitX_weight_eq (spec : CodeSpec) (es : ErrorState (spec.n + 1)) :
+    ErrorVec.weight (dataPauli (propagateCircuit (toCircuitX spec) es))
+    = ErrorVec.weight (dataPauli es) := by
+  rw [toCircuitX_dataPauli_eq]
+
 end QStab.Compiler
