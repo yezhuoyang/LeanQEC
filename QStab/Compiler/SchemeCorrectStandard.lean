@@ -764,6 +764,53 @@ theorem zCircuit_noBackAction {n : Nat} (support : List (Fin n)) :
   have h := zCircuit_dataMatches_preserved support E i
   exact h
 
+/-! ## Z-side parity infrastructure (C1 mirror)
+
+Mirror of iters 13-23 X-side, but simpler: no Hadamard. The Z-side
+CNOT direction (data → anc) means anc accumulates X-components of
+data; measZ directly checks hasXComp without Hadamard rotation. -/
+
+/-- Z-side single-CNOT lemma: after `CNOT(data q, anc)`, the new
+    anc Pauli equals `pauliMul (xPart (data q)) (old anc)`. -/
+theorem cnot_data_to_anc_anc_paulis {n : Nat} (q : Fin n)
+    (es : ErrorState (n + 1)) :
+    (propagateGate (Gate.cnot (mkDataQubit n q) (ancQubit n)
+                              (data_ne_anc n q)) es).paulis (ancQubit n) =
+    pauliMul (xPart (es.paulis (mkDataQubit n q))) (es.paulis (ancQubit n)) := by
+  simp [propagateGate]
+
+/-- The X-component product of data over a CNOT chain. -/
+def productXPart {n : Nat} (qs : List (Fin n)) (E : ErrorVec n) : Pauli :=
+  qs.foldr (fun q acc => pauliMul (xPart (E q)) acc) Pauli.I
+
+@[simp] theorem productXPart_nil {n : Nat} (E : ErrorVec n) :
+    productXPart ([] : List (Fin n)) E = Pauli.I := rfl
+
+@[simp] theorem productXPart_cons {n : Nat} (q : Fin n) (qs : List (Fin n))
+    (E : ErrorVec n) :
+    productXPart (q :: qs) E = pauliMul (xPart (E q)) (productXPart qs E) := rfl
+
+/-- Z-side: xPart always returns I or X. -/
+theorem xPart_in_IX (p : Pauli) : xPart p = Pauli.I ∨ xPart p = Pauli.X := by
+  cases p <;> simp [xPart]
+
+/-- Z-side: productXPart stays in {I, X}. -/
+theorem productXPart_in_IX {n : Nat} (qs : List (Fin n)) (E : ErrorVec n) :
+    productXPart qs E = Pauli.I ∨ productXPart qs E = Pauli.X := by
+  induction qs with
+  | nil => left; rfl
+  | cons q rest ih =>
+    rw [productXPart_cons]
+    rcases xPart_in_IX (E q) with hxI | hxX
+    · rw [hxI]
+      rcases ih with hI | hX
+      · left; rw [hI]; rfl
+      · right; rw [hX]; rfl
+    · rw [hxX]
+      rcases ih with hI | hX
+      · right; rw [hI]; rfl
+      · left; rw [hX]; rfl
+
 /-! ### **`xCircuit_SchemeCorrect`** — the headline theorem
 
 Packages C1 (parityFaithful), C2 (noBackAction), C3 (boundedHook from
