@@ -135,4 +135,48 @@ theorem compatible_of_noBackAction
   show (propagateCircuit Γ (initialFromData qs.E_tilde)).paulis ⟨i.val, _⟩ = qs.E_tilde i
   exact this
 
+/-! ## Clean-propagation structural fact
+
+Since every individual gate is a no-op on clean paulis (the all-`I`
+vector), `liftReach c` states are paulis-clean for any circuit `c`.
+This is the structural lemma that makes the bundle's `bridge` field
+trivial under the placeholder `failure := fun _ => False`. -/
+
+/-- The invariant "all paulis are I" is preserved by every gate. -/
+theorem propagateGate_paulis_all_I {nq : Nat} (g : Gate nq)
+    (es : ErrorState nq) (h : ∀ q, es.paulis q = Pauli.I) (q : Fin nq) :
+    (propagateGate g es).paulis q = Pauli.I := by
+  cases g <;> simp [propagateGate, h, xPart, zPart, pauliMul, hadamardAction]
+  all_goals (split_ifs <;> simp [h])
+
+/-- Generalized: any propagateCircuit preserves "all paulis are I". -/
+theorem propagateCircuit_paulis_all_I {nq : Nat} (gs : Circuit nq) (es : ErrorState nq)
+    (h : ∀ q, es.paulis q = Pauli.I) (q : Fin nq) :
+    (propagateCircuit gs es).paulis q = Pauli.I := by
+  induction gs generalizing es with
+  | nil => simp [propagateCircuit]; exact h q
+  | cons g rest ih =>
+    simp only [propagateCircuit]
+    apply ih
+    intro q'
+    exact propagateGate_paulis_all_I g es h q'
+
+/-- Clean state's paulis are preserved by any propagateCircuit. -/
+theorem propagateCircuit_clean_paulis {nq : Nat} (gs : Circuit nq) (q : Fin nq) :
+    (propagateCircuit gs (ErrorState.clean nq)).paulis q = Pauli.I := by
+  apply propagateCircuit_paulis_all_I
+  intro q'
+  simp [ErrorState.clean, ErrorVec.identity]
+
+/-- **`liftReach` corollary**: every state in `liftReach c` has paulis
+    all `I`. This is the structural fact making the bundle's bridge
+    trivial under the placeholder `failure := fun _ => False` — and
+    it's the foundation for the eventual real failure-lift design. -/
+theorem liftReach_paulis_clean {nq : Nat} (c : Circuit nq) (es : ErrorState nq)
+    (h : liftReach c es) (q : Fin nq) :
+    es.paulis q = Pauli.I := by
+  obtain ⟨gs, _, hes⟩ := h
+  rw [hes]
+  exact propagateCircuit_clean_paulis gs q
+
 end QStab.Compiler
