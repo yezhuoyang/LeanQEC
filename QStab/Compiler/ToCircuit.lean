@@ -247,4 +247,23 @@ theorem toCircuitX_data_preserved (spec : CodeSpec)
   unfold toCircuitX
   exact replicate_round_data_preserved spec spec.R es i
 
+/-! ## **Single-gadget fault tolerance bound**
+
+Per-gadget weight bound: a single fault on a single stabilizer's
+X-side gadget produces a data error of weight ≤ |gateOrdering s|.
+Direct lift of `Standard.weight_bounded`. This is the building
+block for multi-gadget fault tolerance reasoning. -/
+
+/-- A single fault on the X-side gadget for stabilizer `s` produces a
+    data error bounded by the stabilizer's support length. -/
+theorem toCircuitStabilizerX_fault_weight_bound (spec : CodeSpec)
+    (s : Fin spec.numStab) (h_pos : 0 < (spec.gateOrdering s).length)
+    (fault : Fault (spec.n + 1)) :
+    ErrorVec.weight (dataPauli
+        (computeFaultEffect (toCircuitStabilizerX spec s) fault))
+    ≤ (spec.gateOrdering s).length := by
+  unfold toCircuitStabilizerX
+  rw [dataPauli_weight_eq]
+  exact weight_bounded spec.n (spec.gateOrdering s) fault h_pos
+
 end QStab.Compiler
