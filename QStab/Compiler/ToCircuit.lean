@@ -283,4 +283,36 @@ theorem toCircuitX_weight_eq (spec : CodeSpec) (es : ErrorState (spec.n + 1)) :
     = ErrorVec.weight (dataPauli es) := by
   rw [toCircuitX_dataPauli_eq]
 
+/-! ## **`computeFaultEffect` decomposition** (iter 40)
+
+If a fault lands in the first part of a concatenated circuit
+(`fault.position ≤ a.length`), then `computeFaultEffect (a ++ b) fault`
+equals `propagateCircuit b (computeFaultEffect a fault)` — i.e., the
+fault hits the prefix, and the suffix propagates its effect.
+
+This is the structural fact needed to apply per-gadget weight bounds
+to multi-gadget circuits. -/
+
+/-- Decomposition: a fault in the prefix of a concatenated circuit
+    is the fault on the prefix, then clean propagation of the suffix. -/
+theorem computeFaultEffect_append_left {nq : Nat}
+    (a b : Circuit nq) (fault : Fault nq) (h : fault.position ≤ a.length) :
+    computeFaultEffect (a ++ b) fault =
+    propagateCircuit b (computeFaultEffect a fault) := by
+  unfold computeFaultEffect splitAt
+  -- Unfold .1 / .2 of the pair
+  simp only [Prod.mk]
+  -- (a ++ b).take p = a.take p (since p ≤ a.length, so p - a.length = 0)
+  rw [show ((a ++ b).take fault.position : Circuit nq) = a.take fault.position from by
+        rw [List.take_append]
+        have : fault.position - a.length = 0 := Nat.sub_eq_zero_of_le h
+        simp [this]]
+  -- (a ++ b).drop p = a.drop p ++ b (when p ≤ a.length)
+  rw [show ((a ++ b).drop fault.position : Circuit nq) = a.drop fault.position ++ b from by
+        rw [List.drop_append]
+        have : fault.position - a.length = 0 := Nat.sub_eq_zero_of_le h
+        simp [this]]
+  -- propagateCircuit (a.drop k ++ b) es' = propagateCircuit b (propagateCircuit (a.drop k) es')
+  rw [propagateCircuit_append]
+
 end QStab.Compiler
