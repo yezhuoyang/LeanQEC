@@ -1,5 +1,7 @@
 import QStab.QClifford.Gate
 import QStab.State
+import QStab.Invariant
+import QStab.Paper.Soundness
 
 /-! # `QStab.Compiler.LiftInvariant` — bridges QStab invariants to QClifford
 
@@ -82,5 +84,55 @@ theorem liftReach_preserve {nq : Nat} (c : Circuit nq) (g : Gate nq) (hg : g ∈
     · rcases List.mem_singleton.mp h1 with rfl
       exact hg
   · rw [propagateCircuit_append_singleton, hes]
+
+/-! ## `liftInvariant`: the existential predicate on `ErrorState`
+
+The bridge from per-fault QStab semantics to per-gate QClifford
+states. `liftInvariant P inv es` says "there exists a QStab state
+`qs` satisfying `inv.holds` and consistent with `es`'s data Paulis".
+This is the predicate the compiled bundle's `invHolds` field will
+use. -/
+
+open QStab.Paper.Soundness
+
+/-- The lifted invariant: `es` is consistent with some QStab state
+    that satisfies `inv.holds`. -/
+def liftInvariant {P : QECParams} (inv : Invariant P)
+    (es : ErrorState (P.n + 1)) : Prop :=
+  ∃ qs : State P, inv.holds qs ∧ compatible es qs
+
+/-- Initial state condition: the clean QClifford state satisfies
+    `liftInvariant` (witness: `State.init P`). -/
+theorem liftInvariant_clean {P : QECParams} (inv : Invariant P) :
+    liftInvariant inv (ErrorState.clean (P.n + 1)) :=
+  ⟨State.init P, inv.holds_init, compatible_clean P⟩
+
+/-! ## Clean-gadget transfer (fault-free case)
+
+For a fault-free gadget Γ with `noBackAction`, propagating `Γ` from
+an `initialFromData E` state keeps the data part equal to `E`. So
+the QClifford state's data Paulis match the QStab state's `E_tilde`
+throughout — `compatible` is preserved (with the QStab state unchanged
+or only updated by a `measure` Step that leaves `E_tilde` alone).
+
+Stated for `initialFromData E` inputs only. Multi-gadget composition
+will require either a stronger noBackAction or per-gadget reset. -/
+
+/-- Bridge from `noBackAction` (data is preserved) to `compatible`
+    preservation after one fault-free gadget run. Applies when the
+    input is `initialFromData E` (the stating shape of `noBackAction`). -/
+theorem compatible_of_noBackAction
+    {P : QECParams} (Γ : Circuit (P.n + 1)) (h_noBA : noBackAction Γ)
+    {qs : State P} (h_qs_E : qs.E_tilde = qs.E_tilde) :
+    -- For any QStab state qs, the QClifford state propagateCircuit Γ
+    -- (initialFromData qs.E_tilde) is compatible with qs.
+    compatible (propagateCircuit Γ (initialFromData qs.E_tilde)) qs := by
+  intro i
+  have := h_noBA qs.E_tilde i
+  -- this : dataPauli (runClean Γ qs.E_tilde) i = qs.E_tilde i
+  -- runClean Γ E = propagateCircuit Γ (initialFromData E)
+  -- dataPauli es i = es.paulis ⟨i.val, ...⟩
+  show (propagateCircuit Γ (initialFromData qs.E_tilde)).paulis ⟨i.val, _⟩ = qs.E_tilde i
+  exact this
 
 end QStab.Compiler
