@@ -661,4 +661,23 @@ theorem xCircuit_parityFaithful {n : Nat} [NeZero n] (support : List (Fin n))
       · exact hl
     rw [this]; simp [h]
 
+/-! ### **`xCircuit_SchemeCorrect`** — the headline theorem
+
+Packages C1 (parityFaithful), C2 (noBackAction), C3 (boundedHook from
+`Standard.weight_bounded`) into a single `SchemeCorrect` certificate.
+This is the hypothesis `qstab_sound` needs, completing the bridge
+from the standard X-side gadget to QStab transition semantics. -/
+
+/-- **C1 + C2 + C3 = SchemeCorrect for the standard X-side gadget**.
+    Holds under `support.Nodup` (for C1) and `0 < support.length` (for C3).
+    The hook-weight bound `r` is `support.length` (the looser of the
+    two natural choices; matches `Standard.weight_bounded`). -/
+theorem xCircuit_SchemeCorrect {n : Nat} [NeZero n] (support : List (Fin n))
+    (h_nodup : support.Nodup) (hs : 0 < support.length) :
+    SchemeCorrect (xCircuit n support) (Xstabilizer support) support.length := by
+  refine ⟨xCircuit_parityFaithful support h_nodup, xCircuit_noBackAction support, ?_⟩
+  intro fault _
+  rw [dataPauli_weight_eq]
+  exact weight_bounded n support fault hs
+
 end QStab.Compiler.SchemeCorrectStandard
