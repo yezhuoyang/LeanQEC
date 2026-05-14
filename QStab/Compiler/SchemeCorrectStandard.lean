@@ -661,6 +661,109 @@ theorem xCircuit_parityFaithful {n : Nat} [NeZero n] (support : List (Fin n))
       · exact hl
     rw [this]; simp [h]
 
+/-! ## Z-side gadget: `zCircuit_noBackAction` (C2)
+
+Mirror of X-side. The Z-side CNOT direction is reversed (data → anc),
+so the relevant invariant is `ancHasNoZ` (Z-component of anc is I)
+instead of `ancHasNoX`. Standard.lean's `cnot_data_anc_ancHasNoZ`
++ `propagate_cnotDataAnc_ancHasNoZ` provide the helpers. -/
+
+/-- `prepZero(anc)` leaves data alone. -/
+theorem dataMatches_prepZero_anc {n : Nat} (E : ErrorVec n)
+    (es : ErrorState (n + 1)) (h : dataMatches E es) :
+    dataMatches E (propagateGate (Gate.prepZero (ancQubit n)) es) := by
+  intro i
+  simp only [propagateGate]
+  have h_ne : (mkDataQubit n i) ≠ ancQubit n := data_ne_anc n i
+  rw [if_neg h_ne]
+  exact h i
+
+/-- `prepZero(anc)` from any state gives an ancNoZ state. -/
+theorem ancHasNoZ_prepZero_anc {n : Nat} (es : ErrorState (n + 1)) :
+    ancHasNoZ n (propagateGate (Gate.prepZero (ancQubit n)) es) := by
+  simp [ancHasNoZ, propagateGate, ancQubit, zPart]
+
+/-- The initial state from data injection has ancNoZ. -/
+theorem ancHasNoZ_initialFromData {n : Nat} (E : ErrorVec n) :
+    ancHasNoZ n (initialFromData E) := by
+  have h : (initialFromData E).paulis (ancQubit n) = Pauli.I := by
+    simp only [initialFromData, ancQubit]
+    simp
+  simp only [ancHasNoZ]
+  rw [h]; rfl
+
+/-- CNOT(data q, anc) under ancNoZ leaves data alone. -/
+theorem dataMatches_cnot_data_to_anc {n : Nat} (E : ErrorVec n) (q : Fin n)
+    (es : ErrorState (n + 1)) (h : dataMatches E es) (hax : ancHasNoZ n es) :
+    dataMatches E (propagateGate (Gate.cnot (mkDataQubit n q) (ancQubit n)
+                                            (data_ne_anc n q)) es) := by
+  intro i
+  simp only [propagateGate]
+  have h_ne_anc : (mkDataQubit n i) ≠ ancQubit n := data_ne_anc n i
+  rw [if_neg h_ne_anc]
+  by_cases hiq : i = q
+  · subst hiq
+    rw [if_pos rfl]
+    -- new paulis at i = pauliMul (zPart (es.paulis anc)) (es.paulis (mkDataQubit i))
+    simp only [ancHasNoZ] at hax
+    rw [hax]
+    show pauliMul Pauli.I (es.paulis (mkDataQubit n i)) = E i
+    rw [show pauliMul Pauli.I (es.paulis (mkDataQubit n i)) = es.paulis (mkDataQubit n i)
+        from by cases (es.paulis (mkDataQubit n i)) <;> rfl]
+    exact h i
+  · rw [if_neg (by
+      simp only [mkDataQubit, Fin.mk.injEq]
+      intro h_eq; exact hiq (Fin.ext h_eq))]
+    exact h i
+
+/-- CNOT chain (data → anc) preserves both ancNoZ AND dataMatches. -/
+theorem ancHasNoZ_dataMatches_zChain {n : Nat} (E : ErrorVec n)
+    (qs : List (Fin n)) (es : ErrorState (n + 1))
+    (hax : ancHasNoZ n es) (hdm : dataMatches E es) :
+    ancHasNoZ n (propagateCircuit
+      (qs.map fun q => Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es)
+    ∧ dataMatches E (propagateCircuit
+      (qs.map fun q => Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es) := by
+  induction qs generalizing es with
+  | nil => exact ⟨hax, hdm⟩
+  | cons q rest ih =>
+    simp only [List.map, propagateCircuit]
+    have hdm' := dataMatches_cnot_data_to_anc E q es hdm hax
+    have hax' := (QStab.QClifford.Standard.cnot_data_anc_ancHasNoZ n q es hax).1
+    exact ih _ hax' hdm'
+
+/-- The Z-side gadget preserves data exactly. -/
+theorem zCircuit_dataMatches_preserved {n : Nat} (support : List (Fin n))
+    (E : ErrorVec n) :
+    dataMatches E (propagateCircuit (zCircuit n support) (initialFromData E)) := by
+  unfold zCircuit
+  rw [propagateCircuit_append, propagateCircuit_append]
+  set es1 := propagateGate (Gate.prepZero (ancQubit n)) (initialFromData E) with hes1
+  have hes1' : propagateCircuit [Gate.prepZero (ancQubit n)] (initialFromData E) = es1 := by
+    simp [propagateCircuit, hes1]
+  rw [hes1']
+  have h_dm1 : dataMatches E es1 :=
+    dataMatches_prepZero_anc E (initialFromData E) (dataMatches_init E)
+  have h_anc1 : ancHasNoZ n es1 := ancHasNoZ_prepZero_anc (initialFromData E)
+  have ⟨_, h_dm2⟩ := ancHasNoZ_dataMatches_zChain E support es1 h_anc1 h_dm1
+  -- After the CNOT chain, the remaining tail is [measZ anc]
+  set es2 := propagateCircuit
+    (support.map fun q => Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es1
+  -- Need: dataMatches E (propagateCircuit [measZ anc] es2)
+  simp only [propagateCircuit]
+  intro i
+  simp only [propagateGate]
+  exact h_dm2 i
+
+/-- **C2 for Z-side**: the standard Z-side gadget has no back-action. -/
+theorem zCircuit_noBackAction {n : Nat} (support : List (Fin n)) :
+    noBackAction (zCircuit n support) := by
+  intro E i
+  unfold runClean
+  show dataErr n _ i = _
+  have h := zCircuit_dataMatches_preserved support E i
+  exact h
+
 /-! ### **`xCircuit_SchemeCorrect`** — the headline theorem
 
 Packages C1 (parityFaithful), C2 (noBackAction), C3 (boundedHook from

@@ -184,7 +184,7 @@ def ancHasNoX (n : Nat) (es : ErrorState (n + 1)) : Prop :=
 def ancHasNoZ (n : Nat) (es : ErrorState (n + 1)) : Prop :=
   zPart (es.paulis (ancQubit n)) = .I
 
-private theorem data_ne_anc_idx (n : Nat) (j : Fin n) :
+theorem data_ne_anc_idx (n : Nat) (j : Fin n) :
     (⟨j.val, Nat.lt_succ_of_lt j.isLt⟩ : Fin (n + 1)) ≠ ancQubit n := by
   simp [ancQubit, Fin.ext_iff]; omega
 
@@ -249,7 +249,7 @@ theorem propagate_cnotAnc_ancNoX (n : Nat) (qs : List (Fin n))
 -- Invariant: ancHasNoZ preserved by CNOT(q→anc), dataWt unchanged
 -- ============================================================
 
-private theorem cnot_data_anc_ancHasNoZ (n : Nat) (q : Fin n)
+theorem cnot_data_anc_ancHasNoZ (n : Nat) (q : Fin n)
     (es : ErrorState (n + 1)) (h : ancHasNoZ n es) :
     ancHasNoZ n (propagateGate (Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es) ∧
     dataWt n (propagateGate (Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es) =
@@ -275,7 +275,7 @@ private theorem cnot_data_anc_ancHasNoZ (n : Nat) (q : Fin n)
         simp [Fin.ext_iff, hjq]
       simp only [hjq_ne, ite_false]
 
-private theorem propagate_cnotDataAnc_ancHasNoZ (n : Nat) (qs : List (Fin n))
+theorem propagate_cnotDataAnc_ancHasNoZ (n : Nat) (qs : List (Fin n))
     (es : ErrorState (n + 1)) (h : ancHasNoZ n es) :
     ancHasNoZ n (propagateCircuit
       (qs.map fun q => Gate.cnot (mkDataQubit n q) (ancQubit n) (data_ne_anc n q)) es) ∧
