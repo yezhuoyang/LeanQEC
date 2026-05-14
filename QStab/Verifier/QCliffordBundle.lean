@@ -1,5 +1,6 @@
 import QStab.Verifier
 import QStab.QClifford.Gate
+import QStab.Compiler.ToCircuit
 
 /-!
 # QCliffordFTBundle: gate-level fault-tolerance certificate (Phase 3 sketch)
@@ -282,5 +283,58 @@ theorem compileBundle_runFinal_clean (b : QStabFTBundle) :
   show propagateCircuit (compileBundle b).circuit
          (ErrorState.clean (compileBundle b).nq) = ErrorState.clean b.P.n
   rfl
+
+/-! ## **Session 2 real compilation: `compileBundleSpec`**
+
+Replacement for `compileBundle` that takes a `CodeSpec` parameter
+matching the source bundle's `P.n`. The compiled bundle now has:
+
+  * `nq = b.P.n + 1` (one ancilla added)
+  * `circuit = toCircuitX spec` (real gate list, ~50 gates for
+    surface d=3 per round)
+
+Other fields (`failure`, `invHolds`, `preservation`, `bridge`)
+remain placeholders pending the per-gate liftInvariant preservation
+machinery (iter 30+).
+
+This is the function Phase D's concrete bundles will instantiate. -/
+
+open QStab.Compiler
+
+/-- **Real compiler** (X-side first): given a source bundle `b` and
+    a matching code spec `spec`, produce the QClifford bundle with
+    real gate-level circuit. `failure` and `invHolds` are still
+    placeholders this iter; preservation/bridge will be wired in
+    iter 30+. -/
+def compileBundleSpec (b : QStabFTBundle) (spec : CodeSpec)
+    (h_n : spec.n = b.P.n) : QCliffordFTBundle where
+  nq       := b.P.n + 1
+  circuit  := h_n ▸ (toCircuitX spec : Circuit (spec.n + 1))
+  failure  := fun _ => False
+  invHolds := fun _ => True
+  init     := trivial
+  preservation := fun _ _ _ _ => trivial
+  static   := b.static
+  bridge   := fun _ _ _ hf => hf
+
+/-- The new compiler preserves source's `static`. -/
+theorem compileBundleSpec_static_eq (b : QStabFTBundle) (spec : CodeSpec)
+    (h_n : spec.n = b.P.n) :
+    (compileBundleSpec b spec h_n).static = b.static := rfl
+
+/-- The new compiler's qubit count is source's data count + 1 (ancilla). -/
+theorem compileBundleSpec_nq_eq (b : QStabFTBundle) (spec : CodeSpec)
+    (h_n : spec.n = b.P.n) :
+    (compileBundleSpec b spec h_n).nq = b.P.n + 1 := rfl
+
+/-- TAL preservation theorem for the new compiler: still trivial in
+    this iter (Bool equality), but mediated through real circuit
+    field now. -/
+theorem compileBundleSpec_preserves_verify (b : QStabFTBundle) (spec : CodeSpec)
+    (h_n : spec.n = b.P.n) (h : verifyQStab b = true) :
+    verifyQClifford (compileBundleSpec b spec h_n) = true := by
+  show (compileBundleSpec b spec h_n).static = true
+  rw [compileBundleSpec_static_eq]
+  exact h
 
 end QStab.Verifier
