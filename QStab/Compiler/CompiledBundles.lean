@@ -1,6 +1,7 @@
 import QStab.Verifier.QCliffordBundle
 import QStab.Verifier.SurfaceD3X
 import QStab.Verifier.BB72SEX
+import QStab.Verifier.HGPX
 import QStab.Examples.CompilerTest
 
 /-!
@@ -97,5 +98,39 @@ theorem bb72_SE_X_compiled_verified :
 /-- The compiled bundle has the expected qubit count (72 data + 1 ancilla). -/
 theorem bb72_SE_X_compiled_nq :
     bb72_SE_X_compiled.nq = 73 := rfl
+
+/-! ## HGP family — **parametric** Phase D theorem
+
+HGPSpec instances require filling many fields (logicalZ basis,
+stabilizer matrix, weight bounds) that are tied to a specific
+classical parity-check matrix. Rather than commit to a single
+concrete HGPSpec (e.g. Rep3x3 with d=3, n=13), this iter delivers
+the PARAMETRIC compileBundleSpec theorem: for ANY `HGPSpec d` with
+budget below `d`, the compiled bundle verifies.
+
+A concrete HGPSpec for Rep3x3 would still need ~50 LoC of stabilizer
++ logicalZ data — out of scope for one iter. The parametric theorem
+covers any future concrete instance for free. -/
+
+open QStab.Verifier.HGPX
+open QStab.Examples.SurfaceGeneral (HGPSpec)
+
+/-- **Phase D parametric theorem**: for any HGPSpec and any matching
+    CodeSpec with the same qubit count, the compiled QClifford bundle
+    passes verification. This covers the entire HGP family in one
+    statement; concrete instances (Rep3x3, etc.) follow by
+    specialization. -/
+theorem hgp_X_compiled_verified {d : Nat} (spec : HGPSpec d)
+    (h_budget : spec.params.C_budget < d)
+    (cspec : CodeSpec) (h_n : cspec.n = spec.params.n) :
+    verifyQClifford
+      (compileBundleSpec (hgp_X_bundle spec h_budget) cspec h_n) = true := rfl
+
+/-- Same for the qubit-count fact. -/
+theorem hgp_X_compiled_nq {d : Nat} (spec : HGPSpec d)
+    (h_budget : spec.params.C_budget < d)
+    (cspec : CodeSpec) (h_n : cspec.n = spec.params.n) :
+    (compileBundleSpec (hgp_X_bundle spec h_budget) cspec h_n).nq =
+      spec.params.n + 1 := rfl
 
 end QStab.Compiler.CompiledBundles
