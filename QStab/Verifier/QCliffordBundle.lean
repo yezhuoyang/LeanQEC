@@ -350,4 +350,17 @@ theorem compileBundleSpec_preserves_verify (b : QStabFTBundle) (spec : CodeSpec)
   rw [compileBundleSpec_static_eq]
   exact h
 
+/-- **`runFinal` operational result**: the `compileBundleSpec`'s
+    `runFinal` (i.e., propagating the compiled circuit on the clean
+    error state) gives a state with all paulis equal to `I`. This
+    is the structural manifestation of iter 34's
+    `liftReach_paulis_clean`: every reachable state through the
+    compiled circuit is paulis-clean. -/
+theorem compileBundleSpec_runFinal_paulis_clean (b : QStabFTBundle)
+    (spec : CodeSpec) (h_n : spec.n = b.P.n)
+    (q : Fin (compileBundleSpec b spec h_n).nq) :
+    (compileBundleSpec b spec h_n).runFinal.paulis q = Pauli.I := by
+  unfold QCliffordFTBundle.runFinal
+  apply QStab.Compiler.propagateCircuit_clean_paulis
+
 end QStab.Verifier
