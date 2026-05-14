@@ -155,6 +155,44 @@ theorem xCircuit_noBackAction {n : Nat} (support : List (Fin n)) :
   simp only [dataErr]
   exact xCircuit_dataMatches_preserved support E i
 
+/-- **Generalized data preservation** (X-side): for ANY initial
+    state `es` (not just `initialFromData E`), the standard X-side
+    gadget preserves data Paulis pointwise. The key fact:
+    `prepPlus(anc)` at the start of the gadget resets the ancilla,
+    so the per-gate preservation chain (iter 10) works regardless
+    of `es`'s initial ancilla. This is required for multi-gadget
+    composition (iter 32). -/
+theorem xCircuit_data_preserved_general {n : Nat} (support : List (Fin n))
+    (es : ErrorState (n + 1)) :
+    dataMatches (fun i => es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩)
+                (propagateCircuit (xCircuit n support) es) := by
+  set D : ErrorVec n := fun i => es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ with hD
+  have h_dm0 : dataMatches D es := fun i => rfl
+  unfold xCircuit
+  rw [propagateCircuit_append, propagateCircuit_append]
+  have hpc1 : propagateCircuit [Gate.prepPlus (ancQubit n)] es =
+              propagateGate (Gate.prepPlus (ancQubit n)) es := by
+    simp [propagateCircuit]
+  rw [hpc1]
+  set es1 := propagateGate (Gate.prepPlus (ancQubit n)) es
+  have h_ax1 : ancHasNoX n es1 := ancHasNoX_prepPlus_anc es
+  have h_dm1 : dataMatches D es1 :=
+    dataMatches_prepPlus_anc D es h_dm0
+  obtain ⟨_, h_dm2⟩ := ancHasNoX_dataMatches_cnotChain D support es1 h_ax1 h_dm1
+  set es2 := propagateCircuit (support.map _) es1
+  simp only [propagateCircuit]
+  have h_dm3 := dataMatches_hadamard_anc D es2 h_dm2
+  exact dataMatches_measZ_anc D _ h_dm3
+
+/-- Corollary: the `dataPauli` of `propagateCircuit (xCircuit n support) es`
+    equals `dataPauli es` pointwise. Useful form for multi-gadget chain
+    arguments. -/
+theorem xCircuit_dataPauli_preserved {n : Nat} (support : List (Fin n))
+    (es : ErrorState (n + 1)) (i : Fin n) :
+    (propagateCircuit (xCircuit n support) es).paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩
+    = es.paulis ⟨i.val, Nat.lt_succ_of_lt i.isLt⟩ :=
+  xCircuit_data_preserved_general support es i
+
 /-! ## Towards C1 (parityFaithful) — ancilla Pauli accumulation
 
 For C1, we need to track what Pauli the ancilla carries after the
