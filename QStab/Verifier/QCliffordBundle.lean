@@ -321,14 +321,24 @@ def compileBundleSpec (b : QStabFTBundle) (spec : CodeSpec)
     (h_n : spec.n = b.P.n) : QCliffordFTBundle where
   nq       := b.P.n + 1
   circuit  := h_n ▸ (toCircuitX spec : Circuit (spec.n + 1))
-  failure  := fun _ => False
+  -- **Real failure predicate** (iter 37): the data part of the state
+  -- has nonzero Pauli weight. Vacuously false on `liftReach` states
+  -- (which are paulis-clean per iter 34).
+  failure  := fun es => ∃ i : Fin (b.P.n + 1), i.val < b.P.n ∧ es.paulis i ≠ Pauli.I
   invHolds := QStab.Compiler.liftReach
                 (h_n ▸ (toCircuitX spec : Circuit (spec.n + 1)))
   init     := QStab.Compiler.liftReach_clean _
   preservation := fun g hg es h =>
                     QStab.Compiler.liftReach_preserve _ g hg es h
   static   := b.static
-  bridge   := fun _ _ _ hf => hf
+  -- **Real bridge** (iter 37): liftReach states have paulis-clean
+  -- (iter 34's `liftReach_paulis_clean`), so the existential failure
+  -- predicate is vacuously false. The bridge no longer cheats.
+  bridge   := by
+    intro _ es h_inv h_fail
+    obtain ⟨i, _, h_ne⟩ := h_fail
+    apply h_ne
+    exact QStab.Compiler.liftReach_paulis_clean _ es h_inv i
 
 /-- The new compiler preserves source's `static`. -/
 theorem compileBundleSpec_static_eq (b : QStabFTBundle) (spec : CodeSpec)
