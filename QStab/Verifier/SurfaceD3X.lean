@@ -4,9 +4,9 @@ import QStab.Paper.SurfaceD3FromGeneric
 /-!
 # Surface code d=3 X-side fault-tolerance bundle (parametric over scheduling)
 
-Packages the d=3 X-side distance theorem as a `QStabFTBundle`,
+Packages the d=3 X-side distance theorem as a `QStabFTCertificate`,
 parametric over a non-Failing scheduling. Demonstrates the generic
-`QStabFTBundle.ofReachInv` constructor on a code that uses the
+`QStabFTCertificate.ofReachInv` constructor on a code that uses the
 aligned/perpendicular-spread proof rather than the BB-style
 chain-attack discharge.
 
@@ -16,8 +16,8 @@ Joint X+Z is the next iter (uses `SurfaceD3JointXZ`).
 
 For any concrete scheduling, instantiate as:
 ```
-def my_bundle : QStabFTBundle :=
-  surface_d3_X_bundle sched (by decide)  -- classOf sched ≠ Failing
+def my_bundle : QStabFTCertificate :=
+  surface_d3_X_certificate sched (by decide)  -- classOf sched ≠ Failing
 ```
 -/
 
@@ -48,9 +48,9 @@ private theorem finite_check (sched : Surface3Sched)
 
 /-- Surface code d=3 X-side fault-tolerance bundle, parametric over a
     non-Failing scheduling. Failure predicate: `isSuccessState E = true`. -/
-def surface_d3_X_bundle (sched : Surface3Sched)
-    (h_nf : classOf sched ≠ SchedClass.Failing) : QStabFTBundle :=
-  QStabFTBundle.ofReachInv
+def surface_d3_X_certificate (sched : Surface3Sched)
+    (h_nf : classOf sched ≠ SchedClass.Failing) : QStabFTCertificate :=
+  QStabFTCertificate.ofReachInv
     (schedCode sched)
     (schedAllHooks sched)
     (schedCode_hooks_bound sched)
@@ -59,6 +59,6 @@ def surface_d3_X_bundle (sched : Surface3Sched)
 
 theorem surface_d3_X_verified (sched : Surface3Sched)
     (h_nf : classOf sched ≠ SchedClass.Failing) :
-    verifyQStab (surface_d3_X_bundle sched h_nf) = true := rfl
+    verifyQStab (surface_d3_X_certificate sched h_nf) = true := rfl
 
 end QStab.Verifier.SurfaceD3X

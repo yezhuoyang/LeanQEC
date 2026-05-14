@@ -222,7 +222,7 @@ theorem bb_NZ_joint_d_circ_ge_6 :
 /-- **Invariant-form joint non-success** (lifts the body of
     `bb_NZ_joint_d_circ_ge_6` to take the joint bridge invariant
     directly, rather than going via `MultiStep`). This is exactly the
-    shape required by a `QStabFTBundle`'s `bridge` field: from the
+    shape required by a `QStabFTCertificate`'s `bridge` field: from the
     dynamic invariant on a state, conclude the failure predicate
     cannot hold. -/
 theorem bb_NZ_no_joint_success_of_invariant (s : State bb_jointCode)

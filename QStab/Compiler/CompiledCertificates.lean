@@ -1,27 +1,27 @@
-import QStab.Verifier.QCliffordBundle
+import QStab.Verifier.QCliffordCertificate
 import QStab.Verifier.SurfaceD3X
 import QStab.Verifier.BB72SEX
 import QStab.Verifier.HGPX
 import QStab.Examples.CompilerTest
 
 /-!
-# `CompiledBundles` — Phase D concrete compileBundleSpec instances
+# `CompiledBundles` — Phase D concrete compileCertificate instances
 
-Demonstrates session 2's `compileBundleSpec` on real source bundles
+Demonstrates session 2's `compileCertificate` on real source bundles
 from `QStab.Verifier`. Each instance:
 
-  1. Picks a source `QStabFTBundle` (X-side fault-tolerance proven).
+  1. Picks a source `QStabFTCertificate` (X-side fault-tolerance proven).
   2. Picks a matching `CodeSpec` (gate ordering for compilation).
   3. Discharges `spec.n = b.P.n` (typically by `rfl`).
   4. Confirms `verifyQClifford` of the compiled bundle = true via the
      iter 37 cheat-free bridge.
 
-Build success of `lake build QStab.Compiler.CompiledBundles` is the
+Build success of `lake build QStab.Compiler.CompiledCertificates` is the
 end-to-end Phase D smoke test: real source-side fault-tolerance ⇒
 real circuit-level compilation ⇒ real Lean verification.
 -/
 
-namespace QStab.Compiler.CompiledBundles
+namespace QStab.Compiler.CompiledCertificates
 
 open QStab QStab.Verifier
   QStab.Verifier.SurfaceD3X
@@ -31,7 +31,7 @@ open QStab QStab.Verifier
 
 /-! ## Surface code d=3 X-side
 
-Source bundle: `surface_d3_X_bundle` instantiated at a concrete
+Source bundle: `surface_d3_X_certificate` instantiated at a concrete
 non-Failing scheduling. Spec: `surfaceD3Spec` from `CompilerTest`.
 Dimension match: both have `n = 9`. -/
 
@@ -41,12 +41,12 @@ def surfaceD3_concrete_sched : Surface3Sched :=
   (⟨0, by omega⟩, ⟨0, by omega⟩, ⟨0, by omega⟩, ⟨0, by omega⟩)
 
 /-- Surface d=3 X-side source bundle, concretely instantiated. -/
-def surfaceD3_X_bundle_concrete : QStabFTBundle :=
-  surface_d3_X_bundle surfaceD3_concrete_sched (by decide)
+def surfaceD3_X_bundle_concrete : QStabFTCertificate :=
+  surface_d3_X_certificate surfaceD3_concrete_sched (by decide)
 
 /-- The compiled QClifford bundle for Surface d=3 X-side. -/
-def surfaceD3_X_compiled : QCliffordFTBundle :=
-  compileBundleSpec surfaceD3_X_bundle_concrete surfaceD3Spec rfl
+def surfaceD3_X_compiled : QCliffordFTCertificate :=
+  compileCertificate surfaceD3_X_bundle_concrete surfaceD3Spec rfl
 
 /-- **Phase D smoke test**: the compiled Surface d=3 X-side bundle
     passes QClifford verification. -/
@@ -59,7 +59,7 @@ theorem surfaceD3_X_compiled_nq :
 
 /-! ## BB[[72,12,6]] SE-scheduling X-side
 
-Source bundle: `bb72_SE_X_bundle`. We need a `CodeSpec` with `n = 72`.
+Source bundle: `bb72_SE_X_certificate`. We need a `CodeSpec` with `n = 72`.
 Creating a minimal placeholder `bb72_minimal_spec` (the spec's
 gate orderings are placeholders for the structural compilation test;
 the source-side fault-tolerance proof doesn't depend on them).
@@ -87,8 +87,8 @@ def bb72_minimal_spec : CodeSpec where
   hR := by omega
 
 /-- The compiled QClifford bundle for BB72 SE X-side. -/
-def bb72_SE_X_compiled : QCliffordFTBundle :=
-  compileBundleSpec bb72_SE_X_bundle bb72_minimal_spec rfl
+def bb72_SE_X_compiled : QCliffordFTCertificate :=
+  compileCertificate bb72_SE_X_certificate bb72_minimal_spec rfl
 
 /-- **Phase D smoke test**: the compiled BB72 SE X-side bundle
     passes QClifford verification. -/
@@ -105,7 +105,7 @@ HGPSpec instances require filling many fields (logicalZ basis,
 stabilizer matrix, weight bounds) that are tied to a specific
 classical parity-check matrix. Rather than commit to a single
 concrete HGPSpec (e.g. Rep3x3 with d=3, n=13), this iter delivers
-the PARAMETRIC compileBundleSpec theorem: for ANY `HGPSpec d` with
+the PARAMETRIC compileCertificate theorem: for ANY `HGPSpec d` with
 budget below `d`, the compiled bundle verifies.
 
 A concrete HGPSpec for Rep3x3 would still need ~50 LoC of stabilizer
@@ -124,13 +124,13 @@ theorem hgp_X_compiled_verified {d : Nat} (spec : HGPSpec d)
     (h_budget : spec.params.C_budget < d)
     (cspec : CodeSpec) (h_n : cspec.n = spec.params.n) :
     verifyQClifford
-      (compileBundleSpec (hgp_X_bundle spec h_budget) cspec h_n) = true := rfl
+      (compileCertificate (hgp_X_certificate spec h_budget) cspec h_n) = true := rfl
 
 /-- Same for the qubit-count fact. -/
 theorem hgp_X_compiled_nq {d : Nat} (spec : HGPSpec d)
     (h_budget : spec.params.C_budget < d)
     (cspec : CodeSpec) (h_n : cspec.n = spec.params.n) :
-    (compileBundleSpec (hgp_X_bundle spec h_budget) cspec h_n).nq =
+    (compileCertificate (hgp_X_certificate spec h_budget) cspec h_n).nq =
       spec.params.n + 1 := rfl
 
-end QStab.Compiler.CompiledBundles
+end QStab.Compiler.CompiledCertificates

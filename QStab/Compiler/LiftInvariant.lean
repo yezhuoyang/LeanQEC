@@ -16,7 +16,7 @@ Phase B (session 2, iter 8) entry point. Provides:
   circuit). This is the QClifford analog of MultiStep-reachability.
 * `liftReach_clean` — clean state satisfies `liftReach` (empty gs).
 * `liftReach_preserve` — extending by any gate `g ∈ c` preserves
-  `liftReach`; matches the weakened `QCliffordFTBundle.preservation`
+  `liftReach`; matches the weakened `QCliffordFTCertificate.preservation`
   field signature from iter 7.
 
 The connection to source-side `Invariant P` and to `qstab_sound` is

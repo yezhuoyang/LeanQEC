@@ -5,7 +5,7 @@ import QStab.Examples.SurfaceGeneral
 # HGP code X-side fault-tolerance bundle (parametric over HGPSpec d)
 
 Packages the HGP-family X-side distance theorem
-(`hgp_distance_ge_d`) as a `QStabFTBundle`, parametric over an
+(`hgp_distance_ge_d`) as a `QStabFTCertificate`, parametric over an
 `HGPSpec d` with `params.C_budget < d`.
 
 Unlike the BB72 / surface bundles, the HGP framework's distance
@@ -34,8 +34,8 @@ private def reachableInv (spec : HGPSpec d) :
 /-- HGP code X-side fault-tolerance bundle, parametric over an
     `HGPSpec d` with budget below `d`. Failure: zero syndromes AND
     nonzero logical-Z parity. -/
-def hgp_X_bundle (spec : HGPSpec d) (h_budget : spec.params.C_budget < d) :
-    QStabFTBundle where
+def hgp_X_certificate (spec : HGPSpec d) (h_budget : spec.params.C_budget < d) :
+    QStabFTCertificate where
   P       := spec.params
   failure := fun E =>
     (∀ i : Fin spec.params.numStab,
@@ -51,7 +51,7 @@ def hgp_X_bundle (spec : HGPSpec d) (h_budget : spec.params.C_budget < d) :
 
 theorem hgp_X_verified (spec : HGPSpec d)
     (h_budget : spec.params.C_budget < d) :
-    verifyQStab (hgp_X_bundle spec h_budget) = true := rfl
+    verifyQStab (hgp_X_certificate spec h_budget) = true := rfl
 
 /-- X-side `d_circ ≥ d` for any HGP code with `C_budget < d`,
     derived from the bundle via the generic `verifyQStab_sound`. -/
@@ -62,7 +62,7 @@ theorem hgp_X_d_circ_via_bundle
       ¬ ((∀ i : Fin spec.params.numStab,
             ErrorVec.parity (spec.params.stabilizers i) s.E_tilde = false) ∧
          (ErrorVec.parity spec.logicalZ s.E_tilde = true)) :=
-  verifyQStab_sound (hgp_X_bundle spec h_budget)
+  verifyQStab_sound (hgp_X_certificate spec h_budget)
     (hgp_X_verified spec h_budget)
 
 end QStab.Verifier.HGPX

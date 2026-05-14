@@ -14,7 +14,7 @@ bridge)` tuple — not just hardcoded codes — and the soundness theorem
 ## Bundle shape
 
 ```
-QStabFTBundle = ⟨P, failure, inv, static, bridge⟩
+QStabFTCertificate = ⟨P, failure, inv, static, bridge⟩
 ```
 where:
   * `P : QECParams` — the QStab program (compiled from a CodeSpec by the
@@ -54,7 +54,7 @@ already-compiled `P : QECParams` directly.
 4. Establish `static : Bool` (typically by `native_decide` on a finite
    property).
 5. Prove `bridge`.
-6. Assemble `b : QStabFTBundle` and invoke `verifyQStab_sound b _`.
+6. Assemble `b : QStabFTCertificate` and invoke `verifyQStab_sound b _`.
 
 The same `verifyQStab_sound` theorem applies to every code — surface,
 HGP, BB[[72, 12, 6]], and any future instance.
@@ -65,7 +65,7 @@ namespace QStab.Verifier
 open QStab
 
 /-- A fault-tolerance certificate bundle at the QStab (scheme-agnostic) level. -/
-structure QStabFTBundle where
+structure QStabFTCertificate where
   /-- The QStab program parameters. -/
   P       : QECParams
   /-- The failure predicate on accumulated errors. Logical failure
@@ -83,12 +83,12 @@ structure QStabFTBundle where
   bridge  : static = true → ∀ s : State P, inv.holds s → ¬ failure s.E_tilde
 
 /-- The verifier function. Returns the bundle's static side-condition. -/
-def verifyQStab (b : QStabFTBundle) : Bool := b.static
+def verifyQStab (b : QStabFTCertificate) : Bool := b.static
 
 /-- **Generic soundness theorem.** If the verifier accepts the bundle,
     then every `MultiStep`-reachable state from the initial state of
     `b.P` has its accumulated error outside the failure predicate. -/
-theorem verifyQStab_sound (b : QStabFTBundle) (h : verifyQStab b = true) :
+theorem verifyQStab_sound (b : QStabFTCertificate) (h : verifyQStab b = true) :
     ∀ s : State b.P,
       MultiStep b.P (.active (State.init b.P)) (.active s) →
       ¬ b.failure s.E_tilde := by
@@ -109,7 +109,7 @@ private def trivialInv (P : QECParams) : Invariant P where
 
 /-- A trivial bundle: every state passes (failure ≡ False). Sanity check
     that the soundness theorem applies generically. -/
-def trivialBundle (P : QECParams) : QStabFTBundle where
+def trivialBundle (P : QECParams) : QStabFTCertificate where
   P       := P
   failure := fun _ => False
   inv     := trivialInv P
@@ -130,7 +130,7 @@ A reusable constructor that packages any QECParams equipped with:
   * a `hooksUpperBound` proof;
   * a `Bool`-valued failure predicate;
   * a static finite check `∀ E ∈ reachableE allHooks C_budget, isSuccess E = false`
-into a `QStabFTBundle`. The dynamic invariant is the generic `reachInv` from
+into a `QStabFTCertificate`. The dynamic invariant is the generic `reachInv` from
 `GenericReachableBridge`; the bridge composes mono-lifting of the depth with
 the finite check.
 
@@ -141,14 +141,14 @@ etc.). Code-specific bundles become one-liners.
 
 open QStab.Paper.GenericReachableBridge in
 /-- Package any (QECParams, allHooks, hooks-upper-bound, isSuccess, finite-check)
-    tuple into a `QStabFTBundle`. -/
-def QStabFTBundle.ofReachInv
+    tuple into a `QStabFTCertificate`. -/
+def QStabFTCertificate.ofReachInv
     (P : QECParams)
     (allHooks : List (ErrorVec P.n))
     (h_bound : hooksUpperBound P allHooks)
     (isSuccess : ErrorVec P.n → Bool)
     (h_finite : ∀ E ∈ reachableE allHooks P.C_budget, isSuccess E = false) :
-    QStabFTBundle where
+    QStabFTCertificate where
   P       := P
   failure := fun E => isSuccess E = true
   inv     := reachInv P allHooks h_bound
@@ -163,12 +163,12 @@ def QStabFTBundle.ofReachInv
     exact Bool.false_ne_true hfail
 
 open QStab.Paper.GenericReachableBridge in
-theorem QStabFTBundle.ofReachInv_verified
+theorem QStabFTCertificate.ofReachInv_verified
     (P : QECParams)
     (allHooks : List (ErrorVec P.n))
     (h_bound : hooksUpperBound P allHooks)
     (isSuccess : ErrorVec P.n → Bool)
     (h_finite : ∀ E ∈ reachableE allHooks P.C_budget, isSuccess E = false) :
-    verifyQStab (QStabFTBundle.ofReachInv P allHooks h_bound isSuccess h_finite) = true := rfl
+    verifyQStab (QStabFTCertificate.ofReachInv P allHooks h_bound isSuccess h_finite) = true := rfl
 
 end QStab.Verifier

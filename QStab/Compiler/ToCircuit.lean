@@ -187,7 +187,7 @@ theorem toCircuitZ_length (spec : CodeSpec) :
 
 Composes iter 31's `xCircuit_dataPauli_preserved` over `flatMap` and
 `flatten . replicate` to give the full-circuit data-preservation
-result needed by `compileBundleSpec`'s real `invHolds`/`preservation`
+result needed by `compileCertificate`'s real `invHolds`/`preservation`
 wiring (iters 33-34). -/
 
 /-- Auxiliary: through any list of stabilizers compiled to X-side
@@ -237,7 +237,7 @@ theorem replicate_round_data_preserved (spec : CodeSpec) (R : Nat)
 /-- **Full X-side circuit preserves data**: through `spec.R` rounds
     of all-stabilizer X-side syndrome extraction, the data qubits
     are unchanged regardless of input state. This is what
-    `compileBundleSpec` needs to argue that `liftInvariant` is
+    `compileCertificate` needs to argue that `liftInvariant` is
     preserved by every gate in the compiled circuit. -/
 theorem toCircuitX_data_preserved (spec : CodeSpec)
     (es : ErrorState (spec.n + 1)) (i : Fin spec.n) :

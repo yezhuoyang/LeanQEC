@@ -5,7 +5,7 @@ import QStab.Paper.SurfaceD3JointXZ
 # Surface code d=3 joint X+Z fault-tolerance bundle (parametric over scheduling)
 
 Packages the joint X+Z surface-code d=3 distance theorem
-(`joint_nonFailing_op_d_circ_ge_3`) as a `QStabFTBundle`, parametric
+(`joint_nonFailing_op_d_circ_ge_3`) as a `QStabFTCertificate`, parametric
 over a full scheduling `sched : Surface3SchedFull` with both sides
 non-Failing.
 
@@ -34,9 +34,9 @@ private def reachableInv (sched : Surface3SchedFull) :
 
 /-- Surface code d=3 joint X+Z fault-tolerance bundle, parametric over
     a non-Failing full scheduling. Failure: `isSuccessStateFull E = true`. -/
-def surface_d3_joint_bundle (sched : Surface3SchedFull)
+def surface_d3_joint_certificate (sched : Surface3SchedFull)
     (h_X_nf : classOf sched.1 ≠ SchedClass.Failing)
-    (h_Z_nf : classOfZ sched.2 ≠ SchedClass.Failing) : QStabFTBundle where
+    (h_Z_nf : classOfZ sched.2 ≠ SchedClass.Failing) : QStabFTCertificate where
   P       := schedCodeFull sched
   failure := fun E => isSuccessStateFull E = true
   inv     := reachableInv sched
@@ -54,7 +54,7 @@ def surface_d3_joint_bundle (sched : Surface3SchedFull)
 theorem surface_d3_joint_verified (sched : Surface3SchedFull)
     (h_X_nf : classOf sched.1 ≠ SchedClass.Failing)
     (h_Z_nf : classOfZ sched.2 ≠ SchedClass.Failing) :
-    verifyQStab (surface_d3_joint_bundle sched h_X_nf h_Z_nf) = true := rfl
+    verifyQStab (surface_d3_joint_certificate sched h_X_nf h_Z_nf) = true := rfl
 
 /-- Joint X+Z d_circ ≥ 3 for any non-Failing surface d=3 scheduling,
     derived from the bundle via the generic `verifyQStab_sound`. -/
@@ -66,7 +66,7 @@ theorem surface_d3_joint_d_circ_ge_3_via_bundle
       MultiStep (schedCodeFull sched)
         (.active (State.init (schedCodeFull sched))) (.active s) →
       ¬ (isSuccessStateFull s.E_tilde = true) :=
-  verifyQStab_sound (surface_d3_joint_bundle sched h_X_nf h_Z_nf)
+  verifyQStab_sound (surface_d3_joint_certificate sched h_X_nf h_Z_nf)
     (surface_d3_joint_verified sched h_X_nf h_Z_nf)
 
 end QStab.Verifier.SurfaceD3Joint
