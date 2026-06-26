@@ -88,7 +88,7 @@ theorem soundness_z (n : Nat) (support : List (Fin n)) (fault : Fault (n + 1)) :
       qt = classify n (computeFaultEffect (zCircuit n support) fault) :=
   ⟨_, rfl⟩
 
-/-! ### Concrete verification via native_decide
+/-! ### Concrete verification via kernel decide
 
 We verify the exact fault classification for specific circuits,
 matching the Stim simulation data. -/
@@ -97,65 +97,65 @@ matching the Stim simulation data. -/
 def c2 : Circuit 3 := xCircuit 2 [⟨0, by omega⟩, ⟨1, by omega⟩]
 
 -- Ancilla X between CNOTs (pos=2): hook weight 1, no mflip
-example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .X, by decide⟩) = .data 1 false := by native_decide
+example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .X, by decide⟩) = .data 1 false := by decide
 -- Ancilla Z between CNOTs: Type-III
-example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .Z, by decide⟩) = .measOnly := by native_decide
+example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .Z, by decide⟩) = .measOnly := by decide
 -- Ancilla Y between CNOTs: hook + mflip (the Y-fault!)
-example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .Y, by decide⟩) = .data 1 true := by native_decide
+example : classify 2 (computeFaultEffect c2 ⟨2, ⟨2, by omega⟩, .Y, by decide⟩) = .data 1 true := by decide
 
 -- Weight-4 X-stabilizer on 4 data qubits
 def c4 : Circuit 5 := xCircuit 4 [⟨0, by omega⟩, ⟨1, by omega⟩, ⟨2, by omega⟩, ⟨3, by omega⟩]
 
 -- Before prep (pos=0): trivial (prep resets)
-example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .X, by decide⟩) = .trivial := by native_decide
-example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .Y, by decide⟩) = .trivial := by native_decide
-example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .Z, by decide⟩) = .trivial := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .X, by decide⟩) = .trivial := by decide
+example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .Y, by decide⟩) = .trivial := by decide
+example : classify 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .Z, by decide⟩) = .trivial := by decide
 
 -- Ancilla X at pos=1 (before CNOT to q0): full stabilizer hook, weight 4
-example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .X, by decide⟩) = .hook 4 false := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .X, by decide⟩) = .hook 4 false := by decide
 -- Ancilla Y at pos=1: hook + mflip
-example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 4 true := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 4 true := by decide
 -- Ancilla Z at pos=1: Type-III
-example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .Z, by decide⟩) = .measOnly := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨1, ⟨4, by omega⟩, .Z, by decide⟩) = .measOnly := by decide
 
 -- Ancilla X at pos=2: hook weight 3
-example : classify 4 (computeFaultEffect c4 ⟨2, ⟨4, by omega⟩, .X, by decide⟩) = .hook 3 false := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨2, ⟨4, by omega⟩, .X, by decide⟩) = .hook 3 false := by decide
 -- Ancilla Y at pos=2: hook weight 3 + mflip
-example : classify 4 (computeFaultEffect c4 ⟨2, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 3 true := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨2, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 3 true := by decide
 
 -- Ancilla X at pos=3: hook weight 2
-example : classify 4 (computeFaultEffect c4 ⟨3, ⟨4, by omega⟩, .X, by decide⟩) = .hook 2 false := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨3, ⟨4, by omega⟩, .X, by decide⟩) = .hook 2 false := by decide
 
 -- Ancilla X at pos=4: hook weight 1 (single qubit = Type-I)
-example : classify 4 (computeFaultEffect c4 ⟨4, ⟨4, by omega⟩, .X, by decide⟩) = .data 1 false := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨4, ⟨4, by omega⟩, .X, by decide⟩) = .data 1 false := by decide
 -- Ancilla Y at pos=4: weight 1 + mflip
-example : classify 4 (computeFaultEffect c4 ⟨4, ⟨4, by omega⟩, .Y, by decide⟩) = .data 1 true := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨4, ⟨4, by omega⟩, .Y, by decide⟩) = .data 1 true := by decide
 
 -- After all CNOTs, before H (pos=5): X→trivial, Z→Type-III
-example : classify 4 (computeFaultEffect c4 ⟨5, ⟨4, by omega⟩, .X, by decide⟩) = .trivial := by native_decide
-example : classify 4 (computeFaultEffect c4 ⟨5, ⟨4, by omega⟩, .Z, by decide⟩) = .measOnly := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨5, ⟨4, by omega⟩, .X, by decide⟩) = .trivial := by decide
+example : classify 4 (computeFaultEffect c4 ⟨5, ⟨4, by omega⟩, .Z, by decide⟩) = .measOnly := by decide
 
 -- After H (pos=6): X→Type-III, Z→trivial
-example : classify 4 (computeFaultEffect c4 ⟨6, ⟨4, by omega⟩, .X, by decide⟩) = .measOnly := by native_decide
-example : classify 4 (computeFaultEffect c4 ⟨6, ⟨4, by omega⟩, .Z, by decide⟩) = .trivial := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨6, ⟨4, by omega⟩, .X, by decide⟩) = .measOnly := by decide
+example : classify 4 (computeFaultEffect c4 ⟨6, ⟨4, by omega⟩, .Z, by decide⟩) = .trivial := by decide
 
 -- Data qubit faults
 -- X on data q1 during CNOT (pos=2): Type-I, no mflip
-example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .X, by decide⟩) = .data 1 false := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .X, by decide⟩) = .data 1 false := by decide
 -- Z on data q1 during CNOT: Type-I + mflip
-example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Z, by decide⟩) = .data 1 true := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Z, by decide⟩) = .data 1 true := by decide
 -- Y on data q1 during CNOT: Type-I + mflip
-example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Y, by decide⟩) = .data 1 true := by native_decide
+example : classify 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Y, by decide⟩) = .data 1 true := by decide
 
 -- Z-type stabilizer verification
 def cz4 : Circuit 5 := zCircuit 4 [⟨0, by omega⟩, ⟨1, by omega⟩, ⟨2, by omega⟩, ⟨3, by omega⟩]
 
 -- Ancilla X at pos=1: Type-III (X on target of CNOT = no propagation for Z-stab)
-example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .X, by decide⟩) = .measOnly := by native_decide
+example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .X, by decide⟩) = .measOnly := by decide
 -- Ancilla Z at pos=1: hook (Z propagates backward through CNOTs)
-example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .Z, by decide⟩) = .hook 4 false := by native_decide
+example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .Z, by decide⟩) = .hook 4 false := by decide
 -- Ancilla Y at pos=1: hook + mflip
-example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 4 true := by native_decide
+example : classify 4 (computeFaultEffect cz4 ⟨1, ⟨4, by omega⟩, .Y, by decide⟩) = .hook 4 true := by decide
 
 /-! ### Weight bound theorem: helper lemmas -/
 

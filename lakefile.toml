@@ -1,12 +1,14 @@
 name = "LeanQEC"
 version = "0.1.0"
-defaultTargets = ["leanqec"]
+defaultTargets = ["leanqec", "QStab"]
+weakLeanArgs = ["--tstack=512000", "--threads=1", "--memory=24000"]
 
 [[lean_lib]]
 name = "LeanQEC"
 
 [[lean_lib]]
 name = "QStab"
+globs = ["QStab"]
 
 [[lean_exe]]
 name = "leanqec"

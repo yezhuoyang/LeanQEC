@@ -99,7 +99,7 @@ def chosenBackActionSet (i : Fin 15) : Set (ErrorVec 16) :=
 
 theorem chosenHooks_weight_bound :
     ∀ e ∈ chosenHooks, ErrorVec.weight e ≤ 3 := by
-  native_decide
+  decide
 
 theorem chosenBackActionSet_subset :
     ∀ (i : Fin 15) (e : ErrorVec 16),

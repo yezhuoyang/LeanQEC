@@ -3,6 +3,8 @@ import QStab.Paper.BB72ChainCheck
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Algebra.BigOperators.ModEq
 
+set_option maxRecDepth 8192
+
 /-!
 # BB72 BitVec ↔ ErrorVec bridge
 
@@ -50,7 +52,7 @@ def ev_to_bv_z (E : ErrorVec 72) : BitVec 72 :=
 /-- **Per-mech identity**: `mech_x_bv i = ev_to_bv_x (bb_xMech i)`.
     Discharged by `native_decide` over 252 cases. -/
 theorem mech_x_bv_eq : ∀ i : Fin 252, mech_x_bv i = ev_to_bv_x (bb_xMech i) := by
-  native_decide
+  decide
 
 /-- Z-stab indexing: BB72 Z-stabs are stored at indices 36..71 in
     `bb_stabilizers`. -/
@@ -59,12 +61,12 @@ def zStabIdx (i : Fin 36) : Fin 72 := ⟨i.val + 36, by omega⟩
 /-- **Per-Z-stab identity**: `zstab_z_bv i = ev_to_bv_z (bb_stabilizers (zStabIdx i))`. -/
 theorem zstab_z_bv_eq :
     ∀ i : Fin 36, zstab_z_bv i = ev_to_bv_z (bb_stabilizers (zStabIdx i)) := by
-  native_decide
+  decide
 
 /-- **Per-L_Z identity**: `lz_z_bv i = ev_to_bv_z (bb_logicalZ_basis i)`. -/
 theorem lz_z_bv_eq :
     ∀ i : Fin 12, lz_z_bv i = ev_to_bv_z (bb_logicalZ_basis i) := by
-  native_decide
+  decide
 
 /-! ## X-only ErrorVec invariant
 
@@ -85,7 +87,7 @@ def is_X_only (E : ErrorVec 72) : Bool :=
 
 /-- Each mech is X-only. -/
 theorem bb_xMech_is_X_only : ∀ i : Fin 252, is_X_only (bb_xMech i) = true := by
-  native_decide
+  decide
 
 /-! ## Per-mech parity bridge
 
@@ -102,14 +104,14 @@ theorem parity_zstab_mech_bridge :
     ∀ (s : Fin 36) (m : Fin 252),
       ErrorVec.parity (bb_stabilizers (zStabIdx s)) (bb_xMech m) =
         bv_parity (zstab_z_bv s &&& mech_x_bv m) := by
-  native_decide
+  decide
 
 /-- Per-mech bridge for L_Z basis parity. -/
 theorem parity_lz_mech_bridge :
     ∀ (l : Fin 12) (m : Fin 252),
       ErrorVec.parity (bb_logicalZ_basis l) (bb_xMech m) =
         bv_parity (lz_z_bv l &&& mech_x_bv m) := by
-  native_decide
+  decide
 
 /-! ## Pointwise homomorphism: `anticommutes` is XOR-bilinear (Z-only / X-only)
 
@@ -241,11 +243,11 @@ theorem parity_mul_xor_zx (z a b : ErrorVec 72)
 
 theorem is_Z_only_bb_zstab :
     ∀ i : Fin 36, is_Z_only (bb_stabilizers (zStabIdx i)) = true := by
-  native_decide
+  decide
 
 theorem is_Z_only_bb_lz :
     ∀ l : Fin 12, is_Z_only (bb_logicalZ_basis l) = true := by
-  native_decide
+  decide
 
 /-! ## X-only is preserved under `ErrorVec.mul` -/
 

@@ -1,0 +1,407 @@
+# Surface d=3 NZ QClifford geometric Hoare proof ledger
+
+Status:
+  Non-Lean proof artifact.
+  No global fault-location enumeration.
+  No branch count such as 68*3 or choose(68,2)*9 is used.
+  The proof is by geometric assertion lemmas plus schematic QClifford Hoare rules.
+
+Machine-checkable certificate:
+  Reviewer entry point:
+    docs/surface_d3_nz_qclifford_review_packet.md
+
+  Certificate:
+    docs/surface_d3_nz_qclifford_geometric_hoare_certificate.json
+
+  Checker:
+    tools/check_geometric_hoare.py
+
+  Full instruction-level proof view:
+    docs/surface_d3_nz_qclifford_geometric_hoare_full.qhl
+
+  Reviewer-grade detailed proof:
+    docs/surface_d3_nz_qclifford_geometric_hoare_detailed.qhl
+
+  Command:
+    python tools/check_geometric_hoare.py docs/surface_d3_nz_qclifford_geometric_hoare_certificate.json
+
+  Current checker result:
+    CHECK PASSED: surface_d3_nz_full_circuit_distance
+    top_level_rule_nodes: 13
+    assertion_derivation_nodes: 8
+    deterministic_gate_count: 44
+    local_fault_site_count: 68
+    concrete_instruction_count: 112
+    concrete_instruction_seq_nodes: 111
+    expanded_hoare_nodes_no_branching: 227
+    row_cut_equivalence_checks: 3
+    col_cut_equivalence_checks: 3
+    hook_suffix_shape_checks: 24
+    max_top_level_depth: 5
+    enumerates_global_fault_sets: 0
+    enumerates_pauli_space: 0
+    uses_lean_discharge: 0
+    qhl_view_checked: 1
+    full_qhl_primitive_lines_checked: 112
+    detailed_qhl_primitive_lines_checked: 112
+    detailed_qhl_hook_checks_checked: 24
+
+  What the checker verifies:
+    1. The derivation uses only declared assertion and QClifford Hoare rules.
+    2. The concrete program is exactly the eight-gadget surface-d3 NZ schedule.
+    3. Row/column cut equivalences hold by symbolic Pauli multiplication.
+    4. LX/LZ form the centralizer quotient basis by a small F2 rank check.
+    5. Each concrete NZ suffix hook has dangerous spread at most one modulo
+       the gadget stabilizer.
+    6. The final root is the Hoare derivation
+       {{ clean[] }} C_NZ_D3 {{ DIST_CIRC_D3 }}.
+    7. The readable .qhl ledger lines 000..012 mirror the JSON derivation.
+    8. The full .qhl proof view contains exactly the 112 concrete
+       instruction-level Hoare triples expected from C_NZ_D3.
+    9. The detailed .qhl proof view contains A001-A008 proof details,
+       24 hook checks, and 112 primitive side-condition classifications.
+
+Goal:
+  Prove the concrete distance-3 undetected-logical theorem for the standard
+  surface-d3 NZ syndrome-extraction circuit:
+
+    DIST_CIRC_D3 :=
+      ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[]
+
+  Here `data[]` is the concrete Pauli residual on data qubits q0..q8 after
+  propagating all faults through the concrete QClifford circuit.  `det[]` is
+  the concrete measurement-result/syndrome bit vector produced by the
+  stabilizer measurements.  `ZeroDet(det[])` means every bit in that vector is
+  zero.  `faults[]` is the number of concrete fault-site events.
+
+Concrete program C_NZ_D3:
+  Data qubits: q0,...,q8 in a 3 by 3 grid.
+  Reused syndrome qubit: q9.
+
+  Stabilizers:
+    s0 = Z(q0) Z(q1) Z(q3) Z(q4)
+    s1 = X(q1) X(q2) X(q4) X(q5)
+    s2 = X(q3) X(q4) X(q6) X(q7)
+    s3 = Z(q4) Z(q5) Z(q7) Z(q8)
+    s4 = X(q0) X(q1)
+    s5 = Z(q2) Z(q5)
+    s6 = Z(q3) Z(q6)
+    s7 = X(q7) X(q8)
+
+  Logical representatives:
+    LX = X(q0) X(q3) X(q6)
+    LZ = Z(q0) Z(q1) Z(q2)
+
+  NZ schedule:
+    G0 := MeasZStab(s0; order q0,q3,q1,q4)
+    G1 := MeasXStab(s1; order q1,q2,q4,q5)
+    G2 := MeasXStab(s2; order q3,q4,q6,q7)
+    G3 := MeasZStab(s3; order q4,q7,q5,q8)
+    G4 := MeasXStab(s4; order q0,q1)
+    G5 := MeasZStab(s5; order q2,q5)
+    G6 := MeasZStab(s6; order q3,q6)
+    G7 := MeasXStab(s7; order q7,q8)
+
+  C_NZ_D3 := G0;G1;G2;G3;G4;G5;G6;G7
+
+  Each gadget is the concrete QClifford circuit using q9:
+    MeasZStab(s; data order d0,...,dk):
+      Prep0(q9); CX(d0,q9); ...; CX(dk,q9); MeasZ(q9)
+    MeasXStab(s; data order d0,...,dk):
+      PrepP(q9); CX(q9,d0); ...; CX(q9,dk); H(q9); MeasZ(q9)
+
+  The detailed/full QHL proof files list the inserted !q locations explicitly.
+  Each fault site advances a boundary-frontier assertion by
+  H-LocalFaultFrontier inside the enclosing gadget proof.
+
+Core assertion syntax:
+  E                 : concrete Pauli data residual on q0..q8.
+  det               : concrete measurement-result/syndrome bit vector.
+  f                 : concrete fault count.
+
+  The kernel terms are only:
+    phys[], data[], det[], faults[], I, q(i), maskAt(m,i),
+    if b then A else B, A*B, single(q,P), vecAt(E,q), dataOf(E),
+    hasX(vecAt(E,q)), hasZ(vecAt(E,q)), measAt(det[],s),
+    parity(A,E).
+
+  Surface-code objects are derived Pauli strings:
+    s0 := single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z)
+    s1 := single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X)
+    s2 := single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X)
+    s3 := single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z)
+    s4 := single(q0,X)*single(q1,X)
+    s5 := single(q2,Z)*single(q5,Z)
+    s6 := single(q3,Z)*single(q6,Z)
+    s7 := single(q7,X)*single(q8,X)
+
+    LX := single(q0,X)*single(q3,X)*single(q6,X)
+    LZ := single(q0,Z)*single(q1,Z)*single(q2,Z)
+
+    ProdStab(m) :=
+      product over i=0..7 of (if maskAt(m,i) then si else I).
+
+  Derived assertions:
+    Centralizer(E) := forall i in {0..7}. parity(stabAt(i),E)=0.
+    Stab(E)        := exists m. E = ProdStab(m).
+    LogicalAny(E)  := Centralizer(E) /\ not Stab(E).
+    ZeroDet(det)   := forall s. measAt(det,s)=0.
+
+  Row/column geometry is not primitive term syntax. It is derived from qubit
+  literals, vector indexing, and Pauli component predicates:
+
+    row(q,0) := q=q(0) \/ q=q(1) \/ q=q(2)
+    row(q,1) := q=q(3) \/ q=q(4) \/ q=q(5)
+    row(q,2) := q=q(6) \/ q=q(7) \/ q=q(8)
+
+    col(q,0) := q=q(0) \/ q=q(3) \/ q=q(6)
+    col(q,1) := q=q(1) \/ q=q(4) \/ q=q(7)
+    col(q,2) := q=q(2) \/ q=q(5) \/ q=q(8)
+
+    RowHasX(E,r) := exists q. row(q,r) /\ hasX(vecAt(E,q))
+    ColHasZ(E,c) := exists q. col(q,c) /\ hasZ(vecAt(E,q))
+
+    XRowsAll(E) := RowHasX(E,0) /\ RowHasX(E,1) /\ RowHasX(E,2)
+    ZColsAll(E) := ColHasZ(E,0) /\ ColHasZ(E,1) /\ ColHasZ(E,2)
+
+    XRowsLe(E,f) :=
+      (f=0 -> no row has X support) /\
+      (f<=1 -> no two distinct rows have X support) /\
+      (f<=2 -> not XRowsAll(E))
+
+    ZColsLe(E,f) :=
+      (f=0 -> no column has Z support) /\
+      (f<=1 -> no two distinct columns have Z support) /\
+      (f<=2 -> not ZColsAll(E))
+
+  BI_X := exists m. XRowsLe(ProdStab(m)*data[], faults[])
+  BI_Z := exists m. ZColsLe(ProdStab(m)*data[], faults[])
+  BI_PAIR := BI_X /\ BI_Z
+
+  FULL_INV := BI_PAIR
+
+Geometric assertion lemmas:
+  G-RowCuts:
+    Row cuts R0,R1,R2 are stabilizer-equivalent to LZ:
+      R0 = LZ
+      R1 = (s0*s5)*R0
+      R2 = (s3*s6)*R1
+
+  G-ColCuts:
+    Column cuts C0,C1,C2 are stabilizer-equivalent to LX:
+      C0 = LX
+      C1 = (s4*s2)*C0
+      C2 = (s1*s7)*C1
+
+  G-HomologyCover:
+    Centralizer(E) /\ not Stab(E)
+      ==> parity(LZ,E)=1 \/ parity(LX,E)=1
+
+    Proof idea:
+      In the surface-code cell complex, a syndrome-free Pauli residual is a
+      cycle. If it has zero intersection with both boundary-to-boundary cuts
+      LZ and LX, the cycle is null-homologous, hence a stabilizer boundary.
+      Therefore a non-stabilizer centralizer element has nonzero intersection
+      with at least one of LZ or LX.
+
+  G-RowSpread:
+    Centralizer(E) /\ parity(LZ,E)=1
+      ==> forall m. XRowsAll(ProdStab(m)*E).
+
+    Proof idea:
+      For each row r, Rr is stabilizer-equivalent to LZ. For any stabilizer
+      representative S*E, parity(Rr,S*E)=parity(LZ,E)=1. Since Rr contains
+      only Z on row r, odd parity forces an X or Y component in row r.
+      Thus every row is touched.
+
+  G-ColSpread:
+    Centralizer(E) /\ parity(LX,E)=1
+      ==> forall m. ZColsAll(ProdStab(m)*E).
+
+    Proof idea:
+      For each column c, Cc is stabilizer-equivalent to LX. For any stabilizer
+      representative S*E, parity(Cc,S*E)=parity(LX,E)=1. Since Cc contains
+      only X on column c, odd parity forces a Z or Y component in column c.
+      Thus every column is touched.
+
+  G-LogicalAnyToBarrierZero:
+    LogicalAny(E)
+      ==> (forall m. XRowsAll(ProdStab(m)*E)) \/
+          (forall m. ZColsAll(ProdStab(m)*E)).
+
+    Proof:
+      Use G-HomologyCover. If parity(LZ,E)=1, use G-RowSpread to force
+      X support in all three rows for every stabilizer representative.
+      If parity(LX,E)=1, use G-ColSpread to force Z support in all three
+      columns for every stabilizer representative.
+
+  G-DataDistance:
+    BI_PAIR ==> (LogicalAny(data[]) -> 3 <= faults[]).
+
+    Proof:
+      If LogicalAny(data[]), then G-LogicalAnyToBarrierZero gives either
+      all-row X support for every stabilizer representative or all-column Z
+      support for every stabilizer representative. The matching conjunct of
+      BI_PAIR supplies an existential representative satisfying XRowsLe or
+      ZColsLe. By the bounded definitions of XRowsLe/ZColsLe, three occupied
+      rows or columns imply 3 <= faults[].
+
+  G-FinalCircuitDistance:
+    FULL_INV ==> DIST_CIRC_D3.
+
+    Proof:
+      FULL_INV projects to BI_PAIR.  By G-DataDistance, BI_PAIR proves
+      LogicalAny(data[]) -> 3 <= faults[].  The extra ZeroDet(det[])
+      hypothesis in DIST_CIRC_D3 is discharged by antecedent weakening.  The
+      proof does not introduce any boundary-function or chain invariant.
+
+Local geometric QClifford fault lemmas:
+  G-DataFaultLocal:
+    A single data Pauli fault contributes one geometric edge/cell. It
+    satisfies the derived XRowsLe/ZColsLe one-fault extension formulas and
+    increases faults[] by exactly 1.
+
+  G-NoDataFaultLocal:
+    A prep, terminal ancilla, or measurement-result fault site with no data
+    residual increments faults[].  It is not used as an identity branch; it
+    preserves BI_PAIR because the right side of the barrier inequality
+    increases.
+
+  G-AncillaFaultLocal:
+    An ancilla Pauli fault inside a gadget propagates through the concrete
+    CNOT suffix to a hook residual supported inside that gadget. It updates
+    data[] exactly by Pauli propagation.
+
+  G-NZHookBound:
+    Every hook chain produced by the above NZ orders has geometric spread at
+    most one in the relevant row/column barrier sense:
+      LocalBI_X(Rhook) and LocalBI_Z(Rhook).
+
+    This is a stabilizer-shape proof over the eight gadget shapes, not an
+    enumeration of all fault locations. Bulk and boundary gadgets are handled
+    by the cut geometry of the plaquette; the NZ order makes the suffix/prefix
+    hook homologous to a one-row or one-column local chain.
+
+Allowed Hoare rules used in this ledger:
+  H-Seq:
+    {{ P }} A {{ Q }}
+    {{ Q }} B {{ R }}
+    -----------------
+    {{ P }} A;B {{ R }}
+
+  H-Conseq:
+    P ==> P'
+    {{ P' }} C {{ Q' }}
+    Q' ==> Q
+    ----------------
+    {{ P }} C {{ Q }}
+
+  H-GateFrontier:
+    For a deterministic Clifford gate U at local point k:
+    {{ BND[G,k] }} U {{ BND[G,k+1] }}
+
+  H-LocalFaultFrontier:
+    If one concrete fault at the current primitive maps by Pauli propagation to
+    a local geometric mechanism M, and M satisfies G-DataFaultLocal,
+    G-NoDataFaultLocal, or G-AncillaFaultLocal against the remaining gadget
+    suffix, then:
+    {{ BND[G,k] }} fault(M) {{ BND[G,k+1] }}
+
+  H-FrontierDef:
+    BND[G,k] := BI_PAIR(dataOf(PropDet(Suffix[G,k], phys[])), faults[]).
+    At gadget boundaries BND[G,0] and BND[G,end] are FULL_INV.
+
+  H-GadgetGeo:
+    A full concrete stabilizer gadget preserves FULL_INV by sequencing the
+    primitive frontier triples from BND[G,0]=FULL_INV to
+    BND[G,end]=FULL_INV.
+
+  E-FinalGeo:
+    FULL_INV ==> DIST_CIRC_D3 by G-FinalCircuitDistance.
+
+Main Hoare derivation:
+  000. {{ clean[] }} E-CleanInit {{ FULL_INV }}
+
+  001. {{ FULL_INV }}
+       H-GadgetGeo G0=MeasZStab(s0; q0,q3,q1,q4)
+       {{ FULL_INV }}
+
+  002. {{ FULL_INV }}
+       H-GadgetGeo G1=MeasXStab(s1; q1,q2,q4,q5)
+       {{ FULL_INV }}
+
+  003. {{ FULL_INV }}
+       H-GadgetGeo G2=MeasXStab(s2; q3,q4,q6,q7)
+       {{ FULL_INV }}
+
+  004. {{ FULL_INV }}
+       H-GadgetGeo G3=MeasZStab(s3; q4,q7,q5,q8)
+       {{ FULL_INV }}
+
+  005. {{ FULL_INV }}
+       H-GadgetGeo G4=MeasXStab(s4; q0,q1)
+       {{ FULL_INV }}
+
+  006. {{ FULL_INV }}
+       H-GadgetGeo G5=MeasZStab(s5; q2,q5)
+       {{ FULL_INV }}
+
+  007. {{ FULL_INV }}
+       H-GadgetGeo G6=MeasZStab(s6; q3,q6)
+       {{ FULL_INV }}
+
+  008. {{ FULL_INV }}
+       H-GadgetGeo G7=MeasXStab(s7; q7,q8)
+       {{ FULL_INV }}
+
+  009. {{ FULL_INV }}
+       H-Seq lines 001..008 over C_NZ_D3
+       {{ FULL_INV }}
+
+  010. {{ clean[] }}
+       H-Conseq line 000 and line 009
+       {{ FULL_INV }}
+
+  011. {{ FULL_INV }}
+       E-FinalGeo
+       {{ DIST_CIRC_D3 }}
+
+  012. {{ clean[] }}
+       H-Conseq line 010 and line 011
+       {{ DIST_CIRC_D3 }}
+
+What this proof deliberately avoids:
+  It does not enumerate one-fault branches.
+  It does not enumerate two-fault pairs.
+  It does not classify residuals by a finite table over all 9-qubit Paulis.
+  It does not use a boundary-function invariant. Measurement faults are
+  handled as no-data residual fault events that increment faults[].
+
+What must be represented in the QClifford assertion language:
+  1. BI_X/BI_Z barriers expanded through XRowsLe/ZColsLe derived formulas,
+     not primitive RowX/ColZ/beta terms.
+  2. Measurement-record assertion ZeroDet(det[]) :=
+     forall s. measAt(det[],s)=0.
+  3. Geometric assertion lemmas G-HomologyCover, G-RowSpread, G-ColSpread, and
+     G-FinalCircuitDistance.
+  4. Derived gadget-level Hoare rules H-GadgetGeo that are checked from
+     concrete Pauli propagation plus the NZ hook-shape lemmas.
+
+Small proof-tree size, schematic:
+  Main derivation nodes:
+    1 E-CleanInit
+    8 H-GadgetGeo
+    1 H-Seq fold over the eight gadgets
+    1 H-Conseq from clean[] to FULL_INV
+    1 E-FinalGeo
+    1 H-Conseq
+
+  Total top-level nodes: 13.
+
+  Each H-GadgetGeo expands to:
+    one H-LocalFaultFrontier or H-GateFrontier triple per concrete primitive,
+    plus local geometric side proofs. This expansion is linear in the concrete
+    program length, not exponential in fault sets.
+
+  Fault combinations of size 0, 1, and 2 are covered by induction through
+  FULL_INV and by G-FinalCircuitDistance, not by explicit branch enumeration.

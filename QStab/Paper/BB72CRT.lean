@@ -1,6 +1,8 @@
 import QStab.Paper.BB72Instance
 import Mathlib.Tactic.FinCases
 
+set_option maxRecDepth 8192
+
 /-!
 # BB72 CRT decomposition: structural theorem on the L_X̄ logical space
 
@@ -94,21 +96,21 @@ def Rpoly.one : Rpoly := fun i => i.val == 0
 
 /-- Sanity check: the four idempotents sum to the identity 1. -/
 theorem e_sum_eq_one : Rpoly.add (Rpoly.add e_1 e_2) (Rpoly.add e_3 e_4) = Rpoly.one := by
-  native_decide
+  decide
 
 /-- Each idempotent is idempotent: `e_i * e_i = e_i`. -/
-theorem e_1_idempotent : Rpoly.mul e_1 e_1 = e_1 := by native_decide
-theorem e_2_idempotent : Rpoly.mul e_2 e_2 = e_2 := by native_decide
-theorem e_3_idempotent : Rpoly.mul e_3 e_3 = e_3 := by native_decide
-theorem e_4_idempotent : Rpoly.mul e_4 e_4 = e_4 := by native_decide
+theorem e_1_idempotent : Rpoly.mul e_1 e_1 = e_1 := by decide
+theorem e_2_idempotent : Rpoly.mul e_2 e_2 = e_2 := by decide
+theorem e_3_idempotent : Rpoly.mul e_3 e_3 = e_3 := by decide
+theorem e_4_idempotent : Rpoly.mul e_4 e_4 = e_4 := by decide
 
 /-- Idempotents are orthogonal. -/
-theorem e_12_orth : Rpoly.mul e_1 e_2 = Rpoly.zero := by native_decide
-theorem e_13_orth : Rpoly.mul e_1 e_3 = Rpoly.zero := by native_decide
-theorem e_14_orth : Rpoly.mul e_1 e_4 = Rpoly.zero := by native_decide
-theorem e_23_orth : Rpoly.mul e_2 e_3 = Rpoly.zero := by native_decide
-theorem e_24_orth : Rpoly.mul e_2 e_4 = Rpoly.zero := by native_decide
-theorem e_34_orth : Rpoly.mul e_3 e_4 = Rpoly.zero := by native_decide
+theorem e_12_orth : Rpoly.mul e_1 e_2 = Rpoly.zero := by decide
+theorem e_13_orth : Rpoly.mul e_1 e_3 = Rpoly.zero := by decide
+theorem e_14_orth : Rpoly.mul e_1 e_4 = Rpoly.zero := by decide
+theorem e_23_orth : Rpoly.mul e_2 e_3 = Rpoly.zero := by decide
+theorem e_24_orth : Rpoly.mul e_2 e_4 = Rpoly.zero := by decide
+theorem e_34_orth : Rpoly.mul e_3 e_4 = Rpoly.zero := by decide
 
 /-! ## Polynomials A and B -/
 
@@ -206,10 +208,10 @@ def Rpoly.delta (alpha beta : Rpoly) : Rpoly :=
 private def Rpoly.x : Rpoly := ofList (List.replicate 6 false ++ [true] ++ List.replicate 29 false)
 private def Rpoly.x_squared : Rpoly := ofList (List.replicate 12 false ++ [true] ++ List.replicate 23 false)
 
-example : Rpoly.mul Rpoly.x Rpoly.x = Rpoly.x_squared := by native_decide
-example : Rpoly.mul polyA Rpoly.one = polyA := by native_decide
-example : Rpoly.mul Rpoly.one polyA = polyA := by native_decide
-example : Rpoly.mul polyA polyB = Rpoly.mul polyB polyA := by native_decide
+example : Rpoly.mul Rpoly.x Rpoly.x = Rpoly.x_squared := by decide
+example : Rpoly.mul polyA Rpoly.one = polyA := by decide
+example : Rpoly.mul Rpoly.one polyA = polyA := by decide
+example : Rpoly.mul polyA polyB = Rpoly.mul polyB polyA := by decide
 
 /-- **The δ-polynomial vanishes on every L_X̄ basis vector.**
 
@@ -222,7 +224,7 @@ example : Rpoly.mul polyA polyB = Rpoly.mul polyB polyA := by native_decide
 theorem bb_lx_basis_delta_vanishes :
     ∀ (k : Fin 12),
       Rpoly.delta (bb_lx_alpha k) (bb_lx_beta k) = Rpoly.zero := by
-  native_decide
+  decide
 
 /-! ## Z-side dual structural theorem
 
@@ -303,7 +305,7 @@ def Rpoly.delta_Z (alpha beta : Rpoly) : Rpoly :=
 theorem bb_lz_basis_delta_Z_vanishes :
     ∀ (k : Fin 12),
       Rpoly.delta_Z (bb_lz_alpha k) (bb_lz_beta k) = Rpoly.zero := by
-  native_decide
+  decide
 
 /-! ## Headline structural theorems -/
 

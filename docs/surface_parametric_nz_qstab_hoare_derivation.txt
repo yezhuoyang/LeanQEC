@@ -1,0 +1,731 @@
+# Surface parametric NZ QStab adversarial Hoare derivation ledger
+
+This ledger uses paper/QStab notation only.
+
+The verified QStab object is not a fixed injected-error trace.
+It is the nondeterministic QStab transition system.  Stabilizer measurement
+and the error-transition families are semantic transition rules.  The Hoare
+lines below are obligations for those transition rules, universally quantified
+over the adversary choices.
+
+
+===============================================================================
+0. QStab transition relation being verified
+===============================================================================
+
+Distance assumptions:
+
+  d : Nat
+  3 <= d
+  odd(d)
+
+Surface/NZ QStab parameters:
+
+  P_d.n        = d*d
+  P_d.numStab  = d*d - 1
+  P_d.stab(s)  = SurfaceStab(d,s)
+  P_d.back(s)  = NZHookSet(d,s)
+  P_d.next(c)  = NZNextCoord(d,c)
+  P_d.budget   = C_budget
+
+QStab execution states:
+
+  X ::= active(s)
+      | done(s)
+      | error(s)
+
+QStab active state fields used below:
+
+  s.C       : remaining fault budget
+  s.E       : residual Pauli error
+  s.G       : measurement table
+  s.F       : inconsistency table
+  s.coord   : current NZ schedule coordinate
+  s.cnt0    : number of type-0 faults
+  s.cnt1    : number of type-1 faults
+  s.cnt2    : number of type-2 faults
+  s.cnt3    : number of type-3 faults
+  s.lamE    : data-error weight counter
+
+Transition families:
+
+  Data-error family:
+    type0(q,p)
+    type1(q,p,mf)
+
+  Back-action error family:
+    type2(e,mf)
+
+  Measurement-flip error family:
+    type3
+
+  Stabilizer measurement:
+    measure
+
+The checked kernel splits the data-error family into type0 and type1 labels
+because type1 carries the measurement-flip bit mf.  This is a split of one
+error family into two rule labels, not repeat syntax and not a fixed trace.
+
+The QStab execution relation is the following transition relation.
+
+  step type0(q,p)
+    guard:
+      q : Fin(P_d.n)
+      p : Pauli
+      p != I
+      0 < s.C
+    transition:
+      active(s) -->
+      active(s[
+        C    := s.C - 1,
+        cnt0 := s.cnt0 + 1,
+        lamE := s.lamE + 1,
+        E    := update(s.E,q,p)
+      ])
+
+  step type1(q,p,mf)
+    guard:
+      q : Fin(P_d.n)
+      p : Pauli
+      p != I
+      mf : Bool
+      0 < s.C
+    transition:
+      active(s) -->
+      active(s[
+        C    := s.C - 1,
+        cnt1 := s.cnt1 + 1,
+        lamE := s.lamE + 1,
+        E    := update(s.E,q,p),
+        G    := flipCurrent(s.G,s.coord,mf)
+      ])
+
+  step type2(e,mf)
+    guard:
+      e : ErrorVec(P_d.n)
+      mf : Bool
+      e in P_d.back(s.coord.x)
+      0 < s.C
+    transition:
+      active(s) -->
+      active(s[
+        C    := s.C - 1,
+        cnt2 := s.cnt2 + 1,
+        lamE := s.lamE + weight(e),
+        E    := mul(e,s.E),
+        G    := flipCurrent(s.G,s.coord,mf),
+        F    := updateCurrentF(s.F,s.coord.x,parity(P_d.stab(s.coord.x),e),mf)
+      ])
+
+  step type3
+    guard:
+      0 < s.C
+    transition:
+      active(s) -->
+      active(s[
+        C    := s.C - 1,
+        cnt3 := s.cnt3 + 1,
+        G    := flipCurrent(s.G,s.coord,true)
+      ])
+
+  step measure
+    guard:
+      P_d.next(s.coord) = some(c')
+    transition:
+      active(s) -->
+      active(measureStep(P_d,s,c'))
+
+  step halt
+    guard:
+      P_d.next(s.coord) = none
+    transition:
+      active(s) --> done(s)
+
+  step budget_exhausted
+    guard:
+      s.C = 0
+    transition:
+      active(s) --> error(s)
+
+Run judgment:
+
+  Run(P_d,done(s))
+
+means that s is reached from init(P_d) by any finite path of the steps
+above, with arbitrary adversarial choices in the three error families.
+
+
+===============================================================================
+1. Hoare labels for QStab transition rules
+===============================================================================
+
+There is no repeat syntax in this ledger.  There is also no user-facing
+sequencing syntax.  A run is a semantic path in the transition relation.
+
+The Hoare checker uses one label for each active-state transition obligation:
+
+  t0(q,p)
+  t1(q,p,mf)
+  t2(e,mf)
+  t3
+  meas
+
+These labels are not trace entries selected in advance.  They name one
+active-state transition rule so that the Hoare kernel can check one triple.
+
+Correspondence with the transition system:
+
+  type0(q,p)      uses Hoare transition label t0(q,p)
+  type1(q,p,mf)   uses Hoare transition label t1(q,p,mf)
+  type2(e,mf)     uses Hoare transition label t2(e,mf)
+  type3           uses Hoare transition label t3
+  measure         uses Hoare transition label meas
+
+The halt and budget_exhausted steps have no Hoare labels.  They are terminal
+execution-state transitions handled by the run-level invariant rule.
+
+
+===============================================================================
+2. Assertion-language syntax
+===============================================================================
+
+Terms:
+
+  T ::= budget
+      | remaining
+      | error
+      | current
+      | coordStab(T)
+      | natLit(k)
+      | natSub(T,T)
+      | vecLit(e)
+
+Closed formulas:
+
+  A ::= top
+      | and(A,A)
+      | le(T,T)
+      | lt(T,T)
+      | eq(T,T)
+      | imp(A,A)
+      | backAction(T,T)
+      | logicalMember(L,T)
+      | barrierInvF(beta,L)
+      | circuitDistanceF(L)
+      | wpT0(q,p,A)
+      | wpT1(q,p,mf,A)
+      | wpT2(e,mf,A)
+      | wpT3(A)
+      | wpMeas(A)
+
+Derived formulas:
+
+  spentF =
+    natSub(budget,remaining)
+
+  distanceLowerBoundF(L) =
+    le(natLit(distance(L)),spentF)
+
+  circuitDistanceF(L) =
+    imp(logicalMember(L,error),distanceLowerBoundF(L))
+
+  wpT0(q,p,A) =
+    imp(lt(natLit(0),remaining),substT0(q,p,A))
+
+  wpT1(q,p,mf,A) =
+    imp(lt(natLit(0),remaining),substT1(q,p,mf,A))
+
+  wpT2(e,mf,A) =
+    imp(backAction(coordStab(current),vecLit(e)),
+      imp(lt(natLit(0),remaining),substT2(e,mf,A)))
+
+  wpT3(A) =
+    imp(lt(natLit(0),remaining),substT3(A))
+
+  wpMeas(A) =
+    substMeas(A)
+
+
+===============================================================================
+3. Surface/NZ syntax objects
+===============================================================================
+
+Surface code data:
+
+  A_d =
+    alignedCodeData(
+      params       = P_d,
+      distance     = d,
+      logicalZ     = SurfaceLogicalZ(d),
+      stabilizers  = SurfaceStab(d),
+      groupOf      = SurfaceRowGroup(d),
+      cut          = SurfaceRowCut(d))
+
+Separate NZ schedule data:
+
+  NZ_d =
+    nzSchedule(
+      nextCoord     = NZNextCoord(d),
+      backActionSet = NZHookSet(d))
+
+The schedule is part of P_d through P_d.next and P_d.back.  It is not part of
+the definition of SurfaceLogicalZ(d), SurfaceStab(d), SurfaceRowGroup(d), or
+SurfaceRowCut(d).
+
+Logical-class and barrier symbols:
+
+  LZ_d =
+    logicalClass(A_d,"surface.barZ")
+
+  beta_d =
+    barrier(A_d,"surface.beta.spread")
+
+Main invariant formula:
+
+  BI_d =
+    barrierInvF(beta_d,LZ_d)
+
+Distance formula:
+
+  DIST_d =
+    circuitDistanceF(LZ_d)
+
+
+===============================================================================
+4. Surface aligned-code derivation in assertion syntax
+===============================================================================
+
+Aligned-code contract formulas:
+
+  cutStabEquivF(A_d)
+
+  cutShapeF(A_d)
+
+  logicalZNormalizerF(A_d)
+
+  stabilizersCommuteF(A_d)
+
+  hookAlignedF(beta_d,A_d)
+
+Aligned-code derivation leaves:
+
+  AC0_d =
+    CutStabEquiv(A_d)
+    proves cutStabEquivF(A_d)
+
+  AC1_d =
+    CutShape(A_d)
+    proves cutShapeF(A_d)
+
+  AC2_d =
+    LogicalZNormalizer(A_d)
+    proves logicalZNormalizerF(A_d)
+
+  AC3_d =
+    StabilizersCommute(A_d)
+    proves stabilizersCommuteF(A_d)
+
+  AC4_d =
+    HookAligned(beta_d,A_d)
+    proves hookAlignedF(beta_d,A_d)
+
+Surface aligned-code contract derivation:
+
+  AC_d =
+    And(AC0_d,
+    And(AC1_d,
+    And(AC2_d,
+    And(AC3_d,
+        AC4_d))))
+
+  AC_d proves
+    and(cutStabEquivF(A_d),
+    and(cutShapeF(A_d),
+    and(logicalZNormalizerF(A_d),
+    and(stabilizersCommuteF(A_d),
+        hookAlignedF(beta_d,A_d)))))
+
+Barrier contract derivation generated from AC_d:
+
+  BC_d =
+    BarrierContractFromAlignedCode(beta_d,LZ_d,A_d,AC_d)
+
+  BC_d proves
+    barrierContractF(beta_d,LZ_d)
+
+This is the contract consumed by the Hoare rule BarrierContractSyntax.
+
+
+===============================================================================
+5. Hoare derivation rules
+===============================================================================
+
+Judgment:
+
+  |- {A} tau {B}
+
+Primitive derivation constructors:
+
+  T0(A,q,p)
+    : |- {wpT0(q,p,A)} t0(q,p) {A}
+
+  T1(A,q,p,mf)
+    : |- {wpT1(q,p,mf,A)} t1(q,p,mf) {A}
+
+  T2(A,e,mf)
+    : |- {wpT2(e,mf,A)} t2(e,mf) {A}
+
+  T3(A)
+    : |- {wpT3(A)} t3 {A}
+
+  Meas(A)
+    : |- {wpMeas(A)} meas {A}
+
+  BarrierContractSyntax(beta,L,contract,tau)
+    : |- {barrierInvF(beta,L)} tau {barrierInvF(beta,L)}
+
+
+===============================================================================
+6. Raw WP triples for arbitrary adversarial labels
+===============================================================================
+
+For every q : Fin(P_d.n) and p : Pauli:
+
+  RAW0(q,p) = T0(BI_d,q,p)
+
+  |- {wpT0(q,p,BI_d)}
+       t0(q,p)
+     {BI_d}
+
+For every q : Fin(P_d.n), p : Pauli, and mf : Bool:
+
+  RAW1(q,p,mf) = T1(BI_d,q,p,mf)
+
+  |- {wpT1(q,p,mf,BI_d)}
+       t1(q,p,mf)
+     {BI_d}
+
+For every e : ErrorVec(P_d.n) and mf : Bool:
+
+  RAW2(e,mf) = T2(BI_d,e,mf)
+
+  |- {wpT2(e,mf,BI_d)}
+       t2(e,mf)
+     {BI_d}
+
+For type3:
+
+  RAW3 = T3(BI_d)
+
+  |- {wpT3(BI_d)}
+       t3
+     {BI_d}
+
+For measurement:
+
+  RAWM = Meas(BI_d)
+
+  |- {wpMeas(BI_d)}
+       meas
+     {BI_d}
+
+
+===============================================================================
+7. Universal invariant-preservation triples
+===============================================================================
+
+For every q : Fin(P_d.n), p : Pauli, and proof p != I:
+
+  INV0(q,p) =
+    BarrierContractSyntax(beta_d,LZ_d,BC_d,t0(q,p))
+
+  |- {BI_d}
+       t0(q,p)
+     {BI_d}
+
+For every q : Fin(P_d.n), p : Pauli, proof p != I, and mf : Bool:
+
+  INV1(q,p,mf) =
+    BarrierContractSyntax(beta_d,LZ_d,BC_d,t1(q,p,mf))
+
+  |- {BI_d}
+       t1(q,p,mf)
+     {BI_d}
+
+For every e : ErrorVec(P_d.n) and mf : Bool:
+
+  INV2(e,mf) =
+    BarrierContractSyntax(beta_d,LZ_d,BC_d,t2(e,mf))
+
+  |- {BI_d}
+       t2(e,mf)
+     {BI_d}
+
+The side condition e in P_d.back(s.coord.x) is not an external proof hidden
+in INV2.  It is the first antecedent of wpT2(e,mf,BI_d), namely:
+
+  backAction(coordStab(current),vecLit(e))
+
+and it is also the operational guard of the type2 step.
+
+For type3:
+
+  INV3 =
+    BarrierContractSyntax(beta_d,LZ_d,BC_d,t3)
+
+  |- {BI_d}
+       t3
+     {BI_d}
+
+For measurement:
+
+  INVM =
+    BarrierContractSyntax(beta_d,LZ_d,BC_d,meas)
+
+  |- {BI_d}
+       meas
+     {BI_d}
+
+
+===============================================================================
+8. Invariant certificate for the nondeterministic QStab transition system
+===============================================================================
+
+Invariant certificate:
+
+  IC_d.init:
+    satisfies(init(P_d),BI_d)
+
+  IC_d.t0(q,p,p_nonI):
+    INV0(q,p)
+
+  IC_d.t1(q,p,p_nonI,mf):
+    INV1(q,p,mf)
+
+  IC_d.t2(e,mf):
+    INV2(e,mf)
+
+  IC_d.t3:
+    INV3
+
+  IC_d.meas:
+    INVM
+
+The checker accepts IC_d only by checking the six entries above:
+
+  init
+  forall q p, p != I      -> |- {BI_d} t0(q,p)    {BI_d}
+  forall q p mf, p != I   -> |- {BI_d} t1(q,p,mf) {BI_d}
+  forall e mf             -> |- {BI_d} t2(e,mf)   {BI_d}
+  |- {BI_d} t3   {BI_d}
+  |- {BI_d} meas {BI_d}
+
+
+===============================================================================
+9. Run-level invariant derivation
+===============================================================================
+
+Run soundness rule for invariant certificates:
+
+  CheckInvariant(IC_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,BI_d)
+
+Thus:
+
+  RUN-INV(d,s)
+
+  CheckInvariant(IC_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,BI_d)
+
+This is the point where arbitrary adversarial injection paths are covered.
+The induction is over the actual nondeterministic run:
+
+  data-error rule type0(q,p)
+    may choose any q and any p != I
+
+  data-error rule type1(q,p,mf)
+    may choose any q, any p != I, and either mf
+
+  back-action rule type2(e,mf)
+    may choose any e in the current NZ back-action set and either mf
+
+  measurement-flip rule type3
+    may occur whenever 0 < remaining
+
+  stabilizer measurement rule measure
+    follows the NZ coordinate successor
+
+  halt ends the run when the NZ successor is none
+
+No fixed list of injected errors is present in the transition system.
+
+
+===============================================================================
+10. Circuit-distance assertion
+===============================================================================
+
+Distance formula:
+
+  DIST_d =
+    circuitDistanceF(LZ_d)
+
+Expanded:
+
+  DIST_d =
+    imp(
+      logicalMember(LZ_d,error),
+      le(natLit(distance(LZ_d)),natSub(budget,remaining)))
+
+For the Surface bar-Z logical class:
+
+  distance(LZ_d) = d
+
+Therefore:
+
+  DIST_d =
+    imp(
+      logicalMember(LZ_d,error),
+      le(natLit(d),natSub(budget,remaining)))
+
+
+===============================================================================
+11. Distance derivation from the same checked contract
+===============================================================================
+
+Barrier-contract distance rule:
+
+  CheckBarrierContract(BC_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,DIST_d)
+
+Concrete Surface/NZ instance:
+
+  DIST-RUN(d,s)
+
+  BC_d proves barrierContractF(beta_d,LZ_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,circuitDistanceF(LZ_d))
+
+Expanded conclusion:
+
+  DIST-RUN(d,s)
+
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,
+    imp(
+      logicalMember(LZ_d,error),
+      le(natLit(d),natSub(budget,remaining))))
+
+State-level reading:
+
+  Run(P_d,done(s))
+  logicalMember(LZ_d,s.E)
+  ------------------------------------------------
+  d <= P_d.budget - s.C
+
+
+===============================================================================
+12. Complete checker-facing derivation summary
+===============================================================================
+
+Surface/NZ syntax:
+
+  A_d    = alignedCodeData(P_d,d,SurfaceLogicalZ,SurfaceStab,SurfaceRowGroup,SurfaceRowCut)
+  NZ_d   = nzSchedule(NZNextCoord,NZHookSet)
+  LZ_d   = logicalClass(A_d,"surface.barZ")
+  beta_d = barrier(A_d,"surface.beta.spread")
+  BI_d   = barrierInvF(beta_d,LZ_d)
+  DIST_d = circuitDistanceF(LZ_d)
+
+Contract proof:
+
+  AC_d proves the aligned-code formula for A_d and beta_d
+
+  BC_d = BarrierContractFromAlignedCode(beta_d,LZ_d,A_d,AC_d)
+
+  BC_d proves barrierContractF(beta_d,LZ_d)
+
+Universal Hoare derivation families:
+
+  forall q p, p != I:
+    INV0(q,p) |- {BI_d} t0(q,p) {BI_d}
+
+  forall q p mf, p != I:
+    INV1(q,p,mf) |- {BI_d} t1(q,p,mf) {BI_d}
+
+  forall e mf:
+    INV2(e,mf) |- {BI_d} t2(e,mf) {BI_d}
+
+  INV3 |- {BI_d} t3 {BI_d}
+
+  INVM |- {BI_d} meas {BI_d}
+
+Invariant certificate:
+
+  IC_d =
+    invariantCertificate(
+      init = satisfies(init(P_d),BI_d),
+      t0   = INV0,
+      t1   = INV1,
+      t2   = INV2,
+      t3   = INV3,
+      meas = INVM)
+
+Run-level theorem:
+
+  CheckInvariant(IC_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,BI_d)
+
+Distance theorem:
+
+  CheckBarrierContract(BC_d)
+  Run(P_d,done(s))
+  ------------------------------------------------
+  satisfies(s,DIST_d)
+
+Equivalent operational theorem:
+
+  for all done states s reached by the QStab nondeterministic Surface/NZ
+  transition system:
+
+    if s.E is in the Surface bar-Z logical class,
+    then d <= P_d.budget - s.C.
+
+
+===============================================================================
+13. Why no repeat or fixed trace syntax is needed
+===============================================================================
+
+A finite textual list of transition labels would describe one chosen
+injected-error trace.  Such a list is not part of the Surface/NZ adversarial
+QStab language.
+
+The adversarial proof uses these families instead:
+
+  forall q p, p != I:
+    |- {BI_d} t0(q,p) {BI_d}
+
+  forall q p mf, p != I:
+    |- {BI_d} t1(q,p,mf) {BI_d}
+
+  forall e mf:
+    |- {BI_d} t2(e,mf) {BI_d}
+
+  |- {BI_d} t3 {BI_d}
+
+  |- {BI_d} meas {BI_d}
+
+Together with run induction over the QStab step relation, this proves the
+invariant after any finite adversarial path of enabled injections.
+
+
+End of ledger.

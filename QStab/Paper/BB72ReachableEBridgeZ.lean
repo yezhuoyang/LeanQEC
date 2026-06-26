@@ -141,11 +141,11 @@ def bb_zMech (i : Fin 252) : ErrorVec 72 :=
     bb_allHooksZ.getD (i.val - 72) (ErrorVec.identity 72)
 
 /-- bb_allHooksZ has length 180. -/
-theorem bb_allHooksZ_length : bb_allHooksZ.length = 180 := by native_decide
+theorem bb_allHooksZ_length : bb_allHooksZ.length = 180 := by decide
 
 /-- Each Z-mech is Z-only. -/
 theorem bb_zMech_is_Z_only : ∀ i : Fin 252, is_Z_only_ev (bb_zMech i) = true := by
-  native_decide
+  decide
 
 /-- zContent fixes the 252 Z-mechs. -/
 theorem zContent_zMech (i : Fin 252) :
@@ -169,7 +169,7 @@ theorem bb_zMech_hook (h : ErrorVec 72) (hh : h ∈ bb_allHooksZ) :
 /-- Each L_X basis vector is X-only. -/
 theorem is_X_only_bb_lx :
     ∀ l : Fin 12, QStab.Paper.BB72BVBridge.is_X_only (bb_logicalX_basis l) = true := by
-  native_decide
+  decide
 
 /-- Specialization: for any X-stab (i.val < 36), parity vs E equals parity vs zContent E. -/
 theorem parity_xstab_eq_zContent (i : Fin 72) (hi : i.val < 36) (E : ErrorVec 72) :

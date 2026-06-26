@@ -1,0 +1,346 @@
+{
+  "schema": "qclifford-geometric-hoare-v1",
+  "name": "surface_d3_nz_full_circuit_distance",
+  "status": "syntactic-qclifford-hoare-certificate",
+  "prohibits": [
+    "H-CheckedTrace",
+    "H-ErrTable",
+    "Tbl",
+    "branch",
+    "branches",
+    "fault_pairs",
+    "choose",
+    "forallErrorVecs",
+    "native_decide",
+    "Lean_discharge",
+    "backActionSet",
+    "RowX(",
+    "ColZ(",
+    "betaX(",
+    "betaZ(",
+    "Gamma",
+    "ChainInv",
+    "Weight(",
+    "DataBoundary(",
+    "DetectorBoundary("
+  ],
+  "goal": {
+    "pre": "clean[]",
+    "program": "C_NZ_D3",
+    "post": "DIST_CIRC_D3",
+    "expanded": "DIST_CIRC_D3 := ZeroDet(det[]) /\\ LogicalAny(data[]) -> 3 <= faults[]"
+  },
+  "program": {
+    "data_qubits": ["q0", "q1", "q2", "q3", "q4", "q5", "q6", "q7", "q8"],
+    "ancilla": "q9",
+    "grid": {
+      "rows": [["q0", "q1", "q2"], ["q3", "q4", "q5"], ["q6", "q7", "q8"]],
+      "cols": [["q0", "q3", "q6"], ["q1", "q4", "q7"], ["q2", "q5", "q8"]]
+    },
+    "gadgets": [
+      {"id": "G0", "kind": "MeasZStab", "stab": "s0", "order": ["q0", "q3", "q1", "q4"]},
+      {"id": "G1", "kind": "MeasXStab", "stab": "s1", "order": ["q1", "q2", "q4", "q5"]},
+      {"id": "G2", "kind": "MeasXStab", "stab": "s2", "order": ["q3", "q4", "q6", "q7"]},
+      {"id": "G3", "kind": "MeasZStab", "stab": "s3", "order": ["q4", "q7", "q5", "q8"]},
+      {"id": "G4", "kind": "MeasXStab", "stab": "s4", "order": ["q0", "q1"]},
+      {"id": "G5", "kind": "MeasZStab", "stab": "s5", "order": ["q2", "q5"]},
+      {"id": "G6", "kind": "MeasZStab", "stab": "s6", "order": ["q3", "q6"]},
+      {"id": "G7", "kind": "MeasXStab", "stab": "s7", "order": ["q7", "q8"]}
+    ]
+  },
+  "assertion_syntax": {
+    "atoms": {
+      "clean[]": "data[] = I /\\ det[] = 0 /\\ faults[] = 0",
+      "ZeroDet(det[])": "forall s. measAt(det[],s)=0",
+      "Centralizer(E)": "forall i in {0..7}. parity(stabAt(i),E)=0",
+      "Stab(E)": "exists stabilizer mask m. E = ProdStab(m)",
+      "LogicalAny(E)": "Centralizer(E) /\\ not Stab(E)",
+      "BI_X": "exists m. XRowsLe(ProdStab(m)*data[], faults[])",
+      "BI_Z": "exists m. ZColsLe(ProdStab(m)*data[], faults[])",
+      "BI_PAIR": "BI_X /\\ BI_Z",
+      "FULL_INV": "BI_PAIR",
+      "DIST_CIRC_D3": "ZeroDet(det[]) /\\ LogicalAny(data[]) -> 3 <= faults[]"
+    },
+    "derived_terms": {
+      "q0": "q(0)",
+      "q1": "q(1)",
+      "q2": "q(2)",
+      "q3": "q(3)",
+      "q4": "q(4)",
+      "q5": "q(5)",
+      "q6": "q(6)",
+      "q7": "q(7)",
+      "q8": "q(8)",
+      "s0": "single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z)",
+      "s1": "single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X)",
+      "s2": "single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X)",
+      "s3": "single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z)",
+      "s4": "single(q0,X)*single(q1,X)",
+      "s5": "single(q2,Z)*single(q5,Z)",
+      "s6": "single(q3,Z)*single(q6,Z)",
+      "s7": "single(q7,X)*single(q8,X)",
+      "stabAt(0)": "s0",
+      "stabAt(1)": "s1",
+      "stabAt(2)": "s2",
+      "stabAt(3)": "s3",
+      "stabAt(4)": "s4",
+      "stabAt(5)": "s5",
+      "stabAt(6)": "s6",
+      "stabAt(7)": "s7",
+      "ProdStab(m)": "(if maskAt(m,0) then s0 else I)*(if maskAt(m,1) then s1 else I)*(if maskAt(m,2) then s2 else I)*(if maskAt(m,3) then s3 else I)*(if maskAt(m,4) then s4 else I)*(if maskAt(m,5) then s5 else I)*(if maskAt(m,6) then s6 else I)*(if maskAt(m,7) then s7 else I)",
+      "LX": "single(q0,X)*single(q3,X)*single(q6,X)",
+      "LZ": "single(q0,Z)*single(q1,Z)*single(q2,Z)",
+      "R0": "single(q0,Z)*single(q1,Z)*single(q2,Z)",
+      "R1": "single(q3,Z)*single(q4,Z)*single(q5,Z)",
+      "R2": "single(q6,Z)*single(q7,Z)*single(q8,Z)",
+      "C0": "single(q0,X)*single(q3,X)*single(q6,X)",
+      "C1": "single(q1,X)*single(q4,X)*single(q7,X)",
+      "C2": "single(q2,X)*single(q5,X)*single(q8,X)"
+    },
+    "derived_formulas": {
+      "row(q,0)": "q=q(0) \\/ q=q(1) \\/ q=q(2)",
+      "row(q,1)": "q=q(3) \\/ q=q(4) \\/ q=q(5)",
+      "row(q,2)": "q=q(6) \\/ q=q(7) \\/ q=q(8)",
+      "col(q,0)": "q=q(0) \\/ q=q(3) \\/ q=q(6)",
+      "col(q,1)": "q=q(1) \\/ q=q(4) \\/ q=q(7)",
+      "col(q,2)": "q=q(2) \\/ q=q(5) \\/ q=q(8)",
+      "RowHasX(E,r)": "exists q. row(q,r) /\\ hasX(vecAt(E,q))",
+      "ColHasZ(E,c)": "exists q. col(q,c) /\\ hasZ(vecAt(E,q))",
+      "XRowsAll(E)": "RowHasX(E,0) /\\ RowHasX(E,1) /\\ RowHasX(E,2)",
+      "ZColsAll(E)": "ColHasZ(E,0) /\\ ColHasZ(E,1) /\\ ColHasZ(E,2)",
+      "XRowsLe(E,f)": "(f=0 -> not RowHasX(E,0) /\\ not RowHasX(E,1) /\\ not RowHasX(E,2)) /\\ (f<=1 -> not ((RowHasX(E,0)/\\RowHasX(E,1)) \\/ (RowHasX(E,0)/\\RowHasX(E,2)) \\/ (RowHasX(E,1)/\\RowHasX(E,2)))) /\\ (f<=2 -> not XRowsAll(E))",
+      "ZColsLe(E,f)": "(f=0 -> not ColHasZ(E,0) /\\ not ColHasZ(E,1) /\\ not ColHasZ(E,2)) /\\ (f<=1 -> not ((ColHasZ(E,0)/\\ColHasZ(E,1)) \\/ (ColHasZ(E,0)/\\ColHasZ(E,2)) \\/ (ColHasZ(E,1)/\\ColHasZ(E,2)))) /\\ (f<=2 -> not ZColsAll(E))"
+    },
+    "connectives": ["not", "/\\", "\\/", "->", "<=", "=", "exists", "forall"],
+    "terms": ["I", "phys[]", "data[]", "det[]", "faults[]", "q(i)", "I|X|Y|Z", "single(q,P)", "vecAt(E,q)", "dataOf(E)", "hasX(vecAt(E,q))", "hasZ(vecAt(E,q))", "measAt(det[],s)", "maskAt(m,i)", "if b then A else B", "A*B", "parity(A,E)"]
+  },
+  "geometric_cuts": {
+    "rows": [
+      {"id": "R0", "equiv_product": ["LZ"]},
+      {"id": "R1", "equiv_product": ["s0", "s5", "R0"]},
+      {"id": "R2", "equiv_product": ["s3", "s6", "R1"]}
+    ],
+    "cols": [
+      {"id": "C0", "equiv_product": ["LX"]},
+      {"id": "C1", "equiv_product": ["s4", "s2", "C0"]},
+      {"id": "C2", "equiv_product": ["s1", "s7", "C1"]}
+    ]
+  },
+  "assertion_derivations": [
+    {
+      "id": "A001",
+      "rule": "G-RowCuts",
+      "checks": ["R0=LZ", "R1=s0*s5*R0", "R2=s3*s6*R1"],
+      "conclusion": "for each row r, Rr is stabilizer-equivalent to LZ"
+    },
+    {
+      "id": "A002",
+      "rule": "G-ColCuts",
+      "checks": ["C0=LX", "C1=s4*s2*C0", "C2=s1*s7*C1"],
+      "conclusion": "for each column c, Cc is stabilizer-equivalent to LX"
+    },
+    {
+      "id": "A003",
+      "rule": "G-HomologyCover",
+      "checks": ["stabilizer-rank=8", "centralizer-quotient-basis=[LX,LZ]", "parity(LX,LZ)=1"],
+      "conclusion": "Centralizer(E) /\\ not Stab(E) -> parity(LZ,E)=1 \\/ parity(LX,E)=1"
+    },
+    {
+      "id": "A004",
+      "rule": "G-RowSpread",
+      "premises": ["A001"],
+      "conclusion": "Centralizer(E) /\\ parity(LZ,E)=1 -> forall m. XRowsAll(ProdStab(m)*E)"
+    },
+    {
+      "id": "A005",
+      "rule": "G-ColSpread",
+      "premises": ["A002"],
+      "conclusion": "Centralizer(E) /\\ parity(LX,E)=1 -> forall m. ZColsAll(ProdStab(m)*E)"
+    },
+    {
+      "id": "A006",
+      "rule": "G-LogicalAnyToBarrierZero",
+      "premises": ["A003", "A004", "A005"],
+      "conclusion": "LogicalAny(E) -> (forall m. XRowsAll(ProdStab(m)*E)) \\/ (forall m. ZColsAll(ProdStab(m)*E))"
+    },
+    {
+      "id": "A007",
+      "rule": "G-DataDistance",
+      "premises": ["A006"],
+      "conclusion": "BI_PAIR -> (LogicalAny(data[]) -> 3 <= faults[])"
+    },
+    {
+      "id": "A008",
+      "rule": "G-FinalCircuitDistance",
+      "premises": ["A007"],
+      "conclusion": "FULL_INV -> (ZeroDet(det[]) /\\ LogicalAny(data[]) -> 3 <= faults[])"
+    }
+  ],
+  "local_geometric_lemmas": [
+    {
+      "id": "L001",
+      "rule": "G-DataFaultLocal",
+      "check": "single data Pauli satisfies the derived XRowsLe/ZColsLe one-fault extension formulas",
+      "conclusion": "single data fault preserves BI_PAIR after incrementing faults[]"
+    },
+    {
+      "id": "L002",
+      "rule": "G-NoDataFaultLocal",
+      "check": "prep, terminal ancilla, and measurement-result fault sites with no data residual increment faults[]",
+      "conclusion": "no-data residual fault preserves BI_PAIR after incrementing faults[]"
+    },
+    {
+      "id": "L003",
+      "rule": "G-AncillaFaultLocal",
+      "check": "ancilla Pauli is propagated through the concrete CNOT suffix as an NZ hook",
+      "conclusion": "ancilla fault reduces to a checked hook mechanism"
+    },
+    {
+      "id": "L004",
+      "rule": "G-NZHookBound",
+      "check": "for every gadget, every suffix hook satisfies the derived XRowsLe/ZColsLe one-fault extension formulas modulo that gadget stabilizer",
+      "conclusion": "all concrete NZ hooks preserve BI_PAIR after incrementing faults[]"
+    }
+  ],
+  "hoare_rules": [
+    {
+      "id": "H-Seq",
+      "schema": "{{ P }} A {{ Q }}; {{ Q }} B {{ R }} ==> {{ P }} A;B {{ R }}"
+    },
+    {
+      "id": "H-Conseq",
+      "schema": "P -> P'; {{ P' }} C {{ Q' }}; Q' -> Q ==> {{ P }} C {{ Q }}"
+    },
+    {
+      "id": "H-GateFrontier",
+      "schema": "{{ BND[G,k] }} U {{ BND[G,k+1] }} for a deterministic QClifford primitive U, where BND[G,k] is the derived boundary-frontier assertion for the remaining deterministic suffix"
+    },
+    {
+      "id": "H-LocalFaultFrontier",
+      "schema": "{{ BND[G,k] }} !q {{ BND[G,k+1] }} when the local fault is classified by L001/L002/L003/L004 against the concrete remaining gadget suffix"
+    },
+    {
+      "id": "H-FrontierDef",
+      "schema": "BND[G,k] := BI_PAIR(dataOf(PropDet(Suffix[G,k], phys[])), faults[]); BND[G,0] and BND[G,end] are definitionally FULL_INV"
+    },
+    {
+      "id": "H-GadgetGeo",
+      "schema": "one concrete stabilizer gadget preserves FULL_INV by sequencing primitive frontier triples from BND[G,0]=FULL_INV to BND[G,end]=FULL_INV"
+    },
+    {
+      "id": "E-CleanInit",
+      "schema": "clean[] -> FULL_INV"
+    },
+    {
+      "id": "E-FinalGeo",
+      "schema": "FULL_INV -> DIST_CIRC_D3 by BI_PAIR projection, G-DataDistance, and antecedent weakening over ZeroDet(det[])"
+    }
+  ],
+  "derivation": [
+    {
+      "id": "D000",
+      "rule": "E-CleanInit",
+      "pre": "clean[]",
+      "program": "skip",
+      "post": "FULL_INV",
+      "premises": []
+    },
+    {
+      "id": "D001",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G0",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D002",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G1",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D003",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G2",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D004",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G3",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D005",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G4",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D006",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G5",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D007",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G6",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D008",
+      "rule": "H-GadgetGeo",
+      "pre": "FULL_INV",
+      "program": "G7",
+      "post": "FULL_INV",
+      "premises": ["L001", "L002", "L003", "L004"]
+    },
+    {
+      "id": "D009",
+      "rule": "H-Seq",
+      "pre": "FULL_INV",
+      "program": "C_NZ_D3",
+      "post": "FULL_INV",
+      "children": ["D001", "D002", "D003", "D004", "D005", "D006", "D007", "D008"]
+    },
+    {
+      "id": "D010",
+      "rule": "H-Conseq",
+      "pre": "clean[]",
+      "program": "C_NZ_D3",
+      "post": "FULL_INV",
+      "children": ["D000", "D009"]
+    },
+    {
+      "id": "D011",
+      "rule": "E-FinalGeo",
+      "pre": "FULL_INV",
+      "program": "skip",
+      "post": "DIST_CIRC_D3",
+      "premises": ["A008"]
+    },
+    {
+      "id": "D012",
+      "rule": "H-Conseq",
+      "pre": "clean[]",
+      "program": "C_NZ_D3",
+      "post": "DIST_CIRC_D3",
+      "children": ["D010", "D011"]
+    }
+  ],
+  "root": "D012"
+}

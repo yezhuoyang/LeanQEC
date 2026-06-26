@@ -33,6 +33,106 @@ def hasZComponent : Pauli → Bool
 @[simp] theorem hasXComponent_I : hasXComponent .I = false := rfl
 @[simp] theorem hasZComponent_I : hasZComponent .I = false := rfl
 
+/-! ### Parametric Pauli multiplication helpers (Phase 1 downstream support)
+
+The lemmas below give an algebraic toolkit for reasoning about how
+`hasXComponent` / `hasZComponent` behave under `Pauli.mul`. They are the
+building blocks for parametric hook-spread arguments at arbitrary code
+distance: every Pauli identity factors through these 16-branch `rfl`s,
+which are all kernel-`decide`-able.
+
+* `mul_comm` / `mul_self` are top-level versions of the identities that
+  were previously inlined inside `ErrorVec.mul_comm` and friends.
+* `hasXComponent_mul_Z`         — left-multiplying by `Z` is X-component
+  invariant (Z anticommutes with neither I nor Z).
+* `hasXComponent_mul_X_ne` /    — left-multiplying by `X` or `Y` flips the
+  `hasXComponent_mul_Y_ne`        X-component (each X/Y product moves
+                                  in/out of {X,Y}).
+* `hasZComponent_mul_*`         — symmetric statements for Z-component.
+* `hasXComponent_mul_eq_xor` /  — the bilinear closed form: the X-component
+  `hasZComponent_mul_eq_xor`      of a product is the xor of components.
+
+Every proof is `cases p <;> ... <;> rfl` (or `decide`), no advanced tactics. -/
+
+/-- Top-level form of Pauli (Klein-four) commutativity, ignoring phase.
+    Previously inlined inside `ErrorVec.mul_comm`; lifted out so that
+    downstream parametric proofs can call it directly without rebuilding
+    the 16-case `cases ... <;> rfl` ladder. -/
+theorem mul_comm (p q : Pauli) : Pauli.mul p q = Pauli.mul q p := by
+  cases p <;> cases q <;> rfl
+
+/-- Top-level re-export of `Pauli.mul_self` from `LeanQEC/Pauli.lean`, kept
+    inside the `Pauli` namespace so it sits next to the other parametric
+    helpers. (`Pauli.mul_self` already exists; this alias avoids cross-file
+    qualification when used from `SurfaceGeometry` downstream lemmas.) -/
+theorem mul_self_eq_I (p : Pauli) : Pauli.mul p p = .I := by
+  cases p <;> rfl
+
+/-- Left-multiplying by `Z` does not change the X-component, because
+    `Z` itself has no X-component, and `Z · X = Y`, `Z · Y = X`,
+    `Z · Z = I`, all of which preserve membership in `{X, Y}`. -/
+@[simp] theorem hasXComponent_mul_Z (p : Pauli) :
+    hasXComponent (Pauli.mul .Z p) = hasXComponent p := by
+  cases p <;> rfl
+
+/-- Left-multiplying by `X` flips the X-component. -/
+theorem hasXComponent_mul_X_ne (p : Pauli) :
+    hasXComponent (Pauli.mul .X p) ≠ hasXComponent p := by
+  cases p <;> decide
+
+/-- Left-multiplying by `Y` flips the X-component. -/
+theorem hasXComponent_mul_Y_ne (p : Pauli) :
+    hasXComponent (Pauli.mul .Y p) ≠ hasXComponent p := by
+  cases p <;> decide
+
+/-- Left-multiplying by `X` does not change the Z-component (symmetric to
+    `hasXComponent_mul_Z`). -/
+@[simp] theorem hasZComponent_mul_X (p : Pauli) :
+    hasZComponent (Pauli.mul .X p) = hasZComponent p := by
+  cases p <;> rfl
+
+/-- Left-multiplying by `Z` flips the Z-component. -/
+theorem hasZComponent_mul_Z_ne (p : Pauli) :
+    hasZComponent (Pauli.mul .Z p) ≠ hasZComponent p := by
+  cases p <;> decide
+
+/-- Left-multiplying by `Y` flips the Z-component. -/
+theorem hasZComponent_mul_Y_ne (p : Pauli) :
+    hasZComponent (Pauli.mul .Y p) ≠ hasZComponent p := by
+  cases p <;> decide
+
+/-- The X-component of a Pauli product is the xor of the X-components.
+    This is the bilinear closed form that drives parametric hook-spread
+    reasoning; all 16 cases are `rfl`. -/
+theorem hasXComponent_mul_eq_xor (p q : Pauli) :
+    hasXComponent (Pauli.mul p q) =
+      xor (hasXComponent p) (hasXComponent q) := by
+  cases p <;> cases q <;> rfl
+
+/-- The Z-component of a Pauli product is the xor of the Z-components. -/
+theorem hasZComponent_mul_eq_xor (p q : Pauli) :
+    hasZComponent (Pauli.mul p q) =
+      xor (hasZComponent p) (hasZComponent q) := by
+  cases p <;> cases q <;> rfl
+
+/-- Identity is a right-unit for `Pauli.mul` (X-component form). -/
+@[simp] theorem hasXComponent_mul_I_right (p : Pauli) :
+    hasXComponent (Pauli.mul p .I) = hasXComponent p := by
+  cases p <;> rfl
+
+/-- Identity is a left-unit for `Pauli.mul` (X-component form, definitional). -/
+@[simp] theorem hasXComponent_mul_I_left (p : Pauli) :
+    hasXComponent (Pauli.mul .I p) = hasXComponent p := rfl
+
+/-- Identity is a right-unit for `Pauli.mul` (Z-component form). -/
+@[simp] theorem hasZComponent_mul_I_right (p : Pauli) :
+    hasZComponent (Pauli.mul p .I) = hasZComponent p := by
+  cases p <;> rfl
+
+/-- Identity is a left-unit for `Pauli.mul` (Z-component form, definitional). -/
+@[simp] theorem hasZComponent_mul_I_left (p : Pauli) :
+    hasZComponent (Pauli.mul .I p) = hasZComponent p := rfl
+
 /-! ### Anticommutation lemmas (foundation for Phase 5 step 2) -/
 
 /-- Anticommutation is symmetric. -/

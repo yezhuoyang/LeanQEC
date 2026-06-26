@@ -3,8 +3,23 @@ import QStab.Verifier.SurfaceD3X
 import QStab.Verifier.BB72SEX
 import QStab.Verifier.HGPX
 import QStab.Examples.CompilerTest
+import QStab.Compiler.Legacy.LiftInvariant
 
 /-!
+**LEGACY (quarantined 2026-06-15).** Per audit memo
+`audit_compile_qstab_qclifford`, this file builds
+`surfaceD3_X_compiled` / `bb72_SE_X_compiled` / parametric HGP
+bundles via the legacy `compileCertificate`, which produces a
+joint vacuous `invHolds := liftReach …` / `failure := ∃ paulis ≠ I`
+predicate. The bundles fed `SurfaceHGPDerivC` (now also legacy).
+The `_verified := rfl` headlines reflect only the source-side
+`static` bit, not real fault-tolerance content.
+
+Since `compileCertificate` was removed from `QCliffordCertificate.lean`
+on the legacy retirement pass, this file no longer elaborates without
+also restoring `compileCertificate`; it is retained for historical
+context.
+
 # `CompiledBundles` — Phase D concrete compileCertificate instances
 
 Demonstrates session 2's `compileCertificate` on real source bundles

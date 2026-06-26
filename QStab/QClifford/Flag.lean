@@ -2,6 +2,8 @@ import QStab.QClifford.Gate
 import Mathlib.Data.Finset.Card
 import Mathlib.Tactic
 
+set_option maxRecDepth 8192
+
 /-! # Flag scheme (Chao-Reichardt) for weight-4 stabilizers
 
 The flag scheme adds a single "flag" ancilla that triggers when a hook
@@ -135,7 +137,7 @@ private theorem splitAt_ge {nq : Nat} (circuit : Circuit nq) (pos : Nat)
     (resets absorb all propagated errors). -/
 private theorem fullCircuit_paulis_I (i : Fin 4) :
     (propagateCircuit flagCircuit (ErrorState.clean 6)).paulis ⟨i.val, by omega⟩ = .I := by
-  fin_cases i <;> native_decide
+  fin_cases i <;> decide
 
 /-- For pos ≥ 11: data weight after injecting on qubit q into propagated clean state.
     The propagated clean state has all paulis = I. Injecting p on q and then
@@ -186,22 +188,22 @@ private theorem sound_X (pos : Nat) (hpos : pos < 11) (q : Fin 6) (hq : q ≠ an
     flagTriggered (computeFaultEffect flagCircuit ⟨pos, q, .X, hpX⟩) = false →
     dataWt (computeFaultEffect flagCircuit ⟨pos, q, .X, hpX⟩) ≤ 1 ∨
     isFullStabilizer (computeFaultEffect flagCircuit ⟨pos, q, .X, hpX⟩) = true := by
-  -- 11 positions × 6 qubits; q=anc case closed by hq contradiction, rest by native_decide
-  interval_cases pos <;> fin_cases q <;> simp_all [anc] <;> intro h <;> native_decide
+  -- 11 positions × 6 qubits; q=anc case closed by hq contradiction, rest by decide
+  interval_cases pos <;> fin_cases q <;> simp_all [anc] <;> intro h <;> decide
 
 /-- For positions 0..10, qubit ≠ anc, pauli = Y: soundness holds. -/
 private theorem sound_Y (pos : Nat) (hpos : pos < 11) (q : Fin 6) (hq : q ≠ anc) :
     flagTriggered (computeFaultEffect flagCircuit ⟨pos, q, .Y, hpY⟩) = false →
     dataWt (computeFaultEffect flagCircuit ⟨pos, q, .Y, hpY⟩) ≤ 1 ∨
     isFullStabilizer (computeFaultEffect flagCircuit ⟨pos, q, .Y, hpY⟩) = true := by
-  interval_cases pos <;> fin_cases q <;> simp_all [anc] <;> intro h <;> native_decide
+  interval_cases pos <;> fin_cases q <;> simp_all [anc] <;> intro h <;> decide
 
 /-- For positions 0..10, any qubit, pauli = Z: soundness holds. -/
 private theorem sound_Z (pos : Nat) (hpos : pos < 11) (q : Fin 6) :
     flagTriggered (computeFaultEffect flagCircuit ⟨pos, q, .Z, hpZ⟩) = false →
     dataWt (computeFaultEffect flagCircuit ⟨pos, q, .Z, hpZ⟩) ≤ 1 ∨
     isFullStabilizer (computeFaultEffect flagCircuit ⟨pos, q, .Z, hpZ⟩) = true := by
-  interval_cases pos <;> fin_cases q <;> intro h <;> native_decide
+  interval_cases pos <;> fin_cases q <;> intro h <;> decide
 
 -- ============================================================
 -- FLAG SOUNDNESS (corrected theorem)
@@ -256,41 +258,41 @@ theorem flagSoundness_w4 (fault : Fault 6)
 -- Hook fault: X on ancilla between first and second flag couplings (pos=5)
 -- flips the flag → round is rejected
 example : flagTriggered (computeFaultEffect flagCircuit ⟨5, anc, .X, by decide⟩) = true := by
-  native_decide
+  decide
 
 -- X on ancilla at pos=6 (between the flag couplings): also rejected
 example : flagTriggered (computeFaultEffect flagCircuit ⟨6, anc, .X, by decide⟩) = true := by
-  native_decide
+  decide
 
 -- Single data fault at pos=3 (before CNOT to d0): weight 1, flag = 0
 example : dataWt (computeFaultEffect flagCircuit ⟨3, d0, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : flagTriggered (computeFaultEffect flagCircuit ⟨3, d0, .X, by decide⟩) = false := by
-  native_decide
+  decide
 
 -- Single data fault at pos=4 (before CNOT to d1): weight 1, flag = 0
 example : dataWt (computeFaultEffect flagCircuit ⟨4, d1, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : flagTriggered (computeFaultEffect flagCircuit ⟨4, d1, .Z, by decide⟩) = false := by
-  native_decide
+  decide
 
 -- Ancilla X before first CNOT to data (pos=2): full stabilizer, flag = 0
 -- (all 4 data get X → correctable, ancilla measurement also flips)
 example : isFullStabilizer (computeFaultEffect flagCircuit ⟨2, anc, .X, by decide⟩) = true := by
-  native_decide
+  decide
 example : flagTriggered (computeFaultEffect flagCircuit ⟨2, anc, .X, by decide⟩) = false := by
-  native_decide
+  decide
 
 -- After second flag CNOT (pos=8): ancilla X → no data effect
 example : dataWt (computeFaultEffect flagCircuit ⟨8, anc, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 
 -- Prep faults (pos=0,1): absorbed by reset
 example : dataWt (computeFaultEffect flagCircuit ⟨0, anc, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt (computeFaultEffect flagCircuit ⟨0, flag, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt (computeFaultEffect flagCircuit ⟨1, flag, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 
 end QStab.QClifford.Flag

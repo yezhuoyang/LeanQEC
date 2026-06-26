@@ -2,6 +2,8 @@ import QStab.Paper.BB72SynVerify
 import QStab.Paper.BB72BVBridge
 import QStab.Paper.BB72ChainAttack
 
+set_option maxRecDepth 8192
+
 /-!
 # BB72 syndrome-form ↔ ErrorVec bridge
 
@@ -29,7 +31,7 @@ theorem mech_syn_bit_eq :
     ∀ (i : Fin 252) (z : Fin 36),
       (mech_syn i).getLsbD z.val =
         ErrorVec.parity (bb_stabilizers (zStabIdx z)) (bb_xMech i) := by
-  native_decide
+  decide
 
 /-- Each bit of `mech_lz[i]` matches the ErrorVec parity vs the corresponding
     L_Z basis vector. Discharged by `native_decide` over 252 × 12 = 3k cases. -/
@@ -37,7 +39,7 @@ theorem mech_lz_bit_eq :
     ∀ (i : Fin 252) (l : Fin 12),
       (mech_lz i).getLsbD l.val =
         ErrorVec.parity (bb_logicalZ_basis l) (bb_xMech i) := by
-  native_decide
+  decide
 
 /-! ## Chain-level lift: chain syndrome XOR = parity of chain XOR vs Z-stab -/
 

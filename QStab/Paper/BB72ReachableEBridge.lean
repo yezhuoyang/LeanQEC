@@ -144,7 +144,7 @@ theorem bb_xMech_type0 (i : Fin 72) :
   simp [i.isLt]
 
 /-- bb_allHooks has length 180. -/
-theorem bb_allHooks_length : bb_allHooks.length = 180 := by native_decide
+theorem bb_allHooks_length : bb_allHooks.length = 180 := by decide
 
 /-- Any hook in bb_allHooks corresponds to an X-mech index ≥ 72. -/
 theorem bb_xMech_hook (h : ErrorVec 72) (hh : h ∈ bb_allHooks) :

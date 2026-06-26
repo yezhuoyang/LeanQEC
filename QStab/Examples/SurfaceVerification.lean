@@ -1,6 +1,8 @@
 import QStab.Examples.SurfaceGeometry
 import QStab.Invariant
 
+set_option maxRecDepth 8192
+
 /-! # B1 patch — bridging `Step.halt` and the simulator's final measurement
 
 **The gap** ([semantics_audit.md#B1](../../../Codedistance/notes/semantics_audit.md)):
@@ -292,57 +294,57 @@ def t7_logicalX_viaMasking : State testCode := t3_logicalX
 
 /-! ### Cemented test theorems
 
-The `#eval!` checks above are merely displayed. These `by native_decide` theorems
+The `#eval!` checks above are merely displayed. These `by decide` theorems
 make the semantic behaviour part of the type-checked development — any future
 refactor that silently breaks them will fail to build. -/
 
 theorem test1_noError_notLogical :
     isUndetectedLogicalError testCode logicalX logicalZ t1_noError = false := by
-  native_decide
+  decide
 
 theorem test2_singleX_notLogical :
     isUndetectedLogicalError testCode logicalX logicalZ t2_singleX = false := by
-  native_decide
+  decide
 
 theorem test2_singleX_GnonZero :
     allGZero testCode t2_singleX = false := by
-  native_decide
+  decide
 
 theorem test2_singleX_EnotInS :
     notInStab testCode logicalX logicalZ t2_singleX.E_tilde = true := by
-  native_decide
+  decide
 
 theorem test3_logicalX_UNDETECTED :
     isUndetectedLogicalError testCode logicalX logicalZ t3_logicalX = true := by
-  native_decide
+  decide
 
 theorem test3_logicalX_Gzero :
     allGZero testCode t3_logicalX = true := by
-  native_decide
+  decide
 
 theorem test3_logicalX_anticommutes_Zbar :
     ErrorVec.parity logicalZ t3_logicalX.E_tilde = true := by
-  native_decide
+  decide
 
 theorem test4_logicalZ_UNDETECTED :
     isUndetectedLogicalError testCode logicalX logicalZ t4_logicalZ = true := by
-  native_decide
+  decide
 
 theorem test5_stabilizer_notLogical :
     isUndetectedLogicalError testCode logicalX logicalZ t5_stabilizer = false := by
-  native_decide
+  decide
 
 theorem test5_stabilizer_Gzero :
     allGZero testCode t5_stabilizer = true := by
-  native_decide
+  decide
 
 theorem test5_stabilizer_EinS :
     notInStab testCode logicalX logicalZ t5_stabilizer.E_tilde = false := by
-  native_decide
+  decide
 
 theorem test6_centerX_detected :
     isUndetectedLogicalError testCode logicalX logicalZ t6_centerX = false := by
-  native_decide
+  decide
 
 /-! ### Stress test: 2-error "masking" attack
 
@@ -403,17 +405,17 @@ This hits the `MaskingLowerBound` gap the paper itself flagged at
 theorem counterexample_2_errors :
     attack_Xq1_masked.cnt0 + attack_Xq1_masked.cnt1
     + attack_Xq1_masked.cnt2 + attack_Xq1_masked.cnt3 = 2 := by
-  native_decide
+  decide
 
 /-- At σ_done, `G` is entirely zero — the decoder sees no detection event. -/
 theorem counterexample_G_zero :
     allGZero testCode attack_Xq1_masked = true := by
-  native_decide
+  decide
 
 /-- At σ_done, `Ẽ ∉ S`. (In fact `Ẽ = X_{q₁}` which has nonzero syndrome.) -/
 theorem counterexample_E_notInS :
     notInStab testCode logicalX logicalZ attack_Xq1_masked.E_tilde = true := by
-  native_decide
+  decide
 
 /-- **The counterexample.** A 2-error execution reaches σ_done satisfying
     both `G = 0` and `Ẽ ∉ S`. By the definition of `d^circ` in paper eq. at
@@ -422,7 +424,7 @@ theorem counterexample_E_notInS :
     d=3 NZ-scheduled surface code with R = 5. -/
 theorem d3_nz_dCirc_at_most_2 :
     isUndetectedLogicalError testCode logicalX logicalZ attack_Xq1_masked = true := by
-  native_decide
+  decide
 
 /-! ### Stim-equivalence test: does the attack trip `v2` (memory_z semantics)?
 
@@ -433,12 +435,12 @@ handle this case; `v2` should agree. -/
 
 theorem attack_v2_NOT_logical :
     isUndetectedLogicalError_v2 testCode logicalZ attack_Xq1_masked = false := by
-  native_decide
+  decide
 
 /-- Sanity: the Z-type stabilizer final-data detector for ŝ₁ actually fires. -/
 theorem attack_final_detector_fires :
     finalDataDetector testCode attack_Xq1_masked ⟨0, by decide⟩ = true := by
-  native_decide
+  decide
 
 /-! ### Genuine 3-error logical X̄ attack — should be flagged by BOTH predicates
 
@@ -465,11 +467,11 @@ def attack_logicalX_3errors : State testCode :=
 
 theorem logicalX_attack_IS_logical_v2 :
     isUndetectedLogicalError_v2 testCode logicalZ attack_logicalX_3errors = true := by
-  native_decide
+  decide
 
 theorem logicalX_attack_uses_3_errors :
     attack_logicalX_3errors.cnt0 = 3 := by
-  native_decide
+  decide
 
 /-! ### Staggered-injection counterexample to `v2 ⟹ zero X-type syndrome`
 
@@ -527,13 +529,13 @@ def attack_staggered_XYX : State testCode :=
 
 /-- The staggered attack uses exactly 3 errors. -/
 theorem staggered_attack_uses_3_errors :
-    attack_staggered_XYX.cnt0 = 3 := by native_decide
+    attack_staggered_XYX.cnt0 = 3 := by decide
 
 /-- The staggered attack satisfies `v2` (all detectors read 0, logical flip
     recorded). -/
 theorem staggered_attack_v2_true :
     isUndetectedLogicalError_v2 testCode logicalZ attack_staggered_XYX = true := by
-  native_decide
+  decide
 
 /-- **Counterexample to `v2 ⟹ zero X-type syndrome`.** The staggered 3-error
     attack reaches a v2-true state where `parity(ŝ_3, Ẽ) = 1` (ŝ_3 is the
@@ -541,7 +543,7 @@ theorem staggered_attack_v2_true :
 theorem staggered_attack_Xsyndrome_nonzero :
     ErrorVec.parity (code.stabilizers ⟨2, by decide⟩)
                     attack_staggered_XYX.E_tilde = true := by
-  native_decide
+  decide
 
 /-! ### A6: spec-level proofs that `logicalX`, `logicalZ` are valid logical operators
 

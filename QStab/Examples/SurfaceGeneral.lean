@@ -1,5 +1,6 @@
 import QStab.Examples.SurfaceGeometry
 import QStab.Invariant
+import Mathlib.Data.Finset.Option
 
 /-! # General d×d NZ surface code distance proof
 
@@ -123,16 +124,18 @@ structure AlignedCodeSpec (d : Nat) where
   hd_pos : 0 < d
   /-- The logical Z operator -/
   logicalZ : ErrorVec params.n
-  /-- Assignment of each qubit to one of d groups -/
-  group : Fin params.n → Fin d
+  /-- Partial assignment of each qubit to one of `d` groups.
+      `none` means the qubit does not participate in any group
+      (e.g. ancillas / HGP Sector-2 qubits). -/
+  group : Fin params.n → Option (Fin d)
   /-- Cut operators, one per group. Cut i has Z-support in group i. -/
   cutOp : Fin d → ErrorVec params.n
   /-- Every cut is stabilizer-equivalent to logicalZ -/
   cutOp_stabEquiv : ∀ i : Fin d,
     ∃ S : ErrorVec params.n, InStab params S ∧ cutOp i = ErrorVec.mul S logicalZ
-  /-- Each cut has Z on its group's qubits, I elsewhere -/
+  /-- Each cut has Z on its group's qubits, I elsewhere (including on `none` qubits). -/
   cutOp_spec : ∀ (i : Fin d) (q : Fin params.n),
-    cutOp i q = if group q = i then .Z else .I
+    cutOp i q = if group q = some i then .Z else .I
   /-- Logical Z is in the normalizer -/
   logicalZ_normalizer : ∀ i : Fin params.numStab,
     ErrorVec.parity (params.stabilizers i) logicalZ = false
@@ -148,10 +151,10 @@ structure AlignedCodeSpec (d : Nat) where
       InStab params S_wit →
       ∃ S_wit' : ErrorVec params.n, InStab params S_wit' ∧
         (Finset.univ.filter fun g : Fin d =>
-          ∃ q : Fin params.n, group q = g ∧
+          ∃ q : Fin params.n, group q = some g ∧
             Pauli.hasXComponent (ErrorVec.mul S_wit' (ErrorVec.mul e_B E) q) = true).card
         ≤ (Finset.univ.filter fun g : Fin d =>
-          ∃ q : Fin params.n, group q = g ∧
+          ∃ q : Fin params.n, group q = some g ∧
             Pauli.hasXComponent (ErrorVec.mul S_wit E q) = true).card + 1
 
 /-! ## General distance theorem from AlignedCodeSpec
@@ -170,7 +173,7 @@ def GroupSpread (spec : AlignedCodeSpec d) (s : State spec.params) : Prop :=
   ∃ S_wit : ErrorVec spec.params.n,
     InStab spec.params S_wit ∧
     (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul S_wit s.E_tilde q) = true).card
     + s.C ≤ spec.params.C_budget
 
@@ -182,7 +185,7 @@ theorem GroupSpread_init (spec : AlignedCodeSpec d) :
   have hE : (State.init spec.params).E_tilde = ErrorVec.identity spec.params.n := rfl
   rw [hC, hE]
   suffices h : (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul (ErrorVec.identity spec.params.n)
           (ErrorVec.identity spec.params.n) q) = true).card = 0 by omega
   apply Finset.card_eq_zero.mpr
@@ -197,30 +200,35 @@ private theorem group_filter_update_le (spec : AlignedCodeSpec d)
     (F G : ErrorVec spec.params.n) (i : Fin spec.params.n)
     (h_ne : ∀ q : Fin spec.params.n, q ≠ i → F q = G q) :
     (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (F q) = true).card ≤
     (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (G q) = true).card + 1 := by
-  set iGrp : Fin d := spec.group i
+  set iGrpFinset : Finset (Fin d) := (spec.group i).toFinset with hiGrpFinset
+  have h_iGrp_card : iGrpFinset.card ≤ 1 := by
+    rw [hiGrpFinset, Option.card_toFinset]
+    cases spec.group i <;> simp
   set S_new := Finset.univ.filter fun g : Fin d =>
-    ∃ q, spec.group q = g ∧ Pauli.hasXComponent (F q) = true
+    ∃ q, spec.group q = some g ∧ Pauli.hasXComponent (F q) = true
   set S_old := Finset.univ.filter fun g : Fin d =>
-    ∃ q, spec.group q = g ∧ Pauli.hasXComponent (G q) = true
-  have h_sub : S_new ⊆ S_old ∪ {iGrp} := by
+    ∃ q, spec.group q = some g ∧ Pauli.hasXComponent (G q) = true
+  have h_sub : S_new ⊆ S_old ∪ iGrpFinset := by
     intro g hg
     have hg' := (Finset.mem_filter.mp hg).2
     obtain ⟨q, hq_grp, hq_has⟩ := hg'
     by_cases hqi : q = i
-    · apply Finset.mem_union_right; subst hqi
-      exact Finset.mem_singleton.mpr (Eq.symm hq_grp)
+    · apply Finset.mem_union_right
+      subst hqi
+      rw [hiGrpFinset, Option.mem_toFinset, hq_grp]
+      exact Option.mem_some.mpr rfl
     · apply Finset.mem_union_left
       exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
         q, hq_grp, by rw [← h_ne q hqi]; exact hq_has⟩
   calc S_new.card
-      ≤ (S_old ∪ {iGrp}).card := Finset.card_le_card h_sub
-    _ ≤ S_old.card + ({iGrp} : Finset (Fin d)).card := Finset.card_union_le _ _
-    _ = S_old.card + 1 := by simp
+      ≤ (S_old ∪ iGrpFinset).card := Finset.card_le_card h_sub
+    _ ≤ S_old.card + iGrpFinset.card := Finset.card_union_le _ _
+    _ ≤ S_old.card + 1 := by omega
 
 /-- GroupSpread is preserved by each step (the invariant). -/
 theorem GroupSpread_preservation (spec : AlignedCodeSpec d)
@@ -267,7 +275,7 @@ theorem GroupSpread_preservation (spec : AlignedCodeSpec d)
   | type3 _ hC =>
     refine ⟨S_wit, hS_stab, ?_⟩
     show (Finset.univ.filter fun g : Fin d =>
-        ∃ q : Fin spec.params.n, spec.group q = g ∧
+        ∃ q : Fin spec.params.n, spec.group q = some g ∧
           Pauli.hasXComponent (ErrorVec.mul S_wit s.E_tilde q) = true).card
       + (s.C - 1) ≤ spec.params.C_budget
     omega
@@ -291,14 +299,14 @@ theorem topological_lower_bound_aligned (spec : AlignedCodeSpec d)
     (hLog : ErrorVec.parity spec.logicalZ E = true)
     {S : ErrorVec spec.params.n} (hS : InStab spec.params S) :
     d ≤ (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul S E q) = true).card := by
   -- Every group has an X-component, so the filter is all of Fin d
   suffices h_all : ∀ g : Fin d,
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul S E q) = true by
     have h_univ : (Finset.univ.filter fun g : Fin d =>
-        ∃ q, spec.group q = g ∧
+        ∃ q, spec.group q = some g ∧
           Pauli.hasXComponent (ErrorVec.mul S E q) = true) = Finset.univ := by
       apply Finset.ext; intro g
       simp only [Finset.mem_filter, Finset.mem_univ, true_and, iff_true]
@@ -346,11 +354,11 @@ theorem topological_lower_bound_aligned (spec : AlignedCodeSpec d)
     apply Finset.filter_eq_empty_iff.mpr
     intro q _
     rw [spec.cutOp_spec]
-    by_cases hg : spec.group q = g
+    by_cases hg : spec.group q = some g
     · -- q in group g. cutOp g q = Z. anticommutes(Z, P) = hasXComponent(P).
       rw [if_pos hg, Pauli.anticommutes_Z_eq_hasXComponent]
       exact h_none q hg
-    · -- q not in group g. cutOp g q = I. anticommutes(I, _) = false.
+    · -- q not in group g (or in no group). cutOp g q = I.
       rw [if_neg hg]; simp [Pauli.anticommutes_I_left]
   rw [h_false] at h_cut_SE
   exact absurd h_cut_SE (by decide)
@@ -380,17 +388,27 @@ HGPSpec captures the tensor product structure of HGP(H₁, H₂).
 The key property: X-stab (i,j) has S1 support in column j only.
 Therefore every hook stays within one column → AlignedCodeSpec. -/
 
-/-- Axiomatic specification of a hypergraph product code. -/
+/-- Axiomatic specification of a hypergraph product code.
+
+    The `col` field is **partial**: qubits in HGP Sector-2 (which carry no
+    column information and contribute no Z-component to any cut) are mapped
+    to `none`. The `cutOp_spec` axiom then says each cut is Z exactly on its
+    column's S1 qubits and I everywhere else (including all S2 qubits).
+    Concrete HGP instances supply `col q := some j` for S1 qubits and
+    `col q := none` for S2 qubits. -/
 structure HGPSpec (d : Nat) where
   params : QECParams
   hd_pos : 0 < d
   logicalZ : ErrorVec params.n
-  col : Fin params.n → Fin d
+  /-- Partial column assignment: `some j` for S1 qubits, `none` for S2 / ancillas. -/
+  col : Fin params.n → Option (Fin d)
   cutOp : Fin d → ErrorVec params.n
   cutOp_stabEquiv : ∀ i : Fin d,
     ∃ S, InStab params S ∧ cutOp i = ErrorVec.mul S logicalZ
+  /-- Each cut is Z on its column's S1 qubits, I on S1 qubits of other columns and on
+      ALL S2 qubits (those with `col q = none`). -/
   cutOp_spec : ∀ (i : Fin d) (q : Fin params.n),
-    cutOp i q = if col q = i then .Z else .I
+    cutOp i q = if col q = some i then .Z else .I
   logicalZ_normalizer : ∀ i : Fin params.numStab,
     ErrorVec.parity (params.stabilizers i) logicalZ = false
   stab_commute : ∀ i j : Fin params.numStab,
@@ -400,11 +418,11 @@ structure HGPSpec (d : Nat) where
     ∀ (E S_wit : ErrorVec params.n), InStab params S_wit →
       ∃ S_wit', InStab params S_wit' ∧
         (Finset.univ.filter fun g : Fin d =>
-          ∃ q, col q = g ∧ Pauli.hasXComponent (ErrorVec.mul S_wit' (ErrorVec.mul e_B E) q) = true).card
+          ∃ q, col q = some g ∧ Pauli.hasXComponent (ErrorVec.mul S_wit' (ErrorVec.mul e_B E) q) = true).card
         ≤ (Finset.univ.filter fun g : Fin d =>
-          ∃ q, col q = g ∧ Pauli.hasXComponent (ErrorVec.mul S_wit E q) = true).card + 1
+          ∃ q, col q = some g ∧ Pauli.hasXComponent (ErrorVec.mul S_wit E q) = true).card + 1
 
-/-- Every HGP code gives an AlignedCodeSpec (column = group). -/
+/-- Every HGP code gives an AlignedCodeSpec (column = group, both `Option`-valued). -/
 def HGPSpec.toAligned (spec : HGPSpec d) : AlignedCodeSpec d where
   params := spec.params
   hd_pos := spec.hd_pos
@@ -982,23 +1000,34 @@ def NZSurfaceSpec.toAligned (spec : NZSurfaceSpec d) : AlignedCodeSpec d where
   params := spec.params
   hd_pos := spec.hd_pos
   logicalZ := spec.logicalZ
-  group := fun q => ⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩
+  -- Every surface qubit lives in some row; lift the total row assignment to `some`.
+  group := fun q => some ⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩
   cutOp := spec.rowCut
   cutOp_stabEquiv := rowCut_stabEquiv_logicalZ spec
   cutOp_spec := fun i q => by
     simp only [spec.rowCut_spec]
-    congr 1
-    exact propext ⟨fun h => Fin.ext h, fun h => Fin.val_eq_of_eq h⟩
+    have h_iff : (q.val / d = i.val) ↔
+        (some (⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩ : Fin d) = some i) := by
+      constructor
+      · intro h
+        exact congrArg some (Fin.ext h)
+      · intro h
+        have h' : (⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩ : Fin d) = i :=
+          Option.some_injective _ h
+        exact Fin.val_eq_of_eq h'
+    by_cases hg : q.val / d = i.val
+    · rw [if_pos hg, if_pos (h_iff.mp hg)]
+    · rw [if_neg hg, if_neg (fun h => hg (h_iff.mpr h))]
   logicalZ_normalizer := spec.logicalZ_normalizer
   stab_commute := spec.stab_commute
   hook_spread_bound := fun s_idx e_B he E S_wit hS => by
     obtain ⟨S_wit', hS', hcard⟩ := spec.hook_spread_bound s_idx e_B he E S_wit hS
     refine ⟨S_wit', hS', ?_⟩
-    -- Convert between (⟨q.val/d, _⟩ : Fin d) = g  and  q.val/d = g.val
+    -- Convert between (some ⟨q.val/d, _⟩ : Option (Fin d)) = some g  and  q.val/d = g.val
     -- These filter sets have equal cardinality because the predicates are equivalent.
     suffices h : ∀ (F : ErrorVec spec.params.n),
         (Finset.univ.filter fun g : Fin d =>
-          ∃ q, (⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩ : Fin d) = g ∧
+          ∃ q, (some ⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩ : Option (Fin d)) = some g ∧
             Pauli.hasXComponent (F q) = true)
         = (Finset.univ.filter fun g : Fin d =>
           ∃ q, q.val / d = g.val ∧
@@ -1008,8 +1037,13 @@ def NZSurfaceSpec.toAligned (spec : NZSurfaceSpec d) : AlignedCodeSpec d where
     apply Finset.filter_congr
     intro g _
     constructor
-    · rintro ⟨q, hg, hx⟩; exact ⟨q, Fin.val_eq_of_eq hg, hx⟩
-    · rintro ⟨q, hg, hx⟩; exact ⟨q, Fin.ext hg, hx⟩
+    · rintro ⟨q, hg, hx⟩
+      have hg' : (⟨q.val / d, Nat.div_lt_of_lt_mul (spec.hn ▸ q.isLt)⟩ : Fin d) = g :=
+        Option.some_injective _ hg
+      exact ⟨q, Fin.val_eq_of_eq hg', hx⟩
+    · rintro ⟨q, hg, hx⟩
+      refine ⟨q, ?_, hx⟩
+      exact congrArg some (Fin.ext hg)
 
 /-! ## d=3 instantiation witness -/
 
@@ -1063,9 +1097,14 @@ theorem stab_commute_d3 : ∀ i j : Fin SurfaceD3.code.numStab,
     ErrorVec.parity (SurfaceD3.code.stabilizers i) (SurfaceD3.code.stabilizers j) = false := by
   decide
 
-/-- The d=3 NZSurfaceSpec instance.
+/-- WARNING: vacuous instance (backActionSet = ∅). Use `SurfaceD3PCC.nzSpecPCC`
+    for the live non-vacuous d=3 surface spec. This scaffolding is kept only because
+    its helper lemmas (`rowCutFin`, `logicalZ_norm`, etc.) are reused downstream.
+
+    The d=3 NZSurfaceSpec instance.
     hook_spread_bound is vacuously true since backActionSet = ∅ in the d=3 code.
     The concrete hook geometry is verified separately in SurfaceVerification.lean. -/
+@[deprecated "D3Witness.nzSpec uses empty backActionSet which is vacuous — use SurfaceD3PCC.nzSpecPCC for the live d=3 surface spec with non-empty backActionSet." (since := "2026-06-16")]
 def nzSpec : NZSurfaceSpec 3 where
   params := SurfaceD3.code
   hn := by decide
@@ -1151,8 +1190,14 @@ theorem stab_commute_d4 : ∀ i j : Fin SurfaceD4.code.numStab,
     ErrorVec.parity (SurfaceD4.code.stabilizers i) (SurfaceD4.code.stabilizers j) = false := by
   decide
 
-/-- The d=4 NZSurfaceSpec instance.
+/-- WARNING: vacuous instance (backActionSet = ∅). No live d=4 PCC-style upgrade
+    has been built; this scaffolding exists because its helper lemmas
+    (`rowCutFin*`, `logicalZ_norm`, `rowCutFin_spec`, `stab_commute_d4`) were proven
+    but never wired into a non-vacuous spec. Do not use as a real FT witness.
+
+    The d=4 NZSurfaceSpec instance.
     hook_spread_bound is vacuously true since backActionSet = ∅ in the d=4 code. -/
+@[deprecated "D4Witness.nzSpec uses empty backActionSet which is vacuous — no live non-vacuous d=4 surface spec exists yet; do not use as a real FT witness." (since := "2026-06-16")]
 def nzSpec : NZSurfaceSpec 4 where
   params := SurfaceD4.code
   hn := by decide

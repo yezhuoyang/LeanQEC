@@ -5,6 +5,8 @@ import QStab.Examples.SurfaceGeometry
 import Mathlib.Tactic.FinCases
 import Mathlib.Data.Fintype.Pi
 
+set_option maxRecDepth 8192
+
 /-! # Steane [[7, 1, 3]] code: d_circ ≤ 2
 
 We construct an explicit 2-fault execution in QStab semantics that produces
@@ -56,14 +58,14 @@ def logicalZ : ErrorVec 7 :=
 
 def attack_E : ErrorVec 7 := ofList [(0, .X), (5, .X), (6, .X)]
 
-/-! ## Key properties verified by native_decide -/
+/-! ## Key properties verified by decide -/
 
 theorem attack_zero_syndrome :
     ∀ i : Fin code.numStab,
-      ErrorVec.parity (code.stabilizers i) attack_E = false := by native_decide
+      ErrorVec.parity (code.stabilizers i) attack_E = false := by decide
 
 theorem attack_flips_logical :
-    ErrorVec.parity logicalZ attack_E = true := by native_decide
+    ErrorVec.parity logicalZ attack_E = true := by decide
 
 theorem hook_in_B1 : hook_X56 ∈ code.backActionSet ⟨0, by decide⟩ := by
   show hook_X56 ∈ backActionSet ⟨0, by decide⟩
@@ -74,7 +76,7 @@ theorem hook_in_B1 : hook_X56 ∈ code.backActionSet ⟨0, by decide⟩ := by
 /-- The final error E_tilde = mul hook_X56 (update identity 0 X) equals attack_E. -/
 theorem attack_E_eq :
     ErrorVec.mul hook_X56 (ErrorVec.update (ErrorVec.identity 7) ⟨0, by decide⟩ .X)
-    = attack_E := by native_decide
+    = attack_E := by decide
 
 /-- **Main theorem: d_circ(Steane) ≤ 2.**
 
@@ -165,13 +167,13 @@ hence detectable. -/
 def hook_X56_prefix : ErrorVec 7 := ofList [(3, .X), (4, .X)]
 
 theorem hook_prefix_product :
-    ErrorVec.mul hook_X56_prefix hook_X56 = stabilizers ⟨0, by decide⟩ := by native_decide
+    ErrorVec.mul hook_X56_prefix hook_X56 = stabilizers ⟨0, by decide⟩ := by decide
 
 theorem hook_X56_prefix_weight :
-    ErrorVec.weight hook_X56_prefix ≤ 2 := by native_decide
+    ErrorVec.weight hook_X56_prefix ≤ 2 := by decide
 
 theorem hook_X56_prefix_ne_id :
-    hook_X56_prefix ≠ ErrorVec.identity 7 := by native_decide
+    hook_X56_prefix ≠ ErrorVec.identity 7 := by decide
 
 /-- No weight-≤ 2 Pauli on 7 qubits has zero syndrome unless it is the identity (d = 3). -/
 theorem no_weight2_in_normalizer :
@@ -179,12 +181,12 @@ theorem no_weight2_in_normalizer :
       ErrorVec.weight E ≤ 2 →
       (∃ i : Fin 6, ErrorVec.parity (stabilizers i) E = true) ∨
       E = ErrorVec.identity 7 := by
-  native_decide
+  decide
 
 /-- Steane stabilizers commute. -/
 theorem stabilizers_commute :
     ∀ (i j : Fin 6), ErrorVec.parity (stabilizers i) (stabilizers j) = false := by
-  native_decide
+  decide
 
 /-- The prefix X₃X₄ has nonzero syndrome. -/
 theorem hook_X56_prefix_detected :
@@ -212,7 +214,7 @@ theorem no_weight2_logical :
       ErrorVec.weight E ≤ 2 →
       (∃ i : Fin code.numStab, ErrorVec.parity (code.stabilizers i) E = true) ∨
       ErrorVec.parity logicalZ E = false := by
-  native_decide
+  decide
 
 /-- **d_circ(Steane) = 2 exactly.**
 

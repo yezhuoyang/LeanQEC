@@ -1,0 +1,187 @@
+# Surface d=3 NZ QClifford checked Hoare derivation
+#
+# Machine certificate:
+#   docs/surface_d3_nz_qclifford_geometric_hoare_certificate.json
+# Checker:
+#   tools/check_geometric_hoare.py
+# Checked command:
+#   python tools/check_geometric_hoare.py docs/surface_d3_nz_qclifford_geometric_hoare_certificate.json
+#
+# The checker accepts only the rules named below.  It rejects H-CheckedTrace,
+# H-ErrTable, Tbl, global fault-set enumeration, finite Pauli-space enumeration,
+# backActionSet, native_decide, and Lean_discharge.
+
+DERIVED q0 := q(0)
+DERIVED q1 := q(1)
+DERIVED q2 := q(2)
+DERIVED q3 := q(3)
+DERIVED q4 := q(4)
+DERIVED q5 := q(5)
+DERIVED q6 := q(6)
+DERIVED q7 := q(7)
+DERIVED q8 := q(8)
+
+DERIVED s0 := single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z)
+DERIVED s1 := single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X)
+DERIVED s2 := single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X)
+DERIVED s3 := single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z)
+DERIVED s4 := single(q0,X)*single(q1,X)
+DERIVED s5 := single(q2,Z)*single(q5,Z)
+DERIVED s6 := single(q3,Z)*single(q6,Z)
+DERIVED s7 := single(q7,X)*single(q8,X)
+DERIVED stabAt(0) := s0
+DERIVED stabAt(1) := s1
+DERIVED stabAt(2) := s2
+DERIVED stabAt(3) := s3
+DERIVED stabAt(4) := s4
+DERIVED stabAt(5) := s5
+DERIVED stabAt(6) := s6
+DERIVED stabAt(7) := s7
+DERIVED ProdStab(m) :=
+  (if maskAt(m,0) then s0 else I)*(if maskAt(m,1) then s1 else I)*
+  (if maskAt(m,2) then s2 else I)*(if maskAt(m,3) then s3 else I)*
+  (if maskAt(m,4) then s4 else I)*(if maskAt(m,5) then s5 else I)*
+  (if maskAt(m,6) then s6 else I)*(if maskAt(m,7) then s7 else I)
+
+DERIVED LX := single(q0,X)*single(q3,X)*single(q6,X)
+DERIVED LZ := single(q0,Z)*single(q1,Z)*single(q2,Z)
+DERIVED R0 := single(q0,Z)*single(q1,Z)*single(q2,Z)
+DERIVED R1 := single(q3,Z)*single(q4,Z)*single(q5,Z)
+DERIVED R2 := single(q6,Z)*single(q7,Z)*single(q8,Z)
+DERIVED C0 := single(q0,X)*single(q3,X)*single(q6,X)
+DERIVED C1 := single(q1,X)*single(q4,X)*single(q7,X)
+DERIVED C2 := single(q2,X)*single(q5,X)*single(q8,X)
+
+DERIVED-ASSERTION clean[] := data[] = I /\ det[] = 0 /\ faults[] = 0
+DERIVED-ASSERTION ZeroDet(det[]) := forall s. measAt(det[],s)=0
+DERIVED-ASSERTION Centralizer(E) := forall i in {0..7}. parity(stabAt(i),E)=0
+DERIVED-ASSERTION Stab(E) := exists stabilizer mask m. E = ProdStab(m)
+DERIVED-ASSERTION LogicalAny(E) := Centralizer(E) /\ not Stab(E)
+
+DERIVED row(q,0) := q=q(0) \/ q=q(1) \/ q=q(2)
+DERIVED row(q,1) := q=q(3) \/ q=q(4) \/ q=q(5)
+DERIVED row(q,2) := q=q(6) \/ q=q(7) \/ q=q(8)
+DERIVED col(q,0) := q=q(0) \/ q=q(3) \/ q=q(6)
+DERIVED col(q,1) := q=q(1) \/ q=q(4) \/ q=q(7)
+DERIVED col(q,2) := q=q(2) \/ q=q(5) \/ q=q(8)
+DERIVED RowHasX(E,r) := exists q. row(q,r) /\ hasX(vecAt(E,q))
+DERIVED ColHasZ(E,c) := exists q. col(q,c) /\ hasZ(vecAt(E,q))
+DERIVED XRowsAll(E) := RowHasX(E,0) /\ RowHasX(E,1) /\ RowHasX(E,2)
+DERIVED ZColsAll(E) := ColHasZ(E,0) /\ ColHasZ(E,1) /\ ColHasZ(E,2)
+DERIVED XRowsLe(E,f) :=
+  (f=0 -> not RowHasX(E,0) /\ not RowHasX(E,1) /\ not RowHasX(E,2)) /\
+  (f<=1 -> not ((RowHasX(E,0)/\RowHasX(E,1)) \/
+                    (RowHasX(E,0)/\RowHasX(E,2)) \/
+                    (RowHasX(E,1)/\RowHasX(E,2)))) /\
+  (f<=2 -> not XRowsAll(E))
+DERIVED ZColsLe(E,f) :=
+  (f=0 -> not ColHasZ(E,0) /\ not ColHasZ(E,1) /\ not ColHasZ(E,2)) /\
+  (f<=1 -> not ((ColHasZ(E,0)/\ColHasZ(E,1)) \/
+                    (ColHasZ(E,0)/\ColHasZ(E,2)) \/
+                    (ColHasZ(E,1)/\ColHasZ(E,2)))) /\
+  (f<=2 -> not ZColsAll(E))
+
+DERIVED-ASSERTION BI_X := exists m. XRowsLe(ProdStab(m)*data[], faults[])
+DERIVED-ASSERTION BI_Z := exists m. ZColsLe(ProdStab(m)*data[], faults[])
+DERIVED-ASSERTION BI_PAIR := BI_X /\ BI_Z
+
+DERIVED-ASSERTION FULL_INV := BI_PAIR
+
+DERIVED-ASSERTION DIST_CIRC_D3 :=
+  ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[]
+
+PROGRAM C_NZ_D3 :=
+  G0;G1;G2;G3;G4;G5;G6;G7
+
+PROGRAM G0 := MeasZStab(s0; q0,q3,q1,q4)
+PROGRAM G1 := MeasXStab(s1; q1,q2,q4,q5)
+PROGRAM G2 := MeasXStab(s2; q3,q4,q6,q7)
+PROGRAM G3 := MeasZStab(s3; q4,q7,q5,q8)
+PROGRAM G4 := MeasXStab(s4; q0,q1)
+PROGRAM G5 := MeasZStab(s5; q2,q5)
+PROGRAM G6 := MeasZStab(s6; q3,q6)
+PROGRAM G7 := MeasXStab(s7; q7,q8)
+
+ASSERTION-DERIVATION A001 G-RowCuts
+  proves: for each row r, Rr is stabilizer-equivalent to LZ
+
+ASSERTION-DERIVATION A002 G-ColCuts
+  proves: for each column c, Cc is stabilizer-equivalent to LX
+
+ASSERTION-DERIVATION A003 G-HomologyCover
+  proves: Centralizer(E) /\ not Stab(E) -> parity(LZ,E)=1 \/ parity(LX,E)=1
+
+ASSERTION-DERIVATION A004 G-RowSpread(A001)
+  proves: Centralizer(E) /\ parity(LZ,E)=1 -> forall m. XRowsAll(ProdStab(m)*E)
+
+ASSERTION-DERIVATION A005 G-ColSpread(A002)
+  proves: Centralizer(E) /\ parity(LX,E)=1 -> forall m. ZColsAll(ProdStab(m)*E)
+
+ASSERTION-DERIVATION A006 G-LogicalAnyToBarrierZero(A003,A004,A005)
+  proves: LogicalAny(E) -> (forall m. XRowsAll(ProdStab(m)*E)) \/ (forall m. ZColsAll(ProdStab(m)*E))
+
+ASSERTION-DERIVATION A007 G-DataDistance(A006)
+  proves: BI_PAIR -> (LogicalAny(data[]) -> 3 <= faults[])
+
+ASSERTION-DERIVATION A008 G-FinalCircuitDistance(A007)
+  proves: FULL_INV -> (ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[])
+
+000. {{ clean[] }}
+     E-CleanInit
+     {{ FULL_INV }}
+
+001. {{ FULL_INV }}
+     H-GadgetGeo G0 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+002. {{ FULL_INV }}
+     H-GadgetGeo G1 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+003. {{ FULL_INV }}
+     H-GadgetGeo G2 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+004. {{ FULL_INV }}
+     H-GadgetGeo G3 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+005. {{ FULL_INV }}
+     H-GadgetGeo G4 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+006. {{ FULL_INV }}
+     H-GadgetGeo G5 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+007. {{ FULL_INV }}
+     H-GadgetGeo G6 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+008. {{ FULL_INV }}
+     H-GadgetGeo G7 using L001,L002,L003,L004
+     {{ FULL_INV }}
+
+009. {{ FULL_INV }}
+     H-Seq lines 001..008 over C_NZ_D3
+     {{ FULL_INV }}
+
+010. {{ clean[] }}
+     H-Conseq using line 000 and line 009
+     {{ FULL_INV }}
+
+011. {{ FULL_INV }}
+     E-FinalGeo using A008
+     {{ DIST_CIRC_D3 }}
+
+012. {{ clean[] }}
+     H-Conseq using line 010 and line 011
+     {{ DIST_CIRC_D3 }}
+
+CHECKED-SIZE top_level_rule_nodes := 13
+CHECKED-SIZE assertion_derivation_nodes := 8
+CHECKED-SIZE deterministic_gate_count := 44
+CHECKED-SIZE local_fault_site_count := 68
+CHECKED-SIZE concrete_instruction_count := 112
+CHECKED-SIZE expanded_hoare_nodes_no_branching := 227
+CHECKED-SIZE hook_suffix_shape_checks := 24

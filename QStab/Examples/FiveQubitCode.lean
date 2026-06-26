@@ -5,6 +5,8 @@ import QStab.Examples.SurfaceGeometry
 import Mathlib.Tactic.FinCases
 import Mathlib.Data.Fintype.Pi
 
+set_option maxRecDepth 8192
+
 /-! # Five-qubit [[5, 1, 3]] code: d_circ = 2
 
 The perfect [[5,1,3]] code is non-CSS with generators XZZXI, IXZZX, XIXZZ, ZXIXZ.
@@ -72,10 +74,10 @@ def attack_E : ErrorVec 5 := ofList [(1, .Z), (2, .Z), (4, .Y)]
 
 theorem attack_zero_syndrome :
     ∀ i : Fin code.numStab,
-      ErrorVec.parity (code.stabilizers i) attack_E = false := by native_decide
+      ErrorVec.parity (code.stabilizers i) attack_E = false := by decide
 
 theorem attack_flips_logical :
-    ErrorVec.parity logicalZ attack_E = true := by native_decide
+    ErrorVec.parity logicalZ attack_E = true := by decide
 
 theorem hook_in_B1 : hook_Z12 ∈ code.backActionSet ⟨0, by decide⟩ := by
   show hook_Z12 ∈ backActionSet ⟨0, by decide⟩
@@ -84,7 +86,7 @@ theorem hook_in_B1 : hook_Z12 ∈ code.backActionSet ⟨0, by decide⟩ := by
 /-- Y on qubit 0 then hook Z₂Z₃ produces attack_E. -/
 theorem attack_E_eq :
     ErrorVec.mul hook_Z12 (ErrorVec.update (ErrorVec.identity 5) ⟨4, by decide⟩ .Y)
-    = attack_E := by native_decide
+    = attack_E := by decide
 
 /-! ## Upper bound: d_circ ≤ 2 -/
 
@@ -152,10 +154,10 @@ theorem hook_prefix_duality {n : Nat} (T_j e_P e_B T_s : ErrorVec n)
 def hook_Z12_prefix : ErrorVec 5 := ofList [(0, .X), (3, .X)]
 
 theorem hook_prefix_product :
-    ErrorVec.mul hook_Z12_prefix hook_Z12 = stabilizers ⟨0, by decide⟩ := by native_decide
+    ErrorVec.mul hook_Z12_prefix hook_Z12 = stabilizers ⟨0, by decide⟩ := by decide
 
 theorem hook_Z12_prefix_weight :
-    ErrorVec.weight hook_Z12_prefix ≤ 2 := by native_decide
+    ErrorVec.weight hook_Z12_prefix ≤ 2 := by decide
 
 /-- No weight-≤ 2 Pauli on 5 qubits has zero syndrome unless it is the identity (d = 3). -/
 theorem no_weight2_in_normalizer :
@@ -163,16 +165,16 @@ theorem no_weight2_in_normalizer :
       ErrorVec.weight E ≤ 2 →
       (∃ i : Fin 4, ErrorVec.parity (stabilizers i) E = true) ∨
       E = ErrorVec.identity 5 := by
-  native_decide
+  decide
 
 /-- Stabilizers commute: parity of any generator against any generator is false. -/
 theorem stabilizers_commute :
     ∀ (i j : Fin 4), ErrorVec.parity (stabilizers i) (stabilizers j) = false := by
-  native_decide
+  decide
 
 /-- The prefix X₀X₃ is not the identity. -/
 theorem hook_Z12_prefix_ne_id :
-    hook_Z12_prefix ≠ ErrorVec.identity 5 := by native_decide
+    hook_Z12_prefix ≠ ErrorVec.identity 5 := by decide
 
 /-- The prefix X₀X₃ has nonzero syndrome (it has weight 2 and is not the identity). -/
 theorem hook_Z12_prefix_detected :
@@ -209,7 +211,7 @@ theorem no_weight2_logical :
       ErrorVec.weight E ≤ 2 →
       (∃ i : Fin code.numStab, ErrorVec.parity (code.stabilizers i) E = true) ∨
       ErrorVec.parity logicalZ E = false := by
-  native_decide
+  decide
 
 /-! ## Main theorem -/
 

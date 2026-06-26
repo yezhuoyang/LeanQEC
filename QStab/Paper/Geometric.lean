@@ -165,37 +165,37 @@ def gateSuffix {n : Nat} (gates : List (Gate n)) (k : Nat) : List (Gate n) :=
 -- ==========================================================
 
 -- Ancilla X between CNOT 1 and CNOT 2 → T-Hook-X → Type-II
-example : geomType anc4 (gateSuffix c4 2) anc4 .X = .type2 := by native_decide
+example : geomType anc4 (gateSuffix c4 2) anc4 .X = .type2 := by decide
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, anc4, .X, by decide⟩) = .type2 := by
-  native_decide
+  decide
 
 -- Ancilla Z between CNOTs → no X-component → Type-III
-example : geomType anc4 (gateSuffix c4 2) anc4 .Z = .type3 := by native_decide
+example : geomType anc4 (gateSuffix c4 2) anc4 .Z = .type3 := by decide
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, anc4, .Z, by decide⟩) = .type3 := by
-  native_decide
+  decide
 
 -- Ancilla Y → has X-component → Type-II hook + mflip (FaultType collapses to .type2)
-example : geomType anc4 (gateSuffix c4 2) anc4 .Y = .type2 := by native_decide
+example : geomType anc4 (gateSuffix c4 2) anc4 .Y = .type2 := by decide
 
 -- Data Z on q1 before its CNOT(anc, q1) → T-Data with mflip → Type-I
-example : geomType anc4 (gateSuffix c4 2) ⟨1, by omega⟩ .Z = .type1 := by native_decide
+example : geomType anc4 (gateSuffix c4 2) ⟨1, by omega⟩ .Z = .type1 := by decide
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Z, by decide⟩) = .type1 := by
-  native_decide
+  decide
 
 -- Data X on q1 before its CNOT(anc, q1) → no Z-component → Type-0
-example : geomType anc4 (gateSuffix c4 2) ⟨1, by omega⟩ .X = .type0 := by native_decide
+example : geomType anc4 (gateSuffix c4 2) ⟨1, by omega⟩ .X = .type0 := by decide
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .X, by decide⟩) = .type0 := by
-  native_decide
+  decide
 
 -- Ancilla X before prepPlus → T-Trivial
-example : geomType anc4 (gateSuffix c4 0) anc4 .X = .trivial := by native_decide
+example : geomType anc4 (gateSuffix c4 0) anc4 .X = .trivial := by decide
 example :
     paperType 4 (computeFaultEffect c4 ⟨0, anc4, .X, by decide⟩) = .trivial := by
-  native_decide
+  decide
 
 -- ==========================================================
 -- Z-stab (ZZZZ) examples — Bug-1 witness for the paper's old T-Hook
@@ -203,19 +203,19 @@ example :
 
 -- Ancilla Z between CNOTs → T-Hook-Z → Type-II.
 -- The OLD T-Hook rule said "P ∈ {X, Y}" which would have missed this.
-example : geomType anc4 (gateSuffix cz4 2) anc4 .Z = .type2 := by native_decide
+example : geomType anc4 (gateSuffix cz4 2) anc4 .Z = .type2 := by decide
 example :
     paperType 4 (computeFaultEffect cz4 ⟨2, anc4, .Z, by decide⟩) = .type2 := by
-  native_decide
+  decide
 
 -- Ancilla X between CNOTs → no Z-component → Type-III, NOT Type-II.
-example : geomType anc4 (gateSuffix cz4 2) anc4 .X = .type3 := by native_decide
+example : geomType anc4 (gateSuffix cz4 2) anc4 .X = .type3 := by decide
 example :
     paperType 4 (computeFaultEffect cz4 ⟨2, anc4, .X, by decide⟩) = .type3 := by
-  native_decide
+  decide
 
 -- Ancilla Y → has Z-component → Type-II.
-example : geomType anc4 (gateSuffix cz4 2) anc4 .Y = .type2 := by native_decide
+example : geomType anc4 (gateSuffix cz4 2) anc4 .Y = .type2 := by decide
 
 /-! ## Soundness of `geomType` against `paperType`
 
@@ -244,7 +244,7 @@ theorem geomType_sound_c4 :
       ∀ (hp : P ≠ .I),
         geomType anc4 (gateSuffix c4 pos) q P =
         paperType 4 (computeFaultEffect c4 ⟨pos, q, P, hp⟩) := by
-  native_decide
+  decide
 
 /-- Soundness on the weight-4 Z-stabilizer gadget `cz4`. -/
 theorem geomType_sound_cz4 :
@@ -254,6 +254,6 @@ theorem geomType_sound_cz4 :
       ∀ (hp : P ≠ .I),
         geomType anc4 (gateSuffix cz4 pos) q P =
         paperType 4 (computeFaultEffect cz4 ⟨pos, q, P, hp⟩) := by
-  native_decide
+  decide
 
 end QStab.Paper.Geometric

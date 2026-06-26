@@ -1,6 +1,7 @@
 import QStab.Examples.SurfaceGeneral
 import QStab.Paper.BarrierFramework
 import Mathlib.Data.Nat.Lattice
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Aligned codes as `BarrierFunction` instances (paper §6.5 generic case)
@@ -33,7 +34,7 @@ variable {d : Nat}
 /-- Group count of `S · E` against the partition `spec.group`. -/
 def groupsX (spec : AlignedCodeSpec d) (S E : ErrorVec spec.params.n) : Nat :=
   (Finset.univ.filter fun g : Fin d =>
-    ∃ q : Fin spec.params.n, spec.group q = g ∧
+    ∃ q : Fin spec.params.n, spec.group q = some g ∧
       Pauli.hasXComponent (ErrorVec.mul S E q) = true).card
 
 /-- The set of attainable spread values `groupsX(S, E)` over all
@@ -81,33 +82,37 @@ private theorem groupsX_pointwise_le (spec : AlignedCodeSpec d)
     (F G : ErrorVec spec.params.n) (i : Fin spec.params.n)
     (h_ne : ∀ q : Fin spec.params.n, q ≠ i → F q = G q) :
     (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (F q) = true).card ≤
     (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (G q) = true).card + 1 := by
-  set iGrp : Fin d := spec.group i
+  set iGrpFinset : Finset (Fin d) := (spec.group i).toFinset with hiGrpFinset
+  have h_iGrp_card : iGrpFinset.card ≤ 1 := by
+    rw [hiGrpFinset, Option.card_toFinset]
+    cases spec.group i <;> simp
   set S_new := Finset.univ.filter fun g : Fin d =>
-    ∃ q : Fin spec.params.n, spec.group q = g ∧
+    ∃ q : Fin spec.params.n, spec.group q = some g ∧
       Pauli.hasXComponent (F q) = true with hS_new
   set S_old := Finset.univ.filter fun g : Fin d =>
-    ∃ q : Fin spec.params.n, spec.group q = g ∧
+    ∃ q : Fin spec.params.n, spec.group q = some g ∧
       Pauli.hasXComponent (G q) = true with hS_old
-  have h_sub : S_new ⊆ S_old ∪ {iGrp} := by
+  have h_sub : S_new ⊆ S_old ∪ iGrpFinset := by
     intro g h_mem
     have h_mem' := (Finset.mem_filter.mp h_mem).2
     obtain ⟨q, hq_grp, hq_has⟩ := h_mem'
     by_cases hqi : q = i
     · apply Finset.mem_union_right
       subst hqi
-      exact Finset.mem_singleton.mpr (Eq.symm hq_grp)
+      rw [hiGrpFinset, Option.mem_toFinset, hq_grp]
+      exact Option.mem_some.mpr rfl
     · apply Finset.mem_union_left
       exact Finset.mem_filter.mpr ⟨Finset.mem_univ _,
         q, hq_grp, by rw [← h_ne q hqi]; exact hq_has⟩
   calc S_new.card
-      ≤ (S_old ∪ {iGrp}).card := Finset.card_le_card h_sub
-    _ ≤ S_old.card + ({iGrp} : Finset (Fin d)).card := Finset.card_union_le _ _
-    _ = S_old.card + 1 := by simp
+      ≤ (S_old ∪ iGrpFinset).card := Finset.card_le_card h_sub
+    _ ≤ S_old.card + iGrpFinset.card := Finset.card_union_le _ _
+    _ ≤ S_old.card + 1 := by omega
 
 /-! ## Subadditivity of `groupsX` in the multiplied factor -/
 
@@ -171,11 +176,11 @@ private theorem groupsX_mul_le_card_support_aux
       (ErrorVec.mul S (ErrorVec.mul F E))
       (ErrorVec.mul S (ErrorVec.mul F' E)) i h_diff
     show (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul S (ErrorVec.mul F E) q) = true).card
         ≤ groupsX spec S E + (k' + 1)
     have h_F'_eq : (Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (ErrorVec.mul S (ErrorVec.mul F' E) q) = true).card
         = groupsX spec S (ErrorVec.mul F' E) := rfl
     rw [h_F'_eq] at h_step
@@ -214,13 +219,13 @@ def barZClass (spec : AlignedCodeSpec d) : LogicalClass spec.params where
     have hmul : ∀ q, ErrorVec.mul (ErrorVec.identity spec.params.n) E q = E q := by
       intro q; show Pauli.mul Pauli.I (E q) = E q; cases E q <;> rfl
     have hgroupcount : (Finset.univ.filter fun g : Fin d =>
-        ∃ q : Fin spec.params.n, spec.group q = g ∧
+        ∃ q : Fin spec.params.n, spec.group q = some g ∧
           Pauli.hasXComponent (E q) = true).card ≥ d := by
       have heq : (Finset.univ.filter fun g : Fin d =>
-          ∃ q : Fin spec.params.n, spec.group q = g ∧
+          ∃ q : Fin spec.params.n, spec.group q = some g ∧
             Pauli.hasXComponent (ErrorVec.mul (ErrorVec.identity spec.params.n) E q) = true)
           = (Finset.univ.filter fun g : Fin d =>
-            ∃ q : Fin spec.params.n, spec.group q = g ∧
+            ∃ q : Fin spec.params.n, spec.group q = some g ∧
               Pauli.hasXComponent (E q) = true) := by
         apply Finset.filter_congr
         intro g _
@@ -229,25 +234,41 @@ def barZClass (spec : AlignedCodeSpec d) : LogicalClass spec.params where
         · rw [hmul q] at hX; exact hX
         · rw [hmul q]; exact hX
       rw [← heq]; exact hTLB
-    -- Bridge "groups with X" to "support of E" via the image of the
-    -- subset {q | hasX(E q)} under spec.group.
+    -- Bridge "groups with X" to "support of E" via biUnion over toFinset
+    -- of the partial group assignment.
     set GroupsX : Finset (Fin d) := Finset.univ.filter fun g : Fin d =>
-      ∃ q : Fin spec.params.n, spec.group q = g ∧
+      ∃ q : Fin spec.params.n, spec.group q = some g ∧
         Pauli.hasXComponent (E q) = true with hGroupsX_def
     set SupportX : Finset (Fin spec.params.n) := Finset.univ.filter fun q =>
       Pauli.hasXComponent (E q) = true with hSupportX_def
-    -- GroupsX is the image of SupportX under spec.group.
-    have h_image_eq : GroupsX = SupportX.image spec.group := by
-      apply Finset.ext
-      intro g
-      simp only [hGroupsX_def, hSupportX_def, Finset.mem_filter, Finset.mem_univ,
-                 true_and, Finset.mem_image]
-      constructor
-      · rintro ⟨q, hg, hX⟩; exact ⟨q, hX, hg⟩
-      · rintro ⟨q, hX, hg⟩; exact ⟨q, hg, hX⟩
-    -- |GroupsX| ≤ |SupportX| by Finset.card_image_le.
-    have h_groupsX_le_supportX : GroupsX.card ≤ SupportX.card := by
-      rw [h_image_eq]; exact Finset.card_image_le
+    -- GroupsX ⊆ ⋃_{q ∈ SupportX} (spec.group q).toFinset
+    have h_groupsX_sub_biUnion :
+        GroupsX ⊆ SupportX.biUnion (fun q => (spec.group q).toFinset) := by
+      intro g hg
+      simp only [hGroupsX_def, Finset.mem_filter, Finset.mem_univ, true_and] at hg
+      obtain ⟨q, hq_grp, hq_has⟩ := hg
+      simp only [Finset.mem_biUnion]
+      refine ⟨q, ?_, ?_⟩
+      · simp only [hSupportX_def, Finset.mem_filter, Finset.mem_univ, true_and]
+        exact hq_has
+      · rw [Option.mem_toFinset, hq_grp]
+        exact Option.mem_some.mpr rfl
+    -- |GroupsX| ≤ Σ q ∈ SupportX, |(spec.group q).toFinset| ≤ SupportX.card
+    have h_biUnion_le : (SupportX.biUnion (fun q => (spec.group q).toFinset)).card
+        ≤ SupportX.card := by
+      have h_sum_le : ∑ q ∈ SupportX, ((spec.group q).toFinset).card ≤
+          ∑ _q ∈ SupportX, 1 := by
+        apply Finset.sum_le_sum
+        intro q _
+        rw [Option.card_toFinset]
+        cases spec.group q <;> simp
+      calc (SupportX.biUnion (fun q => (spec.group q).toFinset)).card
+          ≤ ∑ q ∈ SupportX, ((spec.group q).toFinset).card :=
+              Finset.card_biUnion_le
+        _ ≤ ∑ _q ∈ SupportX, 1 := h_sum_le
+        _ = SupportX.card := by simp
+    have h_groupsX_le_supportX : GroupsX.card ≤ SupportX.card :=
+      le_trans (Finset.card_le_card h_groupsX_sub_biUnion) h_biUnion_le
     -- SupportX ⊆ {q | E q ≠ I} since hasXComp implies non-identity.
     have h_supportX_sub : SupportX ⊆
         Finset.univ.filter fun q : Fin spec.params.n => E q ≠ Pauli.I := by
@@ -280,7 +301,7 @@ noncomputable def alignedBarrier (spec : AlignedCodeSpec d) :
         groupsX spec (ErrorVec.identity spec.params.n)
                 (ErrorVec.identity spec.params.n) = 0 := by
       show (Finset.univ.filter fun g : Fin d =>
-        ∃ q : Fin spec.params.n, spec.group q = g ∧
+        ∃ q : Fin spec.params.n, spec.group q = some g ∧
           Pauli.hasXComponent (ErrorVec.mul (ErrorVec.identity spec.params.n)
             (ErrorVec.identity spec.params.n) q) = true).card = 0
       apply Finset.card_eq_zero.mpr

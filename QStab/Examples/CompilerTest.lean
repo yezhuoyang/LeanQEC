@@ -83,7 +83,7 @@ example : compiledSurface.stabilizers = SurfaceD3.stabilizers := rfl
 -- Check computeR: max hook weight across all stabilizers
 -- Each weight-4 stab has max hook weight 3, weight-2 stabs have max hook weight 1
 -- So r = max(3, 3, 3, 3, 1, 1, 1, 1) = 3
-example : computeR surfaceD3Spec = 3 := by native_decide
+example : computeR surfaceD3Spec = 3 := by decide
 
 -- ## Step 5: The FT certificate
 
@@ -131,16 +131,16 @@ section HookTests
 -- Hook from suffix [2,4,5]: X₂X₄X₅
 
 example : buildHook 9 (SurfaceD3.stabilizers ⟨1, by omega⟩)
-    [⟨5, by omega⟩] = ofList [(5, .X)] := by native_decide
+    [⟨5, by omega⟩] = ofList [(5, .X)] := by decide
 
 example : buildHook 9 (SurfaceD3.stabilizers ⟨1, by omega⟩)
-    [⟨4, by omega⟩, ⟨5, by omega⟩] = ofList [(4, .X), (5, .X)] := by native_decide
+    [⟨4, by omega⟩, ⟨5, by omega⟩] = ofList [(4, .X), (5, .X)] := by decide
 
 -- The weight-2 hook X₄X₅ from T1: this is the "SW-SE horizontal pair"
 -- that the NZ scheduling creates. Under the perpendicular spread argument,
 -- this hook lies in ONE row, so it contributes at most +1 to the row count.
 example : ErrorVec.weight (buildHook 9 (SurfaceD3.stabilizers ⟨1, by omega⟩)
-    [⟨4, by omega⟩, ⟨5, by omega⟩]) = 2 := by native_decide
+    [⟨4, by omega⟩, ⟨5, by omega⟩]) = 2 := by decide
 
 -- The weight-2 hook lies in row 1 (qubits 3,4,5) -- both q4 and q5 are in row 1
 -- This is the key NZ property: X-type hooks are horizontal (same row)

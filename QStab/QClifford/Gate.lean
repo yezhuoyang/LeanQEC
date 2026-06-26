@@ -57,20 +57,32 @@ Key rules:
 - MeasZ: X/Y on measured qubit → measurement flips; Z → no flip
 -/
 
-/-- An error state: Pauli on each qubit + accumulated measurement flips. -/
+/-- An error state: Pauli on each qubit, accumulated qubit-indexed measurement flips,
+and a time-resolved detector log.
+
+`measFlips` is the legacy qubit-indexed XOR accumulator.  It is intentionally
+kept for existing QClifford developments.  `detectors` records each measurement
+outcome in a fresh time slot, indexed by `detectorCursor`, so repeated use of
+one physical ancilla does not merge distinct detector outcomes. -/
 structure ErrorState (nq : Nat) where
   paulis : Fin nq → Pauli
   measFlips : Fin nq → Bool  -- track measurement flips per qubit
+  detectors : Nat → Bool := fun _ => false
+  detectorCursor : Nat := 0
 
 /-- Initial error state: no errors, no flips. -/
 def ErrorState.clean (nq : Nat) : ErrorState nq where
   paulis := fun _ => .I
   measFlips := fun _ => false
+  detectors := fun _ => false
+  detectorCursor := 0
 
 /-- Inject a single Pauli error on qubit q. -/
 def ErrorState.inject (es : ErrorState nq) (q : Fin nq) (p : Pauli) : ErrorState nq where
   paulis := fun i => if i = q then pauliMul p (es.paulis i) else es.paulis i
   measFlips := es.measFlips
+  detectors := es.detectors
+  detectorCursor := es.detectorCursor
 
 /-- Has X-component: X or Y. -/
 def hasXComp : Pauli → Bool
@@ -118,23 +130,33 @@ def propagateGate (g : Gate nq) (es : ErrorState nq) : ErrorState nq :=
         if i = t then pauliMul xFromControl (es.paulis t)  -- target gets X from control
         else if i = c then pauliMul zFromTarget (es.paulis c)  -- control gets Z from target
         else es.paulis i
-      measFlips := es.measFlips }
+      measFlips := es.measFlips
+      detectors := es.detectors
+      detectorCursor := es.detectorCursor }
   | .hadamard q =>
     { paulis := fun i => if i = q then hadamardAction (es.paulis i) else es.paulis i
-      measFlips := es.measFlips }
+      measFlips := es.measFlips
+      detectors := es.detectors
+      detectorCursor := es.detectorCursor }
   | .prepZero q =>
     -- Reset removes error on q
     { paulis := fun i => if i = q then .I else es.paulis i
-      measFlips := es.measFlips }
+      measFlips := es.measFlips
+      detectors := es.detectors
+      detectorCursor := es.detectorCursor }
   | .prepPlus q =>
     -- Reset removes error on q
     { paulis := fun i => if i = q then .I else es.paulis i
-      measFlips := es.measFlips }
+      measFlips := es.measFlips
+      detectors := es.detectors
+      detectorCursor := es.detectorCursor }
   | .measZ q =>
     -- Z-basis measurement: X/Y on q flips the measurement outcome
+    let flip := hasXComp (es.paulis q)
     { paulis := es.paulis  -- error on measured qubit consumed by measurement
-      measFlips := fun i => if i = q then xor (es.measFlips i) (hasXComp (es.paulis q))
-                             else es.measFlips i }
+      measFlips := fun i => if i = q then xor (es.measFlips i) flip else es.measFlips i
+      detectors := fun k => if k = es.detectorCursor then flip else es.detectors k
+      detectorCursor := es.detectorCursor + 1 }
 
 /-- Propagate through a circuit (list of gates). -/
 def propagateCircuit : Circuit nq → ErrorState nq → ErrorState nq

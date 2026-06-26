@@ -1,7 +1,11 @@
 /.lake
 /.claude
 /.github
+/.vscode
 *.olean
 *.ilean
 *.trace
 *.bak
+__pycache__/
+*.pyc
+.audit-tmp/

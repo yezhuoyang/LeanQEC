@@ -1,0 +1,801 @@
+# Surface d=3 NZ QClifford full instruction-level Hoare proof
+#
+# This file is generated from the checked JSON certificate.  It expands
+# the eight H-GadgetGeo nodes into one Hoare triple per concrete
+# instrumented QClifford instruction.  It does not enumerate Pauli
+# branches, fault pairs, or the full Pauli space.
+#
+# Exact theorem:
+#   {{ clean[] }} C_NZ_D3 {{ DIST_CIRC_D3 }}
+# where:
+#   DIST_CIRC_D3 := ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[]
+#
+# The proof is syntactic relative to the rule schemas listed below.  No
+# line invokes Lean, native_decide, H-CheckedTrace, H-ErrTable, Tbl,
+# backActionSet, branch enumeration, or fault-pair enumeration.
+
+SYNTAX Sort ::=
+  Nat | Bool | Qubit | Pauli | PauliVec | MeasVec | StabilizerMask
+
+SYNTAX Pauli ::= I | X | Y | Z
+
+SYNTAX Term ::=
+  phys[] | data[] | det[] | faults[] | I |
+  q(i) | maskAt(m,i) | if b then A else B | A*B |
+  single(q,P) | vecAt(E,q) | dataOf(E) | hasX(vecAt(E,q)) |
+  hasZ(vecAt(E,q)) | measAt(det[],s) | parity(A,E)
+
+SYNTAX Formula ::=
+  TRUE | FALSE | P /\ Q | P \/ Q | P -> Q | not P |
+  t = u | n <= m | exists x. P | forall x. P
+
+NOTE:
+  Every named object below is a derived macro over the kernel syntax.
+  In particular, stabilizers, logicals, row/column predicates,
+  Centralizer, Stab, LogicalAny, ZeroDet, BI_X, and BI_Z are not
+  primitive Formula or Term constructors.
+
+SYNTAX Command ::=
+  skip | !q | Prep0(q) | PrepP(q) | H(q) | CX(q,r) | MeasZ(q) | C;D
+
+MEANING !q:
+  A concrete single-location QClifford fault site at physical qubit q.
+  Its Pauli branch semantics is not printed as X/Y/Z branches here;
+  H-LocalFaultFrontier advances the boundary-frontier assertion.
+
+DERIVED q0 := q(0)
+DERIVED q1 := q(1)
+DERIVED q2 := q(2)
+DERIVED q3 := q(3)
+DERIVED q4 := q(4)
+DERIVED q5 := q(5)
+DERIVED q6 := q(6)
+DERIVED q7 := q(7)
+DERIVED q8 := q(8)
+
+DERIVED s0 := single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z)
+DERIVED s1 := single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X)
+DERIVED s2 := single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X)
+DERIVED s3 := single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z)
+DERIVED s4 := single(q0,X)*single(q1,X)
+DERIVED s5 := single(q2,Z)*single(q5,Z)
+DERIVED s6 := single(q3,Z)*single(q6,Z)
+DERIVED s7 := single(q7,X)*single(q8,X)
+DERIVED stabAt(0) := s0
+DERIVED stabAt(1) := s1
+DERIVED stabAt(2) := s2
+DERIVED stabAt(3) := s3
+DERIVED stabAt(4) := s4
+DERIVED stabAt(5) := s5
+DERIVED stabAt(6) := s6
+DERIVED stabAt(7) := s7
+DERIVED ProdStab(m) :=
+  (if maskAt(m,0) then s0 else I)*(if maskAt(m,1) then s1 else I)*
+  (if maskAt(m,2) then s2 else I)*(if maskAt(m,3) then s3 else I)*
+  (if maskAt(m,4) then s4 else I)*(if maskAt(m,5) then s5 else I)*
+  (if maskAt(m,6) then s6 else I)*(if maskAt(m,7) then s7 else I)
+
+DERIVED LX := single(q0,X)*single(q3,X)*single(q6,X)
+DERIVED LZ := single(q0,Z)*single(q1,Z)*single(q2,Z)
+DERIVED R0 := single(q0,Z)*single(q1,Z)*single(q2,Z)
+DERIVED R1 := single(q3,Z)*single(q4,Z)*single(q5,Z)
+DERIVED R2 := single(q6,Z)*single(q7,Z)*single(q8,Z)
+DERIVED C0 := single(q0,X)*single(q3,X)*single(q6,X)
+DERIVED C1 := single(q1,X)*single(q4,X)*single(q7,X)
+DERIVED C2 := single(q2,X)*single(q5,X)*single(q8,X)
+
+DERIVED-ASSERTION clean[] := data[] = I /\ det[] = 0 /\ faults[] = 0
+DERIVED-ASSERTION ZeroDet(det[]) := forall s. measAt(det[],s)=0
+DERIVED-ASSERTION Centralizer(E) := forall i in {0..7}. parity(stabAt(i),E)=0
+DERIVED-ASSERTION Stab(E) := exists stabilizer mask m. E = ProdStab(m)
+DERIVED-ASSERTION LogicalAny(E) := Centralizer(E) /\ not Stab(E)
+
+DERIVED row(q,0) := q=q(0) \/ q=q(1) \/ q=q(2)
+DERIVED row(q,1) := q=q(3) \/ q=q(4) \/ q=q(5)
+DERIVED row(q,2) := q=q(6) \/ q=q(7) \/ q=q(8)
+DERIVED col(q,0) := q=q(0) \/ q=q(3) \/ q=q(6)
+DERIVED col(q,1) := q=q(1) \/ q=q(4) \/ q=q(7)
+DERIVED col(q,2) := q=q(2) \/ q=q(5) \/ q=q(8)
+DERIVED RowHasX(E,r) := exists q. row(q,r) /\ hasX(vecAt(E,q))
+DERIVED ColHasZ(E,c) := exists q. col(q,c) /\ hasZ(vecAt(E,q))
+DERIVED XRowsAll(E) := RowHasX(E,0) /\ RowHasX(E,1) /\ RowHasX(E,2)
+DERIVED ZColsAll(E) := ColHasZ(E,0) /\ ColHasZ(E,1) /\ ColHasZ(E,2)
+DERIVED XRowsLe(E,f) :=
+  (f=0 -> not RowHasX(E,0) /\ not RowHasX(E,1) /\ not RowHasX(E,2)) /\
+  (f<=1 -> not ((RowHasX(E,0)/\RowHasX(E,1)) \/
+                    (RowHasX(E,0)/\RowHasX(E,2)) \/
+                    (RowHasX(E,1)/\RowHasX(E,2)))) /\
+  (f<=2 -> not XRowsAll(E))
+DERIVED ZColsLe(E,f) :=
+  (f=0 -> not ColHasZ(E,0) /\ not ColHasZ(E,1) /\ not ColHasZ(E,2)) /\
+  (f<=1 -> not ((ColHasZ(E,0)/\ColHasZ(E,1)) \/
+                    (ColHasZ(E,0)/\ColHasZ(E,2)) \/
+                    (ColHasZ(E,1)/\ColHasZ(E,2)))) /\
+  (f<=2 -> not ZColsAll(E))
+
+DERIVED-ASSERTION BI_X := exists m. XRowsLe(ProdStab(m)*data[], faults[])
+DERIVED-ASSERTION BI_Z := exists m. ZColsLe(ProdStab(m)*data[], faults[])
+DERIVED-ASSERTION BI_PAIR := BI_X /\ BI_Z
+DERIVED-ASSERTION FULL_INV := BI_PAIR
+DERIVED-ASSERTION DIST_CIRC_D3 := ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[]
+
+ASSERTION-LEMMA A001 G-RowCuts:
+  R0=LZ, R1=s0*s5*R0, R2=s3*s6*R1.
+
+ASSERTION-LEMMA A002 G-ColCuts:
+  C0=LX, C1=s4*s2*C0, C2=s1*s7*C1.
+
+ASSERTION-LEMMA A003 G-HomologyCover:
+  Centralizer(E) /\ not Stab(E) -> parity(LZ,E)=1 \/ parity(LX,E)=1.
+
+ASSERTION-LEMMA A004 G-RowSpread(A001):
+  Centralizer(E) /\ parity(LZ,E)=1 -> forall m. XRowsAll(ProdStab(m)*E).
+
+ASSERTION-LEMMA A005 G-ColSpread(A002):
+  Centralizer(E) /\ parity(LX,E)=1 -> forall m. ZColsAll(ProdStab(m)*E).
+
+ASSERTION-LEMMA A006 G-LogicalAnyToBarrierZero(A003,A004,A005):
+  LogicalAny(E) ->
+    (forall m. XRowsAll(ProdStab(m)*E)) \/
+    (forall m. ZColsAll(ProdStab(m)*E)).
+
+ASSERTION-LEMMA A007 G-DataDistance(A006):
+  BI_PAIR -> (LogicalAny(data[]) -> 3 <= faults[]).
+
+ASSERTION-LEMMA A008 G-FinalCircuitDistance(A007):
+  FULL_INV -> DIST_CIRC_D3.
+
+LOCAL-LEMMA L001 G-DataFaultLocal:
+  a single data-qubit Pauli fault satisfies the XRowsLe/ZColsLe
+  one-fault extension formulas and increments faults[] by exactly one.
+
+LOCAL-LEMMA L002 G-NoDataFaultLocal:
+  a prep, terminal ancilla, or measurement-result fault site with no
+  data residual increments faults[] and preserves BI_PAIR.
+
+LOCAL-LEMMA L003 G-AncillaFaultLocal:
+  an ancilla fault propagates through the concrete CNOT suffix to an NZ
+  hook mechanism in the current gadget.
+
+LOCAL-LEMMA L004 G-NZHookBound:
+  every NZ suffix hook has dangerous spread <= 1 modulo the measured
+  gadget stabilizer.  The checker verifies 24 such suffix-hook shapes.
+
+FRONTIER TRANSFORMER DEFINITIONS:
+  phys[] is the current concrete Pauli residual over q0..q9.
+  data[] is dataOf(phys[]), the q0..q8 projection.
+  dataOf(E) := single(q0,vecAt(E,q0))*single(q1,vecAt(E,q1))*...*single(q8,vecAt(E,q8)).
+  PropDet(skip,E) := E.
+  PropDet(U;S,E) := PropDet(S, mapU(E)).
+  mapCX(c,t,E) := E * (if hasX(vecAt(E,c)) then single(t,X) else I) *
+                    (if hasZ(vecAt(E,t)) then single(c,Z) else I).
+  mapH(q,E) swaps the X/Z bits of vecAt(E,q) and leaves all other qubits unchanged.
+  mapPrep0(q,E), mapPrepP(q,E), and mapMeasZ(q,E) clear the residual component at q.
+
+FRONTIER ASSERTIONS:
+  BND[G,k] is a derived assertion, not a kernel primitive:
+    BND[G,k] := BI_PAIR(dataOf(PropDet(Suffix[G,k], phys[])), faults[])
+  Suffix[G,k] is the concrete deterministic suffix of gadget G after
+  instrumented local point k, with later !q fault markers erased.
+  PropDet is recursively expanded by the QClifford gate propagation
+  equations for Prep0, PrepP, H, CX, and MeasZ.
+  At gadget boundaries, BND[G,0] and BND[G,end] are definitionally
+  FULL_INV.  Interior BND assertions may hold even when raw BI_PAIR
+  on the current partial data residual is false.
+
+RULE H-LocalFaultFrontier:
+  If the current !q fault is classified by L001, L002, or L003 and any
+  resulting hook satisfies L004, then the concrete local fault advances
+  the frontier assertion:
+    {{ BND[G,k] }} !q {{ BND[G,k+1] }}.
+
+RULE H-GateFrontier:
+  For a concrete deterministic QClifford primitive U at local point k,
+  QClifford Pauli propagation shifts U from the suffix into the current
+  state and derives
+    {{ BND[G,k] }} U {{ BND[G,k+1] }}.
+
+RULE H-Seq:
+  From {{ P }} A {{ Q }} and {{ Q }} B {{ R }}, derive
+    {{ P }} A;B {{ R }}.
+
+RULE H-Conseq:
+  From P -> P', {{ P' }} C {{ Q' }}, and Q' -> Q, derive
+    {{ P }} C {{ Q }}.
+
+RULE E-CleanInit:
+  clean[] -> FULL_INV.
+
+RULE E-FinalGeo:
+  FULL_INV -> DIST_CIRC_D3 using A008.
+
+PROGRAM C_NZ_D3 := G0;G1;G2;G3;G4;G5;G6;G7
+
+PROGRAM G0 := MeasZStab(s0; q0,q3,q1,q4)
+PROGRAM G1 := MeasXStab(s1; q1,q2,q4,q5)
+PROGRAM G2 := MeasXStab(s2; q3,q4,q6,q7)
+PROGRAM G3 := MeasZStab(s3; q4,q7,q5,q8)
+PROGRAM G4 := MeasXStab(s4; q0,q1)
+PROGRAM G5 := MeasZStab(s5; q2,q5)
+PROGRAM G6 := MeasZStab(s6; q3,q6)
+PROGRAM G7 := MeasXStab(s7; q7,q8)
+
+DERIVED BND[G0,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,2] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,3] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,4] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,5] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,6] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,7] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,8] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,9] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,10] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,11] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,12] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,13] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,14] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G0,15] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G1,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,2] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,3] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,4] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,5] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,6] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,7] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,8] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,9] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,10] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,11] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,12] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,13] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,14] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,15] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,16] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G1,17] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G2,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,2] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,3] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,4] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,5] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,6] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,7] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,8] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,9] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,10] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,11] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,12] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,13] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,14] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,15] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,16] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G2,17] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G3,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,2] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,3] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,4] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,5] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,6] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,7] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,8] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,9] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,10] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,11] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,12] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,13] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,14] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G3,15] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G4,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,2] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,3] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,4] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,5] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,6] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,7] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,8] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,9] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,10] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G4,11] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G5,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,2] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,3] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,4] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,5] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,6] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,7] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,8] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G5,9] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G6,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,2] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,3] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,4] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,5] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,6] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,7] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,8] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G6,9] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+DERIVED BND[G7,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,2] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,3] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,4] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,5] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,6] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,7] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,8] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,9] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,10] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+DERIVED BND[G7,11] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+P000. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,1] }}
+
+P001. {{ BND[G0,1] }}
+      H-GateFrontier Prep0(q9) in G0
+      {{ BND[G0,2] }}
+
+P002. {{ BND[G0,2] }}
+      H-LocalFaultFrontier !q0 in G0 using L001,L002,L003,L004
+      {{ BND[G0,3] }}
+
+P003. {{ BND[G0,3] }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,4] }}
+
+P004. {{ BND[G0,4] }}
+      H-GateFrontier CX(q0,q9) in G0
+      {{ BND[G0,5] }}
+
+P005. {{ BND[G0,5] }}
+      H-LocalFaultFrontier !q3 in G0 using L001,L002,L003,L004
+      {{ BND[G0,6] }}
+
+P006. {{ BND[G0,6] }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,7] }}
+
+P007. {{ BND[G0,7] }}
+      H-GateFrontier CX(q3,q9) in G0
+      {{ BND[G0,8] }}
+
+P008. {{ BND[G0,8] }}
+      H-LocalFaultFrontier !q1 in G0 using L001,L002,L003,L004
+      {{ BND[G0,9] }}
+
+P009. {{ BND[G0,9] }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,10] }}
+
+P010. {{ BND[G0,10] }}
+      H-GateFrontier CX(q1,q9) in G0
+      {{ BND[G0,11] }}
+
+P011. {{ BND[G0,11] }}
+      H-LocalFaultFrontier !q4 in G0 using L001,L002,L003,L004
+      {{ BND[G0,12] }}
+
+P012. {{ BND[G0,12] }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,13] }}
+
+P013. {{ BND[G0,13] }}
+      H-GateFrontier CX(q4,q9) in G0
+      {{ BND[G0,14] }}
+
+P014. {{ BND[G0,14] }}
+      H-LocalFaultFrontier !q9 in G0 using L001,L002,L003,L004
+      {{ BND[G0,15] }}
+
+P015. {{ BND[G0,15] }}
+      H-GateFrontier MeasZ(q9) in G0
+      {{ FULL_INV }}
+
+P016. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,1] }}
+
+P017. {{ BND[G1,1] }}
+      H-GateFrontier PrepP(q9) in G1
+      {{ BND[G1,2] }}
+
+P018. {{ BND[G1,2] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,3] }}
+
+P019. {{ BND[G1,3] }}
+      H-LocalFaultFrontier !q1 in G1 using L001,L002,L003,L004
+      {{ BND[G1,4] }}
+
+P020. {{ BND[G1,4] }}
+      H-GateFrontier CX(q9,q1) in G1
+      {{ BND[G1,5] }}
+
+P021. {{ BND[G1,5] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,6] }}
+
+P022. {{ BND[G1,6] }}
+      H-LocalFaultFrontier !q2 in G1 using L001,L002,L003,L004
+      {{ BND[G1,7] }}
+
+P023. {{ BND[G1,7] }}
+      H-GateFrontier CX(q9,q2) in G1
+      {{ BND[G1,8] }}
+
+P024. {{ BND[G1,8] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,9] }}
+
+P025. {{ BND[G1,9] }}
+      H-LocalFaultFrontier !q4 in G1 using L001,L002,L003,L004
+      {{ BND[G1,10] }}
+
+P026. {{ BND[G1,10] }}
+      H-GateFrontier CX(q9,q4) in G1
+      {{ BND[G1,11] }}
+
+P027. {{ BND[G1,11] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,12] }}
+
+P028. {{ BND[G1,12] }}
+      H-LocalFaultFrontier !q5 in G1 using L001,L002,L003,L004
+      {{ BND[G1,13] }}
+
+P029. {{ BND[G1,13] }}
+      H-GateFrontier CX(q9,q5) in G1
+      {{ BND[G1,14] }}
+
+P030. {{ BND[G1,14] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,15] }}
+
+P031. {{ BND[G1,15] }}
+      H-GateFrontier H(q9) in G1
+      {{ BND[G1,16] }}
+
+P032. {{ BND[G1,16] }}
+      H-LocalFaultFrontier !q9 in G1 using L001,L002,L003,L004
+      {{ BND[G1,17] }}
+
+P033. {{ BND[G1,17] }}
+      H-GateFrontier MeasZ(q9) in G1
+      {{ FULL_INV }}
+
+P034. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,1] }}
+
+P035. {{ BND[G2,1] }}
+      H-GateFrontier PrepP(q9) in G2
+      {{ BND[G2,2] }}
+
+P036. {{ BND[G2,2] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,3] }}
+
+P037. {{ BND[G2,3] }}
+      H-LocalFaultFrontier !q3 in G2 using L001,L002,L003,L004
+      {{ BND[G2,4] }}
+
+P038. {{ BND[G2,4] }}
+      H-GateFrontier CX(q9,q3) in G2
+      {{ BND[G2,5] }}
+
+P039. {{ BND[G2,5] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,6] }}
+
+P040. {{ BND[G2,6] }}
+      H-LocalFaultFrontier !q4 in G2 using L001,L002,L003,L004
+      {{ BND[G2,7] }}
+
+P041. {{ BND[G2,7] }}
+      H-GateFrontier CX(q9,q4) in G2
+      {{ BND[G2,8] }}
+
+P042. {{ BND[G2,8] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,9] }}
+
+P043. {{ BND[G2,9] }}
+      H-LocalFaultFrontier !q6 in G2 using L001,L002,L003,L004
+      {{ BND[G2,10] }}
+
+P044. {{ BND[G2,10] }}
+      H-GateFrontier CX(q9,q6) in G2
+      {{ BND[G2,11] }}
+
+P045. {{ BND[G2,11] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,12] }}
+
+P046. {{ BND[G2,12] }}
+      H-LocalFaultFrontier !q7 in G2 using L001,L002,L003,L004
+      {{ BND[G2,13] }}
+
+P047. {{ BND[G2,13] }}
+      H-GateFrontier CX(q9,q7) in G2
+      {{ BND[G2,14] }}
+
+P048. {{ BND[G2,14] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,15] }}
+
+P049. {{ BND[G2,15] }}
+      H-GateFrontier H(q9) in G2
+      {{ BND[G2,16] }}
+
+P050. {{ BND[G2,16] }}
+      H-LocalFaultFrontier !q9 in G2 using L001,L002,L003,L004
+      {{ BND[G2,17] }}
+
+P051. {{ BND[G2,17] }}
+      H-GateFrontier MeasZ(q9) in G2
+      {{ FULL_INV }}
+
+P052. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,1] }}
+
+P053. {{ BND[G3,1] }}
+      H-GateFrontier Prep0(q9) in G3
+      {{ BND[G3,2] }}
+
+P054. {{ BND[G3,2] }}
+      H-LocalFaultFrontier !q4 in G3 using L001,L002,L003,L004
+      {{ BND[G3,3] }}
+
+P055. {{ BND[G3,3] }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,4] }}
+
+P056. {{ BND[G3,4] }}
+      H-GateFrontier CX(q4,q9) in G3
+      {{ BND[G3,5] }}
+
+P057. {{ BND[G3,5] }}
+      H-LocalFaultFrontier !q7 in G3 using L001,L002,L003,L004
+      {{ BND[G3,6] }}
+
+P058. {{ BND[G3,6] }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,7] }}
+
+P059. {{ BND[G3,7] }}
+      H-GateFrontier CX(q7,q9) in G3
+      {{ BND[G3,8] }}
+
+P060. {{ BND[G3,8] }}
+      H-LocalFaultFrontier !q5 in G3 using L001,L002,L003,L004
+      {{ BND[G3,9] }}
+
+P061. {{ BND[G3,9] }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,10] }}
+
+P062. {{ BND[G3,10] }}
+      H-GateFrontier CX(q5,q9) in G3
+      {{ BND[G3,11] }}
+
+P063. {{ BND[G3,11] }}
+      H-LocalFaultFrontier !q8 in G3 using L001,L002,L003,L004
+      {{ BND[G3,12] }}
+
+P064. {{ BND[G3,12] }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,13] }}
+
+P065. {{ BND[G3,13] }}
+      H-GateFrontier CX(q8,q9) in G3
+      {{ BND[G3,14] }}
+
+P066. {{ BND[G3,14] }}
+      H-LocalFaultFrontier !q9 in G3 using L001,L002,L003,L004
+      {{ BND[G3,15] }}
+
+P067. {{ BND[G3,15] }}
+      H-GateFrontier MeasZ(q9) in G3
+      {{ FULL_INV }}
+
+P068. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G4 using L001,L002,L003,L004
+      {{ BND[G4,1] }}
+
+P069. {{ BND[G4,1] }}
+      H-GateFrontier PrepP(q9) in G4
+      {{ BND[G4,2] }}
+
+P070. {{ BND[G4,2] }}
+      H-LocalFaultFrontier !q9 in G4 using L001,L002,L003,L004
+      {{ BND[G4,3] }}
+
+P071. {{ BND[G4,3] }}
+      H-LocalFaultFrontier !q0 in G4 using L001,L002,L003,L004
+      {{ BND[G4,4] }}
+
+P072. {{ BND[G4,4] }}
+      H-GateFrontier CX(q9,q0) in G4
+      {{ BND[G4,5] }}
+
+P073. {{ BND[G4,5] }}
+      H-LocalFaultFrontier !q9 in G4 using L001,L002,L003,L004
+      {{ BND[G4,6] }}
+
+P074. {{ BND[G4,6] }}
+      H-LocalFaultFrontier !q1 in G4 using L001,L002,L003,L004
+      {{ BND[G4,7] }}
+
+P075. {{ BND[G4,7] }}
+      H-GateFrontier CX(q9,q1) in G4
+      {{ BND[G4,8] }}
+
+P076. {{ BND[G4,8] }}
+      H-LocalFaultFrontier !q9 in G4 using L001,L002,L003,L004
+      {{ BND[G4,9] }}
+
+P077. {{ BND[G4,9] }}
+      H-GateFrontier H(q9) in G4
+      {{ BND[G4,10] }}
+
+P078. {{ BND[G4,10] }}
+      H-LocalFaultFrontier !q9 in G4 using L001,L002,L003,L004
+      {{ BND[G4,11] }}
+
+P079. {{ BND[G4,11] }}
+      H-GateFrontier MeasZ(q9) in G4
+      {{ FULL_INV }}
+
+P080. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G5 using L001,L002,L003,L004
+      {{ BND[G5,1] }}
+
+P081. {{ BND[G5,1] }}
+      H-GateFrontier Prep0(q9) in G5
+      {{ BND[G5,2] }}
+
+P082. {{ BND[G5,2] }}
+      H-LocalFaultFrontier !q2 in G5 using L001,L002,L003,L004
+      {{ BND[G5,3] }}
+
+P083. {{ BND[G5,3] }}
+      H-LocalFaultFrontier !q9 in G5 using L001,L002,L003,L004
+      {{ BND[G5,4] }}
+
+P084. {{ BND[G5,4] }}
+      H-GateFrontier CX(q2,q9) in G5
+      {{ BND[G5,5] }}
+
+P085. {{ BND[G5,5] }}
+      H-LocalFaultFrontier !q5 in G5 using L001,L002,L003,L004
+      {{ BND[G5,6] }}
+
+P086. {{ BND[G5,6] }}
+      H-LocalFaultFrontier !q9 in G5 using L001,L002,L003,L004
+      {{ BND[G5,7] }}
+
+P087. {{ BND[G5,7] }}
+      H-GateFrontier CX(q5,q9) in G5
+      {{ BND[G5,8] }}
+
+P088. {{ BND[G5,8] }}
+      H-LocalFaultFrontier !q9 in G5 using L001,L002,L003,L004
+      {{ BND[G5,9] }}
+
+P089. {{ BND[G5,9] }}
+      H-GateFrontier MeasZ(q9) in G5
+      {{ FULL_INV }}
+
+P090. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G6 using L001,L002,L003,L004
+      {{ BND[G6,1] }}
+
+P091. {{ BND[G6,1] }}
+      H-GateFrontier Prep0(q9) in G6
+      {{ BND[G6,2] }}
+
+P092. {{ BND[G6,2] }}
+      H-LocalFaultFrontier !q3 in G6 using L001,L002,L003,L004
+      {{ BND[G6,3] }}
+
+P093. {{ BND[G6,3] }}
+      H-LocalFaultFrontier !q9 in G6 using L001,L002,L003,L004
+      {{ BND[G6,4] }}
+
+P094. {{ BND[G6,4] }}
+      H-GateFrontier CX(q3,q9) in G6
+      {{ BND[G6,5] }}
+
+P095. {{ BND[G6,5] }}
+      H-LocalFaultFrontier !q6 in G6 using L001,L002,L003,L004
+      {{ BND[G6,6] }}
+
+P096. {{ BND[G6,6] }}
+      H-LocalFaultFrontier !q9 in G6 using L001,L002,L003,L004
+      {{ BND[G6,7] }}
+
+P097. {{ BND[G6,7] }}
+      H-GateFrontier CX(q6,q9) in G6
+      {{ BND[G6,8] }}
+
+P098. {{ BND[G6,8] }}
+      H-LocalFaultFrontier !q9 in G6 using L001,L002,L003,L004
+      {{ BND[G6,9] }}
+
+P099. {{ BND[G6,9] }}
+      H-GateFrontier MeasZ(q9) in G6
+      {{ FULL_INV }}
+
+P100. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G7 using L001,L002,L003,L004
+      {{ BND[G7,1] }}
+
+P101. {{ BND[G7,1] }}
+      H-GateFrontier PrepP(q9) in G7
+      {{ BND[G7,2] }}
+
+P102. {{ BND[G7,2] }}
+      H-LocalFaultFrontier !q9 in G7 using L001,L002,L003,L004
+      {{ BND[G7,3] }}
+
+P103. {{ BND[G7,3] }}
+      H-LocalFaultFrontier !q7 in G7 using L001,L002,L003,L004
+      {{ BND[G7,4] }}
+
+P104. {{ BND[G7,4] }}
+      H-GateFrontier CX(q9,q7) in G7
+      {{ BND[G7,5] }}
+
+P105. {{ BND[G7,5] }}
+      H-LocalFaultFrontier !q9 in G7 using L001,L002,L003,L004
+      {{ BND[G7,6] }}
+
+P106. {{ BND[G7,6] }}
+      H-LocalFaultFrontier !q8 in G7 using L001,L002,L003,L004
+      {{ BND[G7,7] }}
+
+P107. {{ BND[G7,7] }}
+      H-GateFrontier CX(q9,q8) in G7
+      {{ BND[G7,8] }}
+
+P108. {{ BND[G7,8] }}
+      H-LocalFaultFrontier !q9 in G7 using L001,L002,L003,L004
+      {{ BND[G7,9] }}
+
+P109. {{ BND[G7,9] }}
+      H-GateFrontier H(q9) in G7
+      {{ BND[G7,10] }}
+
+P110. {{ BND[G7,10] }}
+      H-LocalFaultFrontier !q9 in G7 using L001,L002,L003,L004
+      {{ BND[G7,11] }}
+
+P111. {{ BND[G7,11] }}
+      H-GateFrontier MeasZ(q9) in G7
+      {{ FULL_INV }}
+
+S000. {{ FULL_INV }}
+      H-Seq P000..P111 over C_NZ_D3
+      {{ FULL_INV }}
+
+F000. {{ clean[] }}
+      E-CleanInit
+      {{ FULL_INV }}
+
+F001. {{ FULL_INV }}
+      E-FinalGeo using G-FinalCircuitDistance
+      {{ DIST_CIRC_D3 }}
+
+F002. {{ clean[] }}
+      H-Conseq using F000,S000,F001
+      {{ DIST_CIRC_D3 }}
+
+CHECKED-SIZE primitive_hoare_lines := 112
+CHECKED-SIZE instruction_sequence_nodes := 111
+CHECKED-SIZE expanded_hoare_nodes_no_branching := 227

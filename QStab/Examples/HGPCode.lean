@@ -86,8 +86,8 @@ def cutOp : Fin 3 → ErrorVec 13
   | ⟨2, _⟩ => ofList [(2, .Z), (5, .Z), (8, .Z)]   -- column 2
 
 /-- Each cut is stabilizer-equivalent to L_Z.
-    Verified by native_decide on the specific code instance. -/
-theorem cut0_eq_logicalZ : cutOp ⟨0, by decide⟩ = logicalZ := by native_decide
+    Verified by kernel decide on the specific code instance. -/
+theorem cut0_eq_logicalZ : cutOp ⟨0, by decide⟩ = logicalZ := by decide
 
 /-- cut1 = S · logicalZ where S is a product of Z-stabs 6, 8, 10. -/
 theorem cut01_stabilizer_equiv :
@@ -100,7 +100,7 @@ theorem cut01_stabilizer_equiv :
   exact ⟨S,
     InStab.mul (InStab.mul (InStab.gen ⟨6, by decide⟩) (InStab.gen ⟨8, by decide⟩))
                (InStab.gen ⟨10, by decide⟩),
-    by native_decide⟩
+    by decide⟩
 
 /-- cut2 = S · logicalZ where S is a product of all 6 Z-stabs. -/
 theorem cut02_stabilizer_equiv :
@@ -127,17 +127,17 @@ theorem cut02_stabilizer_equiv :
           (InStab.gen ⟨9, by decide⟩))
         (InStab.gen ⟨10, by decide⟩))
       (InStab.gen ⟨11, by decide⟩),
-    by native_decide⟩
+    by decide⟩
 
 /-- Abelianness: all stabilizers commute. -/
 theorem stab_commute : ∀ i j : Fin code.numStab,
     ErrorVec.parity (code.stabilizers i) (code.stabilizers j) = false := by
-  native_decide
+  decide
 
 /-- L_Z is in the normalizer. -/
 theorem logicalZ_normalizer : ∀ i : Fin code.numStab,
     ErrorVec.parity (code.stabilizers i) logicalZ = false := by
-  native_decide
+  decide
 
 /-! ## Upper bound: d_circ ≤ 3 -/
 
@@ -176,9 +176,9 @@ theorem hgp_d_circ_le_3 :
         (by decide) (by simp [s1, State.init, code])
     · convert Step.type0 s2 ⟨2, by decide⟩ .X
         (by decide) (by simp [s2, s1, State.init, code])
-  · have : s3.E_tilde = attack_E := by native_decide
+  · have : s3.E_tilde = attack_E := by decide
     rw [this]; exact attack_zero_syndrome
-  · have : s3.E_tilde = attack_E := by native_decide
+  · have : s3.E_tilde = attack_E := by decide
     rw [this]; exact attack_flips_logical
   · simp [s3, s2, s1, State.init, code]
 

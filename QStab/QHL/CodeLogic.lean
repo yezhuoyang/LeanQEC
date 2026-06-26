@@ -13,7 +13,7 @@ namespace Term
 
 /-- Shift one variable under a cutoff. Variables below the cutoff are bound by
     an inner binder and must not be captured. -/
-private def weakenVar (cutoff : Nat) {arity : Nat} (v : Fin arity) :
+def weakenVar (cutoff : Nat) {arity : Nat} (v : Fin arity) :
     Fin (arity + 1) :=
   if _ : v.val < cutoff then
     ⟨v.val, Nat.lt_trans v.isLt (Nat.lt_succ_self arity)⟩
@@ -43,6 +43,7 @@ def lift (cutoff : Nat) {arity : Nat} {ty : Ty} :
   | .anticommutes a b => .anticommutes (a.lift cutoff) (b.lift cutoff)
   | .stabLam entry => .stabLam (entry.lift (cutoff + 1))
   | .stabAt s q => .stabAt (s.lift cutoff) (q.lift cutoff)
+  | .stabFold n body => .stabFold (n.lift cutoff) (body.lift (cutoff + 1))
   | .recCall d k => .recCall (d.lift cutoff) (k.lift cutoff)
 
 /-- Weakening at the outermost scope. -/

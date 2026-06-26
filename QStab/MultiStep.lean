@@ -3,40 +3,44 @@ import Mathlib.Logic.Relation
 
 /-! # Multi-step transition and execution runs
 
-Defines multi-step reachability via `Relation.ReflTransGen`
-and the notion of a valid execution run from σ_init.
+Reachability is the reflexive-transitive closure of the nondeterministic
+`Step prog` relation for a fixed measurement program `prog`.
 -/
 
 namespace QStab
 
-/-- Multi-step transition: the reflexive-transitive closure of Step.
-    σ →* σ' in the paper. -/
-def MultiStep (P : QECParams) : ExecState P → ExecState P → Prop :=
-  Relation.ReflTransGen (Step P)
+/-- Multi-step transition for a fixed QStab measurement program. -/
+def MultiStep {P : QECParams} (prog : QStabProgram P) :
+    ExecState P -> ExecState P -> Prop :=
+  Relation.ReflTransGen (Step prog)
 
-/-- A valid execution run from init to some final state.
-    σ_0 →* σ in the paper. -/
-def Run (P : QECParams) (final : ExecState P) : Prop :=
-  MultiStep P (.active (State.init P)) final
+/-- A valid execution run from the initial state for a fixed program. -/
+def Run {P : QECParams} (prog : QStabProgram P) (final : ExecState P) : Prop :=
+  MultiStep prog (.active (State.init P)) final
 
 /-- Once in a done state, no further steps are possible. -/
-theorem done_is_stuck (P : QECParams) (s : State P) (s' : ExecState P) :
-    ¬ Step P (.done s) s' := by
-  intro h; cases h
+theorem done_is_stuck {P : QECParams} (prog : QStabProgram P) (s : State P)
+    (s' : ExecState P) :
+    ¬ Step prog (.done s) s' := by
+  intro h
+  cases h
 
 /-- Once in an error state, no further steps are possible. -/
-theorem error_is_stuck (P : QECParams) (s : State P) (s' : ExecState P) :
-    ¬ Step P (.error s) s' := by
-  intro h; cases h
+theorem error_is_stuck {P : QECParams} (prog : QStabProgram P) (s : State P)
+    (s' : ExecState P) :
+    ¬ Step prog (.error s) s' := by
+  intro h
+  cases h
 
 /-- Multi-step transitivity. -/
-theorem multi_step_trans {P : QECParams} {a b c : ExecState P} :
-    MultiStep P a b → MultiStep P b c → MultiStep P a c :=
+theorem multi_step_trans {P : QECParams} {prog : QStabProgram P}
+    {a b c : ExecState P} :
+    MultiStep prog a b -> MultiStep prog b c -> MultiStep prog a c :=
   Relation.ReflTransGen.trans
 
 /-- Single step lifts to multi-step. -/
-theorem step_to_multi {P : QECParams} {a b : ExecState P} :
-    Step P a b → MultiStep P a b :=
+theorem step_to_multi {P : QECParams} {prog : QStabProgram P} {a b : ExecState P} :
+    Step prog a b -> MultiStep prog a b :=
   Relation.ReflTransGen.single
 
 end QStab

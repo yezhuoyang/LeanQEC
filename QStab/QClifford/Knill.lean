@@ -2,6 +2,8 @@ import QStab.QClifford.Gate
 import Mathlib.Data.Finset.Card
 import Mathlib.Tactic
 
+set_option maxRecDepth 8192
+
 /-! # Knill scheme: transversal CNOT syndrome extraction
 
 The Knill syndrome extraction uses a transversal CNOT: each data qubit i
@@ -74,22 +76,27 @@ theorem soundness (n : Nat) (fault : Fault (n + n)) :
 -- Key structural lemmas
 -- ============================================================
 
-/-- propagateGate applied to a clean state gives a clean state. -/
-private theorem propagateGate_clean {nq : Nat} (g : Gate nq) :
-    propagateGate g (ErrorState.clean nq) = ErrorState.clean nq := by
-  cases g with
-  | cnot c t hne => simp [propagateGate, ErrorState.clean, xPart, zPart]
-  | hadamard q => simp [propagateGate, ErrorState.clean, hadamardAction]
-  | prepZero q => simp [propagateGate, ErrorState.clean]
-  | prepPlus q => simp [propagateGate, ErrorState.clean]
-  | measZ q => simp [propagateGate, ErrorState.clean, hasXComp]
+/-- Every gate preserves the all-identity Pauli invariant.
 
-/-- Any circuit applied to a clean state gives a clean state. -/
-private theorem propagateCircuit_clean {nq : Nat} (circuit : Circuit nq) :
-    propagateCircuit circuit (ErrorState.clean nq) = ErrorState.clean nq := by
-  induction circuit with
-  | nil => simp [propagateCircuit]
-  | cons g gs ih => simp [propagateCircuit, propagateGate_clean, ih]
+This is the component of the old "clean propagates to clean" fact that remains
+true after `measZ` started writing a time-resolved detector record.  Measurement
+may advance `detectorCursor`, but it does not introduce a Pauli. -/
+private theorem propagateGate_allPaulis_I {nq : Nat} (g : Gate nq)
+    (es : ErrorState nq) (hall : ∀ q, es.paulis q = .I) :
+    ∀ q, (propagateGate g es).paulis q = .I := by
+  intro q
+  cases g <;> simp [propagateGate, hall, xPart, zPart, pauliMul, hadamardAction]
+
+/-- Any circuit preserves the all-identity Pauli invariant. -/
+private theorem propagateCircuit_allPaulis_I {nq : Nat} (circuit : Circuit nq)
+    (es : ErrorState nq) (hall : ∀ q, es.paulis q = .I) :
+    ∀ q, (propagateCircuit circuit es).paulis q = .I := by
+  induction circuit generalizing es with
+  | nil =>
+      intro q
+      simpa [propagateCircuit] using hall q
+  | cons g gs ih =>
+      exact ih (propagateGate g es) (propagateGate_allPaulis_I g es hall)
 
 /-- Proof irrelevance for computeFaultEffect. -/
 private theorem ce_irrel {nq : Nat} (circuit : Circuit nq) (pos : Nat) (q : Fin nq)
@@ -260,29 +267,24 @@ private theorem propagateGate_cnot_slotWt (n : Nat) (i : Fin n)
 -- Circuit-level lemmas
 -- ============================================================
 
-/-- computeFaultEffect simplifies: the prefix propagation on clean state gives clean. -/
-private theorem computeFaultEffect_eq (circuit : Circuit nq) (fault : Fault nq) :
-    computeFaultEffect circuit fault =
-    propagateCircuit (circuit.drop fault.position)
-      ((ErrorState.clean nq).inject fault.qubit fault.pauli) := by
-  simp [computeFaultEffect, splitAt, propagateCircuit_clean]
-
-/-- Injecting a single Pauli on qubit q into a clean state gives slotWt ≤ 1. -/
-private theorem slotWt_inject_clean (n : Nat) (q : Fin (n + n)) (p : Pauli) :
-    slotWt n ((ErrorState.clean (n + n)).inject q p) ≤ 1 := by
+/-- Injecting a single Pauli on qubit `q` into any all-I Pauli state gives
+slot weight at most one.  Detector logs and cursors are irrelevant here. -/
+private theorem slotWt_inject_allPaulis_I (n : Nat) (q : Fin (n + n)) (p : Pauli)
+    (es : ErrorState (n + n)) (hall : ∀ j, es.paulis j = .I) :
+    slotWt n (es.inject q p) ≤ 1 := by
   apply Finset.card_le_one.mpr
   intro a ha b hb
-  simp only [Finset.mem_filter, Finset.mem_univ, true_and,
-             ErrorState.inject, ErrorState.clean, pauliMul_I_right] at ha hb
-  -- Each of a, b must have q in their slot (dataQ or ancQ equal to q)
-  have get_slot : ∀ (k : Fin n),
-      ((if dataQ n k = q then p else .I) ≠ .I ∨ (if ancQ n k = q then p else .I) ≠ .I) →
-      dataQ n k = q ∨ ancQ n k = q := by
-    intro k hk; rcases hk with hd | ha
-    · left; by_contra h; simp [h] at hd
-    · right; by_contra h; simp [h] at ha
-  have ha_slot := get_slot a ha
-  have hb_slot := get_slot b hb
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and, ErrorState.inject] at ha hb
+  simp [hall, pauliMul_I_right] at ha hb
+  -- Each of a, b must have q in their slot (dataQ or ancQ equal to q).
+  have ha_slot : dataQ n a = q ∨ ancQ n a = q := by
+    rcases ha with h | h
+    · exact Or.inl h.1
+    · exact Or.inr h.1
+  have hb_slot : dataQ n b = q ∨ ancQ n b = q := by
+    rcases hb with h | h
+    · exact Or.inl h.1
+    · exact Or.inr h.1
   -- q determines the slot index uniquely (dataQ and ancQ ranges are disjoint)
   ext
   have qval_a : q.val = a.val ∨ q.val = n + a.val := by
@@ -335,14 +337,16 @@ private theorem propagateCircuit_knillGates_slotWt (n : Nat) (gates : List (Gate
     Proof: slotWt is preserved through the circuit, and dataWt ≤ slotWt. -/
 theorem weightBound (n : Nat) (fault : Fault (n + n)) :
     dataWt n (computeFaultEffect (knillCircuit n) fault) ≤ 1 := by
-  rw [computeFaultEffect_eq]
+  simp only [computeFaultEffect, splitAt]
   apply Nat.le_trans (dataWt_le_slotWt n _)
   apply propagateCircuit_knillGates_slotWt n _ (fun g hg =>
     knill_gate_mem n g (List.mem_of_mem_drop hg))
-  exact slotWt_inject_clean n fault.qubit fault.pauli
+  apply slotWt_inject_allPaulis_I
+  intro q
+  exact propagateCircuit_allPaulis_I _ _ (fun q => by simp [ErrorState.clean]) q
 
 -- ============================================================
--- Concrete circuits (no sorry, for native_decide)
+-- Concrete circuits checked by kernel `decide`
 -- ============================================================
 
 -- n=1: [prepZero(1), CNOT(0,1), measZ(1)]
@@ -411,35 +415,8 @@ private def hpZ : Pauli.Z ≠ .I := by decide
 /-- Every single fault in the n=1 Knill circuit has data weight ≤ 1. -/
 theorem weightBound1 (fault : Fault 2) :
     dataWt1 (computeFaultEffect knill1 fault) ≤ 1 := by
-  rcases fault with ⟨pos, q, p, hp⟩
-  -- For large pos, circuit suffix is empty, at most 1 data qubit affected
-  by_cases hpos : pos < knill1.length
-  · simp [knill1] at hpos
-    cases p with
-    | I => exact absurd rfl hp
-    | X =>
-      rw [ce_irrel knill1 pos q .X hp hpX]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Y =>
-      rw [ce_irrel knill1 pos q .Y hp hpY]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Z =>
-      rw [ce_irrel knill1 pos q .Z hp hpZ]
-      interval_cases pos <;> fin_cases q <;> native_decide
-  · -- pos >= circuit length: suffix is empty, at most 1 qubit affected
-    push_neg at hpos
-    simp only [computeFaultEffect, splitAt, List.take_of_length_le hpos,
-               List.drop_eq_nil_iff.mpr hpos, propagateCircuit_clean, propagateCircuit]
-    simp only [dataWt1, ErrorState.inject]
-    apply Finset.card_le_one.mpr
-    intro ⟨i, hi⟩ hmemi ⟨j, hj⟩ hmemj
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hmemi hmemj
-    simp only [ErrorState.clean] at hmemi hmemj
-    split_ifs at hmemi hmemj with hiq hjq
-    · ext; have := congrArg Fin.val hiq; have := congrArg Fin.val hjq; omega
-    · simp at hmemj
-    · simp at hmemi
-    · simp at hmemi
+  simpa [dataWt1, dataWt, knill1, knillCircuit, qubitGadget, dataQ, ancQ] using
+    weightBound 1 fault
 
 -- ============================================================
 -- WEIGHT BOUND for n=2
@@ -448,33 +425,8 @@ theorem weightBound1 (fault : Fault 2) :
 /-- Every single fault in the n=2 Knill circuit has data weight ≤ 1. -/
 theorem weightBound2 (fault : Fault 4) :
     dataWt2 (computeFaultEffect knill2 fault) ≤ 1 := by
-  rcases fault with ⟨pos, q, p, hp⟩
-  by_cases hpos : pos < knill2.length
-  · simp [knill2] at hpos
-    cases p with
-    | I => exact absurd rfl hp
-    | X =>
-      rw [ce_irrel knill2 pos q .X hp hpX]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Y =>
-      rw [ce_irrel knill2 pos q .Y hp hpY]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Z =>
-      rw [ce_irrel knill2 pos q .Z hp hpZ]
-      interval_cases pos <;> fin_cases q <;> native_decide
-  · push_neg at hpos
-    simp only [computeFaultEffect, splitAt, List.take_of_length_le hpos,
-               List.drop_eq_nil_iff.mpr hpos, propagateCircuit_clean, propagateCircuit]
-    simp only [dataWt2, ErrorState.inject]
-    apply Finset.card_le_one.mpr
-    intro ⟨i, hi⟩ hmemi ⟨j, hj⟩ hmemj
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hmemi hmemj
-    simp only [ErrorState.clean] at hmemi hmemj
-    split_ifs at hmemi hmemj with hiq hjq
-    · ext; have := congrArg Fin.val hiq; have := congrArg Fin.val hjq; omega
-    · simp at hmemj
-    · simp at hmemi
-    · simp at hmemi
+  simpa [dataWt2, dataWt, knill2, knillCircuit, qubitGadget, dataQ, ancQ] using
+    weightBound 2 fault
 
 -- ============================================================
 -- WEIGHT BOUND for n=3
@@ -483,33 +435,8 @@ theorem weightBound2 (fault : Fault 4) :
 /-- Every single fault in the n=3 Knill circuit has data weight ≤ 1. -/
 theorem weightBound3 (fault : Fault 6) :
     dataWt3 (computeFaultEffect knill3 fault) ≤ 1 := by
-  rcases fault with ⟨pos, q, p, hp⟩
-  by_cases hpos : pos < knill3.length
-  · simp [knill3] at hpos
-    cases p with
-    | I => exact absurd rfl hp
-    | X =>
-      rw [ce_irrel knill3 pos q .X hp hpX]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Y =>
-      rw [ce_irrel knill3 pos q .Y hp hpY]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Z =>
-      rw [ce_irrel knill3 pos q .Z hp hpZ]
-      interval_cases pos <;> fin_cases q <;> native_decide
-  · push_neg at hpos
-    simp only [computeFaultEffect, splitAt, List.take_of_length_le hpos,
-               List.drop_eq_nil_iff.mpr hpos, propagateCircuit_clean, propagateCircuit]
-    simp only [dataWt3, ErrorState.inject]
-    apply Finset.card_le_one.mpr
-    intro ⟨i, hi⟩ hmemi ⟨j, hj⟩ hmemj
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hmemi hmemj
-    simp only [ErrorState.clean] at hmemi hmemj
-    split_ifs at hmemi hmemj with hiq hjq
-    · ext; have := congrArg Fin.val hiq; have := congrArg Fin.val hjq; omega
-    · simp at hmemj
-    · simp at hmemi
-    · simp at hmemi
+  simpa [dataWt3, dataWt, knill3, knillCircuit, qubitGadget, dataQ, ancQ] using
+    weightBound 3 fault
 
 -- ============================================================
 -- WEIGHT BOUND for n=4
@@ -518,93 +445,68 @@ theorem weightBound3 (fault : Fault 6) :
 /-- Every single fault in the n=4 Knill circuit has data weight ≤ 1. -/
 theorem weightBound4 (fault : Fault 8) :
     dataWt4' (computeFaultEffect knill4 fault) ≤ 1 := by
-  rcases fault with ⟨pos, q, p, hp⟩
-  by_cases hpos : pos < knill4.length
-  · simp [knill4] at hpos
-    cases p with
-    | I => exact absurd rfl hp
-    | X =>
-      rw [ce_irrel knill4 pos q .X hp hpX]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Y =>
-      rw [ce_irrel knill4 pos q .Y hp hpY]
-      interval_cases pos <;> fin_cases q <;> native_decide
-    | Z =>
-      rw [ce_irrel knill4 pos q .Z hp hpZ]
-      interval_cases pos <;> fin_cases q <;> native_decide
-  · push_neg at hpos
-    simp only [computeFaultEffect, splitAt, List.take_of_length_le hpos,
-               List.drop_eq_nil_iff.mpr hpos, propagateCircuit_clean, propagateCircuit]
-    simp only [dataWt4', ErrorState.inject]
-    apply Finset.card_le_one.mpr
-    intro ⟨i, hi⟩ hmemi ⟨j, hj⟩ hmemj
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and] at hmemi hmemj
-    simp only [ErrorState.clean] at hmemi hmemj
-    split_ifs at hmemi hmemj with hiq hjq
-    · ext; have := congrArg Fin.val hiq; have := congrArg Fin.val hjq; omega
-    · simp at hmemj
-    · simp at hmemi
-    · simp at hmemi
+  simpa [dataWt4', dataWt, knill4, knillCircuit, qubitGadget, dataQ, ancQ] using
+    weightBound 4 fault
 
 -- ============================================================
--- native_decide verification: n=1
+-- Kernel `decide` verification: n=1
 -- ============================================================
 
 example : dataWt1 (computeFaultEffect knill1 ⟨0, ⟨1, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨1, ⟨0, by omega⟩, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨1, ⟨0, by omega⟩, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨1, ⟨0, by omega⟩, .Y, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨1, ⟨1, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨1, ⟨1, by omega⟩, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨2, ⟨1, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt1 (computeFaultEffect knill1 ⟨2, ⟨1, by omega⟩, .Z, by decide⟩) = 0 := by
-  native_decide
+  decide
 
 -- ============================================================
--- native_decide verification: n=2
+-- Kernel `decide` verification: n=2
 -- ============================================================
 
 example : dataWt2 (computeFaultEffect knill2 ⟨1, ⟨0, by omega⟩, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨1, ⟨0, by omega⟩, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨1, ⟨2, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨1, ⟨2, by omega⟩, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨4, ⟨1, by omega⟩, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨4, ⟨1, by omega⟩, .Y, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt2 (computeFaultEffect knill2 ⟨5, ⟨3, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 
 -- ============================================================
--- native_decide verification: n=4
+-- Kernel `decide` verification: n=4
 -- ============================================================
 
 example : dataWt4' (computeFaultEffect knill4 ⟨1, ⟨0, by omega⟩, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨4, ⟨1, by omega⟩, .Y, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨7, ⟨2, by omega⟩, .Z, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨10, ⟨3, by omega⟩, .X, by decide⟩) = 1 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨1, ⟨4, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨5, ⟨5, by omega⟩, .Z, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨0, ⟨4, by omega⟩, .X, by decide⟩) = 0 := by
-  native_decide
+  decide
 example : dataWt4' (computeFaultEffect knill4 ⟨3, ⟨5, by omega⟩, .Y, by decide⟩) = 0 := by
-  native_decide
+  decide
 
 end QStab.QClifford.Knill

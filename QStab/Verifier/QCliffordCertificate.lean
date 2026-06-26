@@ -1,7 +1,5 @@
 import QStab.Verifier
 import QStab.QClifford.Gate
-import QStab.Compiler.ToCircuit
-import QStab.Compiler.LiftInvariant
 
 /-!
 # QCliffordFTCertificate: gate-level fault-tolerance certificate (Phase 3 sketch)
@@ -211,166 +209,28 @@ theorem QCliffordFTCertificate.runFinal_no_failure (b : QCliffordFTCertificate)
 example : ¬ cnotPairCertificate.failure cnotPairCertificate.runFinal :=
   cnotPairCertificate.runFinal_no_failure cnotPair_verified
 
-/-! ## Phase 4 placeholder: `compileCertificateTrivial`
+/-! ## Legacy retirement note
 
-`compileCertificateTrivial : QStabFTCertificate → QCliffordFTCertificate` is the TAL-style
-proof-preserving compilation: take a source-level (QStab) bundle and
-produce a gate-level (QClifford) bundle that the QClifford verifier
-accepts.
+The previous `compileCertificateTrivial : QStabFTCertificate → QCliffordFTCertificate`
+and `compileCertificate b spec h_n : QCliffordFTCertificate` lived here
+prior to the legacy retirement pass. They built a QClifford bundle
+whose `invHolds := liftReach (toCircuitX spec)` and
+`failure := ∃ i < n, paulis i ≠ I` predicates were jointly VACUOUS
+(every `liftReach` state is paulis-clean, so the failure predicate is
+unsatisfiable — see audit memo `audit_compile_qstab_qclifford`).
+The bundle therefore did not carry real fault-tolerance content.
 
-**Status (iter 15)**: stub. The signature is fixed but the body
-returns `trivialQCliffordCertificate` for any input — i.e., this is a
-non-informative compilation. Future iters refine the body:
+The live fault-tolerance pipeline is
 
-  * Iter 16: connect `nq := source.P.n` and lift `failure` from
-    `ErrorVec source.P.n → Prop` to `ErrorState source.P.n → Prop`.
-  * Iter 17 (deferred per iter 13 finding): bridge `invHolds` via a
-    QStab Step ↔ QClifford Gate correspondence — requires building
-    or formalizing a verified QStab-to-QClifford circuit translation
-    that doesn't currently exist in `QStab.Compiler`.
+  * QClifford-native barrier `gate_level_tolerates` (see
+    `QStab/QClifford/GateBarrier.lean`), and
+  * the Phase A–E compileFT_auto / compile_sound infrastructure
+    (`QStab/QHL/Compile/CompilationRules.lean` and
+    `QStab/QHL/Compile/CompileSound.lean`).
 
-The `compileCertificateTrivial_preserves_verify` theorem (final TAL deliverable)
-is also deferred until iter 17's lifting is in place. -/
-
-/-- `compileCertificateTrivial`: TAL-style proof-preserving compilation from a
-    QStab bundle to a QClifford bundle.
-
-    **Status (iter 17)**: `static` now flows from source — the
-    TAL-style preservation theorem `compileCertificateTrivial_preserves_verify`
-    has a non-trivial dependency on `b.static`. Qubit count wired
-    from `b.P.n`. Other fields (circuit, failure, invHolds,
-    preservation) remain trivial pending QStab→QClifford bridge
-    infrastructure not in `QStab.Compiler`. -/
-def compileCertificateTrivial (b : QStabFTCertificate) : QCliffordFTCertificate where
-  nq      := b.P.n
-  circuit := []
-  failure := fun _ => False
-  invHolds := fun _ => True
-  init    := trivial
-  preservation := fun _ _ _ _ => trivial
-  static  := b.static
-  bridge  := fun _ _ _ hf => hf
-
-/-- The compiled bundle preserves the source's qubit count. -/
-theorem compileCertificateTrivial_nq_eq (b : QStabFTCertificate) :
-    (compileCertificateTrivial b).nq = b.P.n := rfl
-
-/-- The compiled bundle preserves the source's static side-condition. -/
-theorem compileCertificateTrivial_static_eq (b : QStabFTCertificate) :
-    (compileCertificateTrivial b).static = b.static := rfl
-
-/-- **TAL-style proof preservation theorem.** The QStab verifier
-    accepting the source bundle implies the QClifford verifier accepts
-    the compiled bundle. This is the structural analog of Morrisett et
-    al.'s TAL type-preservation under code compilation.
-
-    With the current trivial circuit/invHolds/failure compilation,
-    the theorem reduces to a `Bool` equality. Once the QStab→QClifford
-    bridge is built (a future research phase), the body of
-    `compileCertificateTrivial` will carry real content and this theorem will
-    require structural Pauli-propagation reasoning. -/
-theorem compileCertificateTrivial_preserves_verify (b : QStabFTCertificate)
-    (h : verifyQStab b = true) :
-    verifyQClifford (compileCertificateTrivial b) = true := by
-  show (compileCertificateTrivial b).static = true
-  rw [compileCertificateTrivial_static_eq]
-  exact h
-
-/-- End-to-end operational corollary: running the compiled bundle's
-    circuit on a clean error state returns a clean error state (since
-    the current `compileCertificateTrivial` body produces an empty circuit). -/
-theorem compileCertificateTrivial_runFinal_clean (b : QStabFTCertificate) :
-    (compileCertificateTrivial b).runFinal = ErrorState.clean b.P.n := by
-  show propagateCircuit (compileCertificateTrivial b).circuit
-         (ErrorState.clean (compileCertificateTrivial b).nq) = ErrorState.clean b.P.n
-  rfl
-
-/-! ## **Session 2 real compilation: `compileCertificate`**
-
-Replacement for `compileCertificateTrivial` that takes a `CodeSpec` parameter
-matching the source bundle's `P.n`. The compiled bundle now has:
-
-  * `nq = b.P.n + 1` (one ancilla added)
-  * `circuit = toCircuitX spec` (real gate list, ~50 gates for
-    surface d=3 per round)
-
-Other fields (`failure`, `invHolds`, `preservation`, `bridge`)
-remain placeholders pending the per-gate liftInvariant preservation
-machinery (iter 30+).
-
-This is the function Phase D's concrete bundles will instantiate. -/
-
-open QStab.Compiler
-
-/-- **Real compiler** (X-side first): given a source bundle `b` and
-    a matching code spec `spec`, produce the QClifford bundle with
-    real gate-level circuit AND real `invHolds`/`init`/`preservation`
-    fields via `liftReach`.
-
-    `liftReach c` says "es is reachable from clean by propagating
-    some sequence of gates drawn from `c`" — preserved by every gate
-    `g ∈ c` (extend the witness by appending `g`). Iter 33 wires:
-
-      * `invHolds := liftReach (toCircuitX spec)`
-      * `init := liftReach_clean ...`
-      * `preservation := liftReach_preserve ...`
-
-    `failure` and `bridge` remain placeholders pending the real
-    failure-lift design (Phase D fault-tolerance proofs). -/
-def compileCertificate (b : QStabFTCertificate) (spec : CodeSpec)
-    (h_n : spec.n = b.P.n) : QCliffordFTCertificate where
-  nq       := b.P.n + 1
-  circuit  := h_n ▸ (toCircuitX spec : Circuit (spec.n + 1))
-  -- **Real failure predicate** (iter 37): the data part of the state
-  -- has nonzero Pauli weight. Vacuously false on `liftReach` states
-  -- (which are paulis-clean per iter 34).
-  failure  := fun es => ∃ i : Fin (b.P.n + 1), i.val < b.P.n ∧ es.paulis i ≠ Pauli.I
-  invHolds := QStab.Compiler.liftReach
-                (h_n ▸ (toCircuitX spec : Circuit (spec.n + 1)))
-  init     := QStab.Compiler.liftReach_clean _
-  preservation := fun g hg es h =>
-                    QStab.Compiler.liftReach_preserve _ g hg es h
-  static   := b.static
-  -- **Real bridge** (iter 37): liftReach states have paulis-clean
-  -- (iter 34's `liftReach_paulis_clean`), so the existential failure
-  -- predicate is vacuously false. The bridge no longer cheats.
-  bridge   := by
-    intro _ es h_inv h_fail
-    obtain ⟨i, _, h_ne⟩ := h_fail
-    apply h_ne
-    exact QStab.Compiler.liftReach_paulis_clean _ es h_inv i
-
-/-- The new compiler preserves source's `static`. -/
-theorem compileCertificate_static_eq (b : QStabFTCertificate) (spec : CodeSpec)
-    (h_n : spec.n = b.P.n) :
-    (compileCertificate b spec h_n).static = b.static := rfl
-
-/-- The new compiler's qubit count is source's data count + 1 (ancilla). -/
-theorem compileCertificate_nq_eq (b : QStabFTCertificate) (spec : CodeSpec)
-    (h_n : spec.n = b.P.n) :
-    (compileCertificate b spec h_n).nq = b.P.n + 1 := rfl
-
-/-- TAL preservation theorem for the new compiler: still trivial in
-    this iter (Bool equality), but mediated through real circuit
-    field now. -/
-theorem compileCertificate_preserves_verify (b : QStabFTCertificate) (spec : CodeSpec)
-    (h_n : spec.n = b.P.n) (h : verifyQStab b = true) :
-    verifyQClifford (compileCertificate b spec h_n) = true := by
-  show (compileCertificate b spec h_n).static = true
-  rw [compileCertificate_static_eq]
-  exact h
-
-/-- **`runFinal` operational result**: the `compileCertificate`'s
-    `runFinal` (i.e., propagating the compiled circuit on the clean
-    error state) gives a state with all paulis equal to `I`. This
-    is the structural manifestation of iter 34's
-    `liftReach_paulis_clean`: every reachable state through the
-    compiled circuit is paulis-clean. -/
-theorem compileCertificate_runFinal_paulis_clean (b : QStabFTCertificate)
-    (spec : CodeSpec) (h_n : spec.n = b.P.n)
-    (q : Fin (compileCertificate b spec h_n).nq) :
-    (compileCertificate b spec h_n).runFinal.paulis q = Pauli.I := by
-  unfold QCliffordFTCertificate.runFinal
-  apply QStab.Compiler.propagateCircuit_clean_paulis
+`compileCertificate*` and the supporting `liftReach` machinery were
+moved into `QStab/Compiler/Legacy/LiftInvariant.lean` and
+`QStab/Compiler/Legacy/CompiledCertificates.lean` and removed from the
+default lake build. -/
 
 end QStab.Verifier

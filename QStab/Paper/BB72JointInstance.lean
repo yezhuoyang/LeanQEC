@@ -479,7 +479,7 @@ theorem bb_joint_hooks_subset :
 /-- All Z-hooks weight ≤ 5 (decidable by `native_decide`). -/
 theorem bb_allHooksZ_weight_bound :
     ∀ e ∈ bb_allHooksZ, ErrorVec.weight e ≤ 5 := by
-  native_decide
+  decide
 
 /-- All joint hooks have weight ≤ 5 (each hook from either side). -/
 theorem bb_jointAllHooks_weight_bound :
@@ -559,12 +559,12 @@ in n_qubits) and apply directly here. -/
 /-- Every X-side hook is X-only (each entry is X or I). -/
 theorem bb_allHooks_xOnly :
     ∀ e ∈ bb_allHooks, ∀ j : Fin 72, e j = .X ∨ e j = .I := by
-  native_decide
+  decide
 
 /-- Every Z-side hook is Z-only (each entry is Z or I). -/
 theorem bb_allHooksZ_zOnly :
     ∀ e ∈ bb_allHooksZ, ∀ j : Fin 72, e j = .Z ∨ e j = .I := by
-  native_decide
+  decide
 
 /-! ## Per-stab X-only / Z-only (decided by `native_decide`) -/
 
@@ -574,7 +574,7 @@ theorem bb_stabilizers_xOnly_at_xStabIdx :
   intro i hi j
   have h_dec : ∀ i : Fin 72, i.val < 36 →
       ∀ j : Fin 72, (bb_stabilizers i) j = .X ∨ (bb_stabilizers i) j = .I := by
-    native_decide
+    decide
   exact h_dec i hi j
 
 /-- For Z-stab indices (i.val ≥ 36), the stabiliser is Z-only. -/
@@ -583,7 +583,7 @@ theorem bb_stabilizers_zOnly_at_zStabIdx :
   intro i hi j
   have h_dec : ∀ i : Fin 72, i.val ≥ 36 →
       ∀ j : Fin 72, (bb_stabilizers i) j = .Z ∨ (bb_stabilizers i) j = .I := by
-    native_decide
+    decide
   exact h_dec i hi j
 
 /-! ## Joint bridge invariant: xPart in X-reachable, zPart in Z-reachable -/

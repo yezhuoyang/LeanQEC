@@ -4,6 +4,8 @@ import QStab.PauliOps
 import Mathlib.Tactic.FinCases
 import Mathlib.Tactic.IntervalCases
 
+set_option maxRecDepth 8192
+
 /-!
 # BB [[72, 12, 6]] code: framework instantiation with NZ-sorted scheduling
 
@@ -627,7 +629,7 @@ def bb_backActionSet (i : Fin 72) : Set (ErrorVec 72) :=
 /-- All hooks weight ≤ 5 (decidable per-hook). -/
 theorem bb_allHooks_weight_bound :
     ∀ e ∈ bb_allHooks, ErrorVec.weight e ≤ 5 := by
-  native_decide
+  decide
 
 /-- Each hook in the back-action set is in the all-hooks list.
     Trivial: by definition `bb_backActionSet i ⊆ bb_allHooks`. -/

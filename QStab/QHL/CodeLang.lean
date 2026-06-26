@@ -22,6 +22,18 @@ abbrev PartialStabilizer := Nat -> Option Pauli
 
 def identityStabilizer : Stabilizer := fun _ => Pauli.I
 
+def partialIdentityStabilizer : PartialStabilizer := fun _ => some Pauli.I
+
+def partialStabilizerMul (A B : PartialStabilizer) : PartialStabilizer :=
+  fun q => do
+    let av <- A q
+    let bv <- B q
+    some (Pauli.mul av bv)
+
+def partialStabilizerFold : Nat -> (Nat -> PartialStabilizer) -> PartialStabilizer
+  | 0, _ => partialIdentityStabilizer
+  | n + 1, body => partialStabilizerMul (partialStabilizerFold n body) (body n)
+
 /-- The small value language.  Higher-level QEC notions are derived from these
     sorts, not added as primitives. -/
 inductive Ty where
@@ -95,6 +107,8 @@ inductive Term : Nat -> Ty -> Type where
       Term arity .bool
   | stabLam {arity : Nat} : Term (arity + 1) .pauli -> Term arity .stab
   | stabAt {arity : Nat} : Term arity .stab -> Term arity .nat -> Term arity .pauli
+  | stabFold {arity : Nat} : Term arity .nat -> Term (arity + 1) .stab ->
+      Term arity .stab
   | recCall {arity : Nat} : Term arity .nat -> Term arity .nat -> Term arity .stab
 
 namespace Term
@@ -120,6 +134,7 @@ def sizeOfTerm {arity : Nat} {ty : Ty} : Term arity ty -> Nat
   | .anticommutes a b => 1 + sizeOfTerm a + sizeOfTerm b
   | .stabLam entry => 1 + sizeOfTerm entry
   | .stabAt s q => 1 + sizeOfTerm s + sizeOfTerm q
+  | .stabFold n body => 1 + sizeOfTerm n + sizeOfTerm body
   | .recCall d k => 1 + sizeOfTerm d + sizeOfTerm k
 
 /-- Executable big-step semantics with explicit recursion fuel. -/
@@ -188,6 +203,12 @@ def eval (codeBody : Term 2 .stab) :
       let sv <- eval codeBody fuel s rho
       let qv <- eval codeBody fuel q rho
       sv qv
+  | fuel, _, _, .stabFold n body, rho => do
+      let nv <- eval codeBody fuel n rho
+      some <| partialStabilizerFold nv fun i =>
+        match eval codeBody fuel body (Env.cons i rho) with
+        | some row => row
+        | none => fun _ => none
   | 0, _, _, .recCall _ _, _ =>
       none
   | fuel + 1, _, _, .recCall d k, rho => do

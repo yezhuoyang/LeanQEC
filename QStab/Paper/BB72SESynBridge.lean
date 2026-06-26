@@ -21,13 +21,13 @@ theorem mech_se_syn_bit_eq :
     ∀ (i : Fin 252) (z : Fin 36),
       (mech_se_syn i).getLsbD z.val =
         ErrorVec.parity (bb_stabilizers (zStabIdx z)) (bb_se_xMech i) := by
-  native_decide
+  decide
 
 theorem mech_se_lz_bit_eq :
     ∀ (i : Fin 252) (l : Fin 12),
       (mech_se_lz i).getLsbD l.val =
         ErrorVec.parity (bb_logicalZ_basis l) (bb_se_xMech i) := by
-  native_decide
+  decide
 
 def chain_xor_se_syn : List (Fin 252) → BitVec 36
   | []        => 0

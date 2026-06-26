@@ -99,28 +99,28 @@ private def c4 : Circuit 5 := xCircuit 4
 -- Ancilla X between two CNOT gates: produces a hook → Type-II.
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, ⟨4, by omega⟩, .X, by decide⟩) = .type2 := by
-  native_decide
+  decide
 
 -- Ancilla Z just before measurement: only flips the readout → Type-III.
 example :
     paperType 4 (computeFaultEffect c4 ⟨5, ⟨4, by omega⟩, .Z, by decide⟩) = .type3 := by
-  native_decide
+  decide
 
 -- Data X on q1 commutes with the X on q1 of XXXX → Type-0 (no mflip).
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .X, by decide⟩) = .type0 := by
-  native_decide
+  decide
 
 -- Data Z on q1 anticommutes with X on q1 of XXXX → Type-I (with mflip).
 example :
     paperType 4 (computeFaultEffect c4 ⟨2, ⟨1, by omega⟩, .Z, by decide⟩) = .type1 := by
-  native_decide
+  decide
 
 -- Ancilla X **before** `prepPlus`: absorbed by the reset → trivial. The
 -- paper's enumeration would not assign a type here; this is **Bug 4**.
 example :
     paperType 4 (computeFaultEffect c4 ⟨0, ⟨4, by omega⟩, .X, by decide⟩) = .trivial := by
-  native_decide
+  decide
 
 /-! ## Bug 1: T-Hook is wrong for Z-stabilizers
 
@@ -138,20 +138,20 @@ private def cz4 : Circuit 5 := zCircuit 4
 -- Z-stabilizer: ancilla **Z** between coupling gates → Type-II.
 example :
     paperType 4 (computeFaultEffect cz4 ⟨2, ⟨4, by omega⟩, .Z, by decide⟩) = .type2 := by
-  native_decide
+  decide
 
 -- Z-stabilizer: ancilla **X** between coupling gates → Type-III, NOT
 -- Type-II. (The paper's T-Hook rule mistakenly classifies this as a
 -- hook.)
 example :
     paperType 4 (computeFaultEffect cz4 ⟨2, ⟨4, by omega⟩, .X, by decide⟩) = .type3 := by
-  native_decide
+  decide
 
 -- Z-stabilizer: ancilla **Y** between coupling gates → Type-II + mflip.
 -- (Y has both X and Z components; the Z component creates the hook,
 -- the X component flips the measurement.)
 example :
     paperType 4 (computeFaultEffect cz4 ⟨2, ⟨4, by omega⟩, .Y, by decide⟩) = .type2 := by
-  native_decide
+  decide
 
 end QStab.Paper

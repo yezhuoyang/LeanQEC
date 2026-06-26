@@ -66,13 +66,13 @@ theorem mech_xstab_syn_bit_eq :
     ∀ (i : Fin 252) (x : Fin 36),
       (mech_xstab_syn i).getLsbD x.val =
         ErrorVec.parity (bb_stabilizers (xStabIdx x)) (bb_zMech i) := by
-  native_decide
+  decide
 
 theorem mech_lx_bit_eq :
     ∀ (i : Fin 252) (l : Fin 12),
       (mech_lx i).getLsbD l.val =
         ErrorVec.parity (bb_logicalX_basis l) (bb_zMech i) := by
-  native_decide
+  decide
 
 /-! ## Chain-level lift -/
 

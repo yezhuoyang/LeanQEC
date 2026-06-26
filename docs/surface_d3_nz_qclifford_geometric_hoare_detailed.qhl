@@ -1,0 +1,856 @@
+# Surface d=3 NZ QClifford fully expanded reviewer proof
+#
+# This file expands the compact proof obligations behind the generated
+# instruction-level Hoare proof.  It is checked for consistency by
+# tools/check_geometric_hoare.py.
+
+THEOREM:
+  {{ clean[] }} C_NZ_D3 {{ DIST_CIRC_D3 }}
+
+KERNEL ONLY:
+  Terms are built from phys[], data[], det[], faults[], I, q(i), maskAt(m,i),
+  if-then-else, vector product A*B, single(q,P), vecAt(E,q), dataOf(E),
+  hasX/hasZ, measAt(det[],s), and parity(A,E).
+  All stabilizers, logicals, row/column predicates, and invariants
+  below are derived macros over that kernel.
+
+DERIVED KERNEL MACROS:
+  q0 := q(0)
+  q1 := q(1)
+  q2 := q(2)
+  q3 := q(3)
+  q4 := q(4)
+  q5 := q(5)
+  q6 := q(6)
+  q7 := q(7)
+  q8 := q(8)
+
+  s0 := single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z)
+  s1 := single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X)
+  s2 := single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X)
+  s3 := single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z)
+  s4 := single(q0,X)*single(q1,X)
+  s5 := single(q2,Z)*single(q5,Z)
+  s6 := single(q3,Z)*single(q6,Z)
+  s7 := single(q7,X)*single(q8,X)
+
+  stabAt(0) := s0
+  stabAt(1) := s1
+  stabAt(2) := s2
+  stabAt(3) := s3
+  stabAt(4) := s4
+  stabAt(5) := s5
+  stabAt(6) := s6
+  stabAt(7) := s7
+  ProdStab(m) := (if maskAt(m,0) then s0 else I)*(if maskAt(m,1) then s1 else I)*(if maskAt(m,2) then s2 else I)*(if maskAt(m,3) then s3 else I)*(if maskAt(m,4) then s4 else I)*(if maskAt(m,5) then s5 else I)*(if maskAt(m,6) then s6 else I)*(if maskAt(m,7) then s7 else I)
+
+  LX := single(q0,X)*single(q3,X)*single(q6,X)
+  LZ := single(q0,Z)*single(q1,Z)*single(q2,Z)
+  R0 := single(q0,Z)*single(q1,Z)*single(q2,Z)
+  R1 := single(q3,Z)*single(q4,Z)*single(q5,Z)
+  R2 := single(q6,Z)*single(q7,Z)*single(q8,Z)
+  C0 := single(q0,X)*single(q3,X)*single(q6,X)
+  C1 := single(q1,X)*single(q4,X)*single(q7,X)
+  C2 := single(q2,X)*single(q5,X)*single(q8,X)
+
+DERIVED FORMULAS:
+  row(q,0) := q=q(0) \/ q=q(1) \/ q=q(2)
+  row(q,1) := q=q(3) \/ q=q(4) \/ q=q(5)
+  row(q,2) := q=q(6) \/ q=q(7) \/ q=q(8)
+  col(q,0) := q=q(0) \/ q=q(3) \/ q=q(6)
+  col(q,1) := q=q(1) \/ q=q(4) \/ q=q(7)
+  col(q,2) := q=q(2) \/ q=q(5) \/ q=q(8)
+  RowHasX(E,r) := exists q. row(q,r) /\ hasX(vecAt(E,q))
+  ColHasZ(E,c) := exists q. col(q,c) /\ hasZ(vecAt(E,q))
+  XRowsAll(E) := RowHasX(E,0) /\ RowHasX(E,1) /\ RowHasX(E,2)
+  ZColsAll(E) := ColHasZ(E,0) /\ ColHasZ(E,1) /\ ColHasZ(E,2)
+  XRowsLe(E,f) := (f=0 -> not RowHasX(E,0) /\ not RowHasX(E,1) /\ not RowHasX(E,2)) /\ (f<=1 -> not ((RowHasX(E,0)/\RowHasX(E,1)) \/ (RowHasX(E,0)/\RowHasX(E,2)) \/ (RowHasX(E,1)/\RowHasX(E,2)))) /\ (f<=2 -> not XRowsAll(E))
+  ZColsLe(E,f) := (f=0 -> not ColHasZ(E,0) /\ not ColHasZ(E,1) /\ not ColHasZ(E,2)) /\ (f<=1 -> not ((ColHasZ(E,0)/\ColHasZ(E,1)) \/ (ColHasZ(E,0)/\ColHasZ(E,2)) \/ (ColHasZ(E,1)/\ColHasZ(E,2)))) /\ (f<=2 -> not ZColsAll(E))
+
+DERIVED ASSERTIONS:
+  clean[] := data[] = I /\ det[] = 0 /\ faults[] = 0
+  ZeroDet(det[]) := forall s. measAt(det[],s)=0
+  Centralizer(E) := forall i in {0..7}. parity(stabAt(i),E)=0
+  Stab(E) := exists stabilizer mask m. E = ProdStab(m)
+  LogicalAny(E) := Centralizer(E) /\ not Stab(E)
+  BI_X := exists m. XRowsLe(ProdStab(m)*data[], faults[])
+  BI_Z := exists m. ZColsLe(ProdStab(m)*data[], faults[])
+  BI_PAIR := BI_X /\ BI_Z
+  FULL_INV := BI_PAIR
+  DIST_CIRC_D3 := ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[]
+
+ASSERTION DERIVATION DETAILS:
+A001. G-RowCuts
+  A001.1 R0 = LZ because both expand to single(q0,Z)*single(q1,Z)*single(q2,Z).
+  A001.2 s0*s5*R0 = R1 by Pauli cancellation on q0,q1,q2, leaving single(q3,Z)*single(q4,Z)*single(q5,Z).
+  A001.3 s3*s6*R1 = R2 by Pauli cancellation on q3,q4,q5, leaving single(q6,Z)*single(q7,Z)*single(q8,Z).
+
+A002. G-ColCuts
+  A002.1 C0 = LX because both expand to single(q0,X)*single(q3,X)*single(q6,X).
+  A002.2 s4*s2*C0 = C1 by Pauli cancellation on q0,q3,q6, leaving single(q1,X)*single(q4,X)*single(q7,X).
+  A002.3 s1*s7*C1 = C2 by Pauli cancellation on q1,q4,q7, leaving single(q2,X)*single(q5,X)*single(q8,X).
+
+A003. G-HomologyCover
+  A003.1 The checker verifies all stabilizer pairs commute.
+  A003.2 The checker verifies LX and LZ commute with every stabilizer.
+  A003.3 The checker verifies parity(LX,LZ)=1.
+  A003.4 The checker verifies rank(span{s0..s7})=8 over F2.
+  A003.5 The checker verifies rank(span{s0..s7,LX,LZ})=10, equal to the centralizer dimension 2*9-8.
+  A003.6 Therefore Centralizer(E) /\ not Stab(E) has nonzero parity with LZ or LX.
+
+A004. G-RowSpread
+  For each row cut Rr, A001 gives Rr = LZ modulo stabilizers.
+  If Centralizer(E) and parity(LZ,E)=1, then for every stabilizer mask m, parity(Rr,ProdStab(m)*E)=1.
+  Since Rr is a Z-only row string, parity(Rr,ProdStab(m)*E)=1 forces an X or Y component in that row.
+  Therefore forall m. XRowsAll(ProdStab(m)*E).
+
+A005. G-ColSpread
+  For each column cut Cc, A002 gives Cc = LX modulo stabilizers.
+  If Centralizer(E) and parity(LX,E)=1, then for every stabilizer mask m, parity(Cc,ProdStab(m)*E)=1.
+  Since Cc is an X-only column string, parity(Cc,ProdStab(m)*E)=1 forces a Z or Y component in that column.
+  Therefore forall m. ZColsAll(ProdStab(m)*E).
+
+A006. G-LogicalAnyToBarrierZero
+  Expand LogicalAny(E) := Centralizer(E) /\ not Stab(E).
+  Apply A003.  The LZ-parity branch uses A004; the LX-parity branch uses A005.
+
+A007. G-DataDistance
+  Expand BI_PAIR := BI_X /\ BI_Z.
+  If LogicalAny(data[]), A006 gives either all X rows for every stabilizer representative or all Z columns for every stabilizer representative.
+  BI_X/BI_Z provide an existing stabilizer representative satisfying XRowsLe/ZColsLe at faults[].
+  By the f<=2 clauses of XRowsLe/ZColsLe, all three rows/columns are impossible unless 3 <= faults[].
+
+A008. G-FinalCircuitDistance
+  From FULL_INV := BI_PAIR and A007, derive LogicalAny(data[]) -> 3 <= faults[].
+  Therefore ZeroDet(det[]) /\ LogicalAny(data[]) -> 3 <= faults[] by conjunction elimination and implication introduction.
+
+BOUNDARY-FRONTIER ASSERTIONS:
+  phys[] is the current concrete Pauli residual over q0..q9.
+  data[] is dataOf(phys[]), the q0..q8 projection.
+  dataOf(E) := single(q0,vecAt(E,q0))*single(q1,vecAt(E,q1))*...*single(q8,vecAt(E,q8)).
+  PropDet(skip,E) := E.
+  PropDet(U;S,E) := PropDet(S, mapU(E)).
+  mapCX(c,t,E) := E * (if hasX(vecAt(E,c)) then single(t,X) else I) * (if hasZ(vecAt(E,t)) then single(c,Z) else I).
+  mapH(q,E) swaps the X/Z bits of vecAt(E,q) and leaves all other qubits unchanged.
+  mapPrep0(q,E), mapPrepP(q,E), and mapMeasZ(q,E) clear the residual component at q.
+  BND[G,k] := BI_PAIR(dataOf(PropDet(Suffix[G,k], phys[])), faults[]).
+  Suffix[G,k] is the remaining deterministic suffix of gadget G after local point k; all later !q fault markers are erased.
+  PropDet is the recursive QClifford Pauli-propagation transformer over that concrete suffix.
+  BND[G,0] and BND[G,end] are definitionally FULL_INV at gadget boundaries.
+  Interior BND assertions deliberately do not claim raw FULL_INV on the partial data residual.
+
+CONCRETE FRONTIER DEFINITIONS:
+  BND[G0,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,2] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,3] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,4] := BI_PAIR(dataOf(PropDet(CX(q0,q9);CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,5] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,6] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,7] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,8] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,9] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,10] := BI_PAIR(dataOf(PropDet(CX(q1,q9);CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,11] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,12] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,13] := BI_PAIR(dataOf(PropDet(CX(q4,q9);MeasZ(q9), phys[])), faults[])
+  BND[G0,14] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G0,15] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G1,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,2] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,3] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,4] := BI_PAIR(dataOf(PropDet(CX(q9,q1);CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,5] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,6] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,7] := BI_PAIR(dataOf(PropDet(CX(q9,q2);CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,8] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,9] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,10] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,11] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,12] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,13] := BI_PAIR(dataOf(PropDet(CX(q9,q5);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,14] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,15] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G1,16] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G1,17] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G2,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,2] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,3] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,4] := BI_PAIR(dataOf(PropDet(CX(q9,q3);CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,5] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,6] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,7] := BI_PAIR(dataOf(PropDet(CX(q9,q4);CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,8] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,9] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,10] := BI_PAIR(dataOf(PropDet(CX(q9,q6);CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,11] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,12] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,13] := BI_PAIR(dataOf(PropDet(CX(q9,q7);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,14] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,15] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G2,16] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G2,17] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G3,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,2] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,3] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,4] := BI_PAIR(dataOf(PropDet(CX(q4,q9);CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,5] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,6] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,7] := BI_PAIR(dataOf(PropDet(CX(q7,q9);CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,8] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,9] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,10] := BI_PAIR(dataOf(PropDet(CX(q5,q9);CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,11] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,12] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,13] := BI_PAIR(dataOf(PropDet(CX(q8,q9);MeasZ(q9), phys[])), faults[])
+  BND[G3,14] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G3,15] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G4,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,2] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,3] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,4] := BI_PAIR(dataOf(PropDet(CX(q9,q0);CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,5] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,6] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,7] := BI_PAIR(dataOf(PropDet(CX(q9,q1);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,8] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,9] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G4,10] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G4,11] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G5,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,2] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,3] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,4] := BI_PAIR(dataOf(PropDet(CX(q2,q9);CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,5] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,6] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,7] := BI_PAIR(dataOf(PropDet(CX(q5,q9);MeasZ(q9), phys[])), faults[])
+  BND[G5,8] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G5,9] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G6,1] := BI_PAIR(dataOf(PropDet(Prep0(q9);CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,2] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,3] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,4] := BI_PAIR(dataOf(PropDet(CX(q3,q9);CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,5] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,6] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,7] := BI_PAIR(dataOf(PropDet(CX(q6,q9);MeasZ(q9), phys[])), faults[])
+  BND[G6,8] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G6,9] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+  BND[G7,1] := BI_PAIR(dataOf(PropDet(PrepP(q9);CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,2] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,3] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,4] := BI_PAIR(dataOf(PropDet(CX(q9,q7);CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,5] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,6] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,7] := BI_PAIR(dataOf(PropDet(CX(q9,q8);H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,8] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,9] := BI_PAIR(dataOf(PropDet(H(q9);MeasZ(q9), phys[])), faults[])
+  BND[G7,10] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+  BND[G7,11] := BI_PAIR(dataOf(PropDet(MeasZ(q9), phys[])), faults[])
+
+NZ HOOK SHAPE CHECKS:
+HCHK000. gadget=G0 kind=MeasZStab start=0 suffix=q0,q3,q1,q4 hookPauli=Z hook=single(q0,Z)*single(q1,Z)*single(q3,Z)*single(q4,Z) hookTimesStab=I measure=Z-column-support support=[0, 1] supportAfterStab=[] minSupport=0 <= 1
+HCHK001. gadget=G0 kind=MeasZStab start=1 suffix=q3,q1,q4 hookPauli=Z hook=single(q1,Z)*single(q3,Z)*single(q4,Z) hookTimesStab=single(q0,Z) measure=Z-column-support support=[0, 1] supportAfterStab=[0] minSupport=1 <= 1
+HCHK002. gadget=G0 kind=MeasZStab start=2 suffix=q1,q4 hookPauli=Z hook=single(q1,Z)*single(q4,Z) hookTimesStab=single(q0,Z)*single(q3,Z) measure=Z-column-support support=[1] supportAfterStab=[0] minSupport=1 <= 1
+HCHK003. gadget=G0 kind=MeasZStab start=3 suffix=q4 hookPauli=Z hook=single(q4,Z) hookTimesStab=single(q0,Z)*single(q1,Z)*single(q3,Z) measure=Z-column-support support=[1] supportAfterStab=[0, 1] minSupport=1 <= 1
+HCHK004. gadget=G1 kind=MeasXStab start=0 suffix=q1,q2,q4,q5 hookPauli=X hook=single(q1,X)*single(q2,X)*single(q4,X)*single(q5,X) hookTimesStab=I measure=X-row-support support=[0, 1] supportAfterStab=[] minSupport=0 <= 1
+HCHK005. gadget=G1 kind=MeasXStab start=1 suffix=q2,q4,q5 hookPauli=X hook=single(q2,X)*single(q4,X)*single(q5,X) hookTimesStab=single(q1,X) measure=X-row-support support=[0, 1] supportAfterStab=[0] minSupport=1 <= 1
+HCHK006. gadget=G1 kind=MeasXStab start=2 suffix=q4,q5 hookPauli=X hook=single(q4,X)*single(q5,X) hookTimesStab=single(q1,X)*single(q2,X) measure=X-row-support support=[1] supportAfterStab=[0] minSupport=1 <= 1
+HCHK007. gadget=G1 kind=MeasXStab start=3 suffix=q5 hookPauli=X hook=single(q5,X) hookTimesStab=single(q1,X)*single(q2,X)*single(q4,X) measure=X-row-support support=[1] supportAfterStab=[0, 1] minSupport=1 <= 1
+HCHK008. gadget=G2 kind=MeasXStab start=0 suffix=q3,q4,q6,q7 hookPauli=X hook=single(q3,X)*single(q4,X)*single(q6,X)*single(q7,X) hookTimesStab=I measure=X-row-support support=[1, 2] supportAfterStab=[] minSupport=0 <= 1
+HCHK009. gadget=G2 kind=MeasXStab start=1 suffix=q4,q6,q7 hookPauli=X hook=single(q4,X)*single(q6,X)*single(q7,X) hookTimesStab=single(q3,X) measure=X-row-support support=[1, 2] supportAfterStab=[1] minSupport=1 <= 1
+HCHK010. gadget=G2 kind=MeasXStab start=2 suffix=q6,q7 hookPauli=X hook=single(q6,X)*single(q7,X) hookTimesStab=single(q3,X)*single(q4,X) measure=X-row-support support=[2] supportAfterStab=[1] minSupport=1 <= 1
+HCHK011. gadget=G2 kind=MeasXStab start=3 suffix=q7 hookPauli=X hook=single(q7,X) hookTimesStab=single(q3,X)*single(q4,X)*single(q6,X) measure=X-row-support support=[2] supportAfterStab=[1, 2] minSupport=1 <= 1
+HCHK012. gadget=G3 kind=MeasZStab start=0 suffix=q4,q7,q5,q8 hookPauli=Z hook=single(q4,Z)*single(q5,Z)*single(q7,Z)*single(q8,Z) hookTimesStab=I measure=Z-column-support support=[1, 2] supportAfterStab=[] minSupport=0 <= 1
+HCHK013. gadget=G3 kind=MeasZStab start=1 suffix=q7,q5,q8 hookPauli=Z hook=single(q5,Z)*single(q7,Z)*single(q8,Z) hookTimesStab=single(q4,Z) measure=Z-column-support support=[1, 2] supportAfterStab=[1] minSupport=1 <= 1
+HCHK014. gadget=G3 kind=MeasZStab start=2 suffix=q5,q8 hookPauli=Z hook=single(q5,Z)*single(q8,Z) hookTimesStab=single(q4,Z)*single(q7,Z) measure=Z-column-support support=[2] supportAfterStab=[1] minSupport=1 <= 1
+HCHK015. gadget=G3 kind=MeasZStab start=3 suffix=q8 hookPauli=Z hook=single(q8,Z) hookTimesStab=single(q4,Z)*single(q5,Z)*single(q7,Z) measure=Z-column-support support=[2] supportAfterStab=[1, 2] minSupport=1 <= 1
+HCHK016. gadget=G4 kind=MeasXStab start=0 suffix=q0,q1 hookPauli=X hook=single(q0,X)*single(q1,X) hookTimesStab=I measure=X-row-support support=[0] supportAfterStab=[] minSupport=0 <= 1
+HCHK017. gadget=G4 kind=MeasXStab start=1 suffix=q1 hookPauli=X hook=single(q1,X) hookTimesStab=single(q0,X) measure=X-row-support support=[0] supportAfterStab=[0] minSupport=1 <= 1
+HCHK018. gadget=G5 kind=MeasZStab start=0 suffix=q2,q5 hookPauli=Z hook=single(q2,Z)*single(q5,Z) hookTimesStab=I measure=Z-column-support support=[2] supportAfterStab=[] minSupport=0 <= 1
+HCHK019. gadget=G5 kind=MeasZStab start=1 suffix=q5 hookPauli=Z hook=single(q5,Z) hookTimesStab=single(q2,Z) measure=Z-column-support support=[2] supportAfterStab=[2] minSupport=1 <= 1
+HCHK020. gadget=G6 kind=MeasZStab start=0 suffix=q3,q6 hookPauli=Z hook=single(q3,Z)*single(q6,Z) hookTimesStab=I measure=Z-column-support support=[0] supportAfterStab=[] minSupport=0 <= 1
+HCHK021. gadget=G6 kind=MeasZStab start=1 suffix=q6 hookPauli=Z hook=single(q6,Z) hookTimesStab=single(q3,Z) measure=Z-column-support support=[0] supportAfterStab=[0] minSupport=1 <= 1
+HCHK022. gadget=G7 kind=MeasXStab start=0 suffix=q7,q8 hookPauli=X hook=single(q7,X)*single(q8,X) hookTimesStab=I measure=X-row-support support=[2] supportAfterStab=[] minSupport=0 <= 1
+HCHK023. gadget=G7 kind=MeasXStab start=1 suffix=q8 hookPauli=X hook=single(q8,X) hookTimesStab=single(q7,X) measure=X-row-support support=[2] supportAfterStab=[2] minSupport=1 <= 1
+
+PRIMITIVE HOARE LINES WITH SIDE CONDITIONS:
+P000. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G0,1] }}
+
+P001. {{ BND[G0,1] }}
+      H-GateFrontier Prep0(q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G0,2] }}
+
+P002. {{ BND[G0,2] }}
+      H-LocalFaultFrontier !q0 in G0
+      DETAIL class=data-site; qubit=q0; side=L001; obligation=forall P in {X,Y,Z}, residual single(q0,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G0,3] }}
+
+P003. {{ BND[G0,3] }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q0,q9); hook=HCHK000; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G0,4] }}
+
+P004. {{ BND[G0,4] }}
+      H-GateFrontier CX(q0,q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G0,5] }}
+
+P005. {{ BND[G0,5] }}
+      H-LocalFaultFrontier !q3 in G0
+      DETAIL class=data-site; qubit=q3; side=L001; obligation=forall P in {X,Y,Z}, residual single(q3,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G0,6] }}
+
+P006. {{ BND[G0,6] }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q3,q9); hook=HCHK001; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G0,7] }}
+
+P007. {{ BND[G0,7] }}
+      H-GateFrontier CX(q3,q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G0,8] }}
+
+P008. {{ BND[G0,8] }}
+      H-LocalFaultFrontier !q1 in G0
+      DETAIL class=data-site; qubit=q1; side=L001; obligation=forall P in {X,Y,Z}, residual single(q1,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G0,9] }}
+
+P009. {{ BND[G0,9] }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q1,q9); hook=HCHK002; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G0,10] }}
+
+P010. {{ BND[G0,10] }}
+      H-GateFrontier CX(q1,q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G0,11] }}
+
+P011. {{ BND[G0,11] }}
+      H-LocalFaultFrontier !q4 in G0
+      DETAIL class=data-site; qubit=q4; side=L001; obligation=forall P in {X,Y,Z}, residual single(q4,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G0,12] }}
+
+P012. {{ BND[G0,12] }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q4,q9); hook=HCHK003; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G0,13] }}
+
+P013. {{ BND[G0,13] }}
+      H-GateFrontier CX(q4,q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G0,14] }}
+
+P014. {{ BND[G0,14] }}
+      H-LocalFaultFrontier !q9 in G0
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G0,15] }}
+
+P015. {{ BND[G0,15] }}
+      H-GateFrontier MeasZ(q9) in G0
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P016. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G1,1] }}
+
+P017. {{ BND[G1,1] }}
+      H-GateFrontier PrepP(q9) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,2] }}
+
+P018. {{ BND[G1,2] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q1); hook=HCHK004; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G1,3] }}
+
+P019. {{ BND[G1,3] }}
+      H-LocalFaultFrontier !q1 in G1
+      DETAIL class=data-site; qubit=q1; side=L001; obligation=forall P in {X,Y,Z}, residual single(q1,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G1,4] }}
+
+P020. {{ BND[G1,4] }}
+      H-GateFrontier CX(q9,q1) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,5] }}
+
+P021. {{ BND[G1,5] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q2); hook=HCHK005; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G1,6] }}
+
+P022. {{ BND[G1,6] }}
+      H-LocalFaultFrontier !q2 in G1
+      DETAIL class=data-site; qubit=q2; side=L001; obligation=forall P in {X,Y,Z}, residual single(q2,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G1,7] }}
+
+P023. {{ BND[G1,7] }}
+      H-GateFrontier CX(q9,q2) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,8] }}
+
+P024. {{ BND[G1,8] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q4); hook=HCHK006; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G1,9] }}
+
+P025. {{ BND[G1,9] }}
+      H-LocalFaultFrontier !q4 in G1
+      DETAIL class=data-site; qubit=q4; side=L001; obligation=forall P in {X,Y,Z}, residual single(q4,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G1,10] }}
+
+P026. {{ BND[G1,10] }}
+      H-GateFrontier CX(q9,q4) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,11] }}
+
+P027. {{ BND[G1,11] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q5); hook=HCHK007; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G1,12] }}
+
+P028. {{ BND[G1,12] }}
+      H-LocalFaultFrontier !q5 in G1
+      DETAIL class=data-site; qubit=q5; side=L001; obligation=forall P in {X,Y,Z}, residual single(q5,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G1,13] }}
+
+P029. {{ BND[G1,13] }}
+      H-GateFrontier CX(q9,q5) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,14] }}
+
+P030. {{ BND[G1,14] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G1,15] }}
+
+P031. {{ BND[G1,15] }}
+      H-GateFrontier H(q9) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G1,16] }}
+
+P032. {{ BND[G1,16] }}
+      H-LocalFaultFrontier !q9 in G1
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G1,17] }}
+
+P033. {{ BND[G1,17] }}
+      H-GateFrontier MeasZ(q9) in G1
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P034. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G2,1] }}
+
+P035. {{ BND[G2,1] }}
+      H-GateFrontier PrepP(q9) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,2] }}
+
+P036. {{ BND[G2,2] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q3); hook=HCHK008; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G2,3] }}
+
+P037. {{ BND[G2,3] }}
+      H-LocalFaultFrontier !q3 in G2
+      DETAIL class=data-site; qubit=q3; side=L001; obligation=forall P in {X,Y,Z}, residual single(q3,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G2,4] }}
+
+P038. {{ BND[G2,4] }}
+      H-GateFrontier CX(q9,q3) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,5] }}
+
+P039. {{ BND[G2,5] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q4); hook=HCHK009; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G2,6] }}
+
+P040. {{ BND[G2,6] }}
+      H-LocalFaultFrontier !q4 in G2
+      DETAIL class=data-site; qubit=q4; side=L001; obligation=forall P in {X,Y,Z}, residual single(q4,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G2,7] }}
+
+P041. {{ BND[G2,7] }}
+      H-GateFrontier CX(q9,q4) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,8] }}
+
+P042. {{ BND[G2,8] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q6); hook=HCHK010; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G2,9] }}
+
+P043. {{ BND[G2,9] }}
+      H-LocalFaultFrontier !q6 in G2
+      DETAIL class=data-site; qubit=q6; side=L001; obligation=forall P in {X,Y,Z}, residual single(q6,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G2,10] }}
+
+P044. {{ BND[G2,10] }}
+      H-GateFrontier CX(q9,q6) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,11] }}
+
+P045. {{ BND[G2,11] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q7); hook=HCHK011; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G2,12] }}
+
+P046. {{ BND[G2,12] }}
+      H-LocalFaultFrontier !q7 in G2
+      DETAIL class=data-site; qubit=q7; side=L001; obligation=forall P in {X,Y,Z}, residual single(q7,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G2,13] }}
+
+P047. {{ BND[G2,13] }}
+      H-GateFrontier CX(q9,q7) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,14] }}
+
+P048. {{ BND[G2,14] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G2,15] }}
+
+P049. {{ BND[G2,15] }}
+      H-GateFrontier H(q9) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G2,16] }}
+
+P050. {{ BND[G2,16] }}
+      H-LocalFaultFrontier !q9 in G2
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G2,17] }}
+
+P051. {{ BND[G2,17] }}
+      H-GateFrontier MeasZ(q9) in G2
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P052. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G3,1] }}
+
+P053. {{ BND[G3,1] }}
+      H-GateFrontier Prep0(q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G3,2] }}
+
+P054. {{ BND[G3,2] }}
+      H-LocalFaultFrontier !q4 in G3
+      DETAIL class=data-site; qubit=q4; side=L001; obligation=forall P in {X,Y,Z}, residual single(q4,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G3,3] }}
+
+P055. {{ BND[G3,3] }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q4,q9); hook=HCHK012; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G3,4] }}
+
+P056. {{ BND[G3,4] }}
+      H-GateFrontier CX(q4,q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G3,5] }}
+
+P057. {{ BND[G3,5] }}
+      H-LocalFaultFrontier !q7 in G3
+      DETAIL class=data-site; qubit=q7; side=L001; obligation=forall P in {X,Y,Z}, residual single(q7,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G3,6] }}
+
+P058. {{ BND[G3,6] }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q7,q9); hook=HCHK013; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G3,7] }}
+
+P059. {{ BND[G3,7] }}
+      H-GateFrontier CX(q7,q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G3,8] }}
+
+P060. {{ BND[G3,8] }}
+      H-LocalFaultFrontier !q5 in G3
+      DETAIL class=data-site; qubit=q5; side=L001; obligation=forall P in {X,Y,Z}, residual single(q5,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G3,9] }}
+
+P061. {{ BND[G3,9] }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q5,q9); hook=HCHK014; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G3,10] }}
+
+P062. {{ BND[G3,10] }}
+      H-GateFrontier CX(q5,q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G3,11] }}
+
+P063. {{ BND[G3,11] }}
+      H-LocalFaultFrontier !q8 in G3
+      DETAIL class=data-site; qubit=q8; side=L001; obligation=forall P in {X,Y,Z}, residual single(q8,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G3,12] }}
+
+P064. {{ BND[G3,12] }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q8,q9); hook=HCHK015; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G3,13] }}
+
+P065. {{ BND[G3,13] }}
+      H-GateFrontier CX(q8,q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G3,14] }}
+
+P066. {{ BND[G3,14] }}
+      H-LocalFaultFrontier !q9 in G3
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G3,15] }}
+
+P067. {{ BND[G3,15] }}
+      H-GateFrontier MeasZ(q9) in G3
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P068. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G4
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G4,1] }}
+
+P069. {{ BND[G4,1] }}
+      H-GateFrontier PrepP(q9) in G4
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G4,2] }}
+
+P070. {{ BND[G4,2] }}
+      H-LocalFaultFrontier !q9 in G4
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q0); hook=HCHK016; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G4,3] }}
+
+P071. {{ BND[G4,3] }}
+      H-LocalFaultFrontier !q0 in G4
+      DETAIL class=data-site; qubit=q0; side=L001; obligation=forall P in {X,Y,Z}, residual single(q0,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G4,4] }}
+
+P072. {{ BND[G4,4] }}
+      H-GateFrontier CX(q9,q0) in G4
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G4,5] }}
+
+P073. {{ BND[G4,5] }}
+      H-LocalFaultFrontier !q9 in G4
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q1); hook=HCHK017; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G4,6] }}
+
+P074. {{ BND[G4,6] }}
+      H-LocalFaultFrontier !q1 in G4
+      DETAIL class=data-site; qubit=q1; side=L001; obligation=forall P in {X,Y,Z}, residual single(q1,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G4,7] }}
+
+P075. {{ BND[G4,7] }}
+      H-GateFrontier CX(q9,q1) in G4
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G4,8] }}
+
+P076. {{ BND[G4,8] }}
+      H-LocalFaultFrontier !q9 in G4
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G4,9] }}
+
+P077. {{ BND[G4,9] }}
+      H-GateFrontier H(q9) in G4
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G4,10] }}
+
+P078. {{ BND[G4,10] }}
+      H-LocalFaultFrontier !q9 in G4
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G4,11] }}
+
+P079. {{ BND[G4,11] }}
+      H-GateFrontier MeasZ(q9) in G4
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P080. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G5
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G5,1] }}
+
+P081. {{ BND[G5,1] }}
+      H-GateFrontier Prep0(q9) in G5
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G5,2] }}
+
+P082. {{ BND[G5,2] }}
+      H-LocalFaultFrontier !q2 in G5
+      DETAIL class=data-site; qubit=q2; side=L001; obligation=forall P in {X,Y,Z}, residual single(q2,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G5,3] }}
+
+P083. {{ BND[G5,3] }}
+      H-LocalFaultFrontier !q9 in G5
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q2,q9); hook=HCHK018; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G5,4] }}
+
+P084. {{ BND[G5,4] }}
+      H-GateFrontier CX(q2,q9) in G5
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G5,5] }}
+
+P085. {{ BND[G5,5] }}
+      H-LocalFaultFrontier !q5 in G5
+      DETAIL class=data-site; qubit=q5; side=L001; obligation=forall P in {X,Y,Z}, residual single(q5,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G5,6] }}
+
+P086. {{ BND[G5,6] }}
+      H-LocalFaultFrontier !q9 in G5
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q5,q9); hook=HCHK019; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G5,7] }}
+
+P087. {{ BND[G5,7] }}
+      H-GateFrontier CX(q5,q9) in G5
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G5,8] }}
+
+P088. {{ BND[G5,8] }}
+      H-LocalFaultFrontier !q9 in G5
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G5,9] }}
+
+P089. {{ BND[G5,9] }}
+      H-GateFrontier MeasZ(q9) in G5
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P090. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G6
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G6,1] }}
+
+P091. {{ BND[G6,1] }}
+      H-GateFrontier Prep0(q9) in G6
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G6,2] }}
+
+P092. {{ BND[G6,2] }}
+      H-LocalFaultFrontier !q3 in G6
+      DETAIL class=data-site; qubit=q3; side=L001; obligation=forall P in {X,Y,Z}, residual single(q3,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G6,3] }}
+
+P093. {{ BND[G6,3] }}
+      H-LocalFaultFrontier !q9 in G6
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q3,q9); hook=HCHK020; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G6,4] }}
+
+P094. {{ BND[G6,4] }}
+      H-GateFrontier CX(q3,q9) in G6
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G6,5] }}
+
+P095. {{ BND[G6,5] }}
+      H-LocalFaultFrontier !q6 in G6
+      DETAIL class=data-site; qubit=q6; side=L001; obligation=forall P in {X,Y,Z}, residual single(q6,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G6,6] }}
+
+P096. {{ BND[G6,6] }}
+      H-LocalFaultFrontier !q9 in G6
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q6,q9); hook=HCHK021; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G6,7] }}
+
+P097. {{ BND[G6,7] }}
+      H-GateFrontier CX(q6,q9) in G6
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G6,8] }}
+
+P098. {{ BND[G6,8] }}
+      H-LocalFaultFrontier !q9 in G6
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G6,9] }}
+
+P099. {{ BND[G6,9] }}
+      H-GateFrontier MeasZ(q9) in G6
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+P100. {{ FULL_INV }}
+      H-LocalFaultFrontier !q9 in G7
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G7,1] }}
+
+P101. {{ BND[G7,1] }}
+      H-GateFrontier PrepP(q9) in G7
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G7,2] }}
+
+P102. {{ BND[G7,2] }}
+      H-LocalFaultFrontier !q9 in G7
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q7); hook=HCHK022; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G7,3] }}
+
+P103. {{ BND[G7,3] }}
+      H-LocalFaultFrontier !q7 in G7
+      DETAIL class=data-site; qubit=q7; side=L001; obligation=forall P in {X,Y,Z}, residual single(q7,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G7,4] }}
+
+P104. {{ BND[G7,4] }}
+      H-GateFrontier CX(q9,q7) in G7
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G7,5] }}
+
+P105. {{ BND[G7,5] }}
+      H-LocalFaultFrontier !q9 in G7
+      DETAIL class=ancilla-hook; qubit=q9; next=CX(q9,q8); hook=HCHK023; side=L003,L004; obligation=propagate q9 Pauli component through remaining CNOT suffix
+      {{ BND[G7,6] }}
+
+P106. {{ BND[G7,6] }}
+      H-LocalFaultFrontier !q8 in G7
+      DETAIL class=data-site; qubit=q8; side=L001; obligation=forall P in {X,Y,Z}, residual single(q8,P) satisfies XRowsLe/ZColsLe after faults[]+1
+      {{ BND[G7,7] }}
+
+P107. {{ BND[G7,7] }}
+      H-GateFrontier CX(q9,q8) in G7
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G7,8] }}
+
+P108. {{ BND[G7,8] }}
+      H-LocalFaultFrontier !q9 in G7
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G7,9] }}
+
+P109. {{ BND[G7,9] }}
+      H-GateFrontier H(q9) in G7
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ BND[G7,10] }}
+
+P110. {{ BND[G7,10] }}
+      H-LocalFaultFrontier !q9 in G7
+      DETAIL class=no-data; qubit=q9; side=L002; obligation=no data residual, faults[] increments by 1
+      {{ BND[G7,11] }}
+
+P111. {{ BND[G7,11] }}
+      H-GateFrontier MeasZ(q9) in G7
+      DETAIL class=deterministic-gate; side=H-GateFrontier; obligation=concrete Pauli propagation shifts the deterministic suffix frontier
+      {{ FULL_INV }}
+
+S000. {{ FULL_INV }}
+      H-Seq P000..P111 over C_NZ_D3
+      {{ FULL_INV }}
+
+F000. {{ clean[] }}
+      E-CleanInit using clean[] := data[]=I /\ det[]=0 /\ faults[]=0 and FULL_INV := BI_PAIR
+      {{ FULL_INV }}
+
+F001. {{ FULL_INV }}
+      E-FinalGeo using A008
+      {{ DIST_CIRC_D3 }}
+
+F002. {{ clean[] }}
+      H-Conseq using F000,S000,F001
+      {{ DIST_CIRC_D3 }}

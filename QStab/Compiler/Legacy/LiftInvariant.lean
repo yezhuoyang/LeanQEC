@@ -1,9 +1,26 @@
 import QStab.QClifford.Gate
+import QStab.QClifford.PropagateLemmas
 import QStab.State
 import QStab.Invariant
 import QStab.Paper.Soundness
 
-/-! # `QStab.Compiler.LiftInvariant` — bridges QStab invariants to QClifford
+/-!
+**LEGACY (quarantined 2026-06-15).** Per audit memo
+`audit_compile_qstab_qclifford`, the `liftReach` machinery is consumed
+only by the legacy `compileCertificate`, whose joint
+`invHolds := liftReach …` / `failure := ∃ i < n, paulis i ≠ I`
+predicates are unsatisfiable (every `liftReach` state is paulis-clean).
+
+The four genuinely reusable Pauli-propagation lemmas previously living
+in this file (`propagateCircuit_append_singleton`,
+`propagateGate_paulis_all_I`, `propagateCircuit_paulis_all_I`,
+`propagateCircuit_clean_paulis`) have been extracted to
+`QStab/QClifford/PropagateLemmas.lean` and are re-imported here so the
+file's `compatible_clean` / `compatible_of_noBackAction` (which
+incidentally consume `propagateCircuit_paulis_all_I` via
+`liftReach_paulis_clean`) continue to typecheck.
+
+# `QStab.Compiler.LiftInvariant` — bridges QStab invariants to QClifford
 
 Phase B (session 2, iter 8) entry point. Provides:
 
@@ -53,16 +70,9 @@ def liftReach (c : Circuit nq) (es : ErrorState nq) : Prop :=
   ∃ gs : Circuit nq, (∀ g ∈ gs, g ∈ c) ∧
     es = propagateCircuit gs (ErrorState.clean nq)
 
-/-- `propagateCircuit` distributes over `++` from the right: appending
-    a single gate to the gate-list equals applying that gate to the
-    result of the prefix. -/
-theorem propagateCircuit_append_singleton {nq : Nat}
-    (gs : Circuit nq) (g : Gate nq) (es : ErrorState nq) :
-    propagateCircuit (gs ++ [g]) es = propagateGate g (propagateCircuit gs es) := by
-  induction gs generalizing es with
-  | nil => simp [propagateCircuit]
-  | cons g' rest ih =>
-    simp [propagateCircuit, List.cons_append, ih]
+-- `propagateCircuit_append_singleton` — extracted to
+-- `QStab/QClifford/PropagateLemmas.lean`; re-exported as
+-- `QStab.Compiler.propagateCircuit_append_singleton`.
 
 /-- Clean state always satisfies `liftReach` (witness: empty gate
     sequence). -/
@@ -142,31 +152,10 @@ vector), `liftReach c` states are paulis-clean for any circuit `c`.
 This is the structural lemma that makes the bundle's `bridge` field
 trivial under the placeholder `failure := fun _ => False`. -/
 
-/-- The invariant "all paulis are I" is preserved by every gate. -/
-theorem propagateGate_paulis_all_I {nq : Nat} (g : Gate nq)
-    (es : ErrorState nq) (h : ∀ q, es.paulis q = Pauli.I) (q : Fin nq) :
-    (propagateGate g es).paulis q = Pauli.I := by
-  cases g <;> simp [propagateGate, h, xPart, zPart, pauliMul, hadamardAction]
-  all_goals (split_ifs <;> simp [h])
-
-/-- Generalized: any propagateCircuit preserves "all paulis are I". -/
-theorem propagateCircuit_paulis_all_I {nq : Nat} (gs : Circuit nq) (es : ErrorState nq)
-    (h : ∀ q, es.paulis q = Pauli.I) (q : Fin nq) :
-    (propagateCircuit gs es).paulis q = Pauli.I := by
-  induction gs generalizing es with
-  | nil => simp [propagateCircuit]; exact h q
-  | cons g rest ih =>
-    simp only [propagateCircuit]
-    apply ih
-    intro q'
-    exact propagateGate_paulis_all_I g es h q'
-
-/-- Clean state's paulis are preserved by any propagateCircuit. -/
-theorem propagateCircuit_clean_paulis {nq : Nat} (gs : Circuit nq) (q : Fin nq) :
-    (propagateCircuit gs (ErrorState.clean nq)).paulis q = Pauli.I := by
-  apply propagateCircuit_paulis_all_I
-  intro q'
-  simp [ErrorState.clean, ErrorVec.identity]
+-- `propagateGate_paulis_all_I`, `propagateCircuit_paulis_all_I`, and
+-- `propagateCircuit_clean_paulis` — extracted to
+-- `QStab/QClifford/PropagateLemmas.lean`; re-exported under the
+-- `QStab.Compiler` namespace so consumers keep their original names.
 
 /-- **`liftReach` corollary**: every state in `liftReach c` has paulis
     all `I`. This is the structural fact making the bundle's bridge

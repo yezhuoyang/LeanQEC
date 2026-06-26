@@ -1,0 +1,1560 @@
+Surface Code Distance, PL-Style Syntax and Derivation
+=====================================================
+
+Purpose
+-------
+
+This document is a PL-theoretic rendering of the current checked code-level
+Surface proof in the repository.
+
+It presents:
+
+  1. the small functional syntax used to generate stabilizers,
+  2. the stabilizer-binder assertion syntax,
+  3. the generic logical rule schemas,
+  4. the recursive Surface-code program in that syntax,
+  5. the final derivation tree for odd distance d.
+
+Scope
+-----
+
+This is the code-level distance proof.  It is the layer proving that the
+recursive Surface-code AST has commuting stabilizers, logical X/Z operators of
+weight d, and the geometric lower bound saying every nontrivial normalizer has
+weight at least d.
+
+It is not the QStab circuit-level invariant proof.  The QStab proof consumes
+this code-level theorem later.
+
+Trusted boundary
+----------------
+
+Trusted:
+
+  * the syntax and evaluator for terms/formulas;
+  * the generic SFormula.Deriv rule constructors and their soundness theorem;
+  * the generic FamilyDeriv wrapper, including checkedBoundFree for formulas
+    syntactically free of the bound stabilizer;
+  * ordinary finite arithmetic, Pauli, stabilizer-product, bounded-quantifier,
+    and finite-counting rules listed below.
+
+Not trusted as kernel rules:
+
+  * "row cut commutes";
+  * "column cut commutes";
+  * "Surface grid telescopes";
+  * "Surface row/column support implies weight".
+
+Those are derived or checked as object-language formulas for the recursive
+Surface AST.  In particular, SurfaceCutCommuteFamilyDeriv is now filled from
+generic local Pauli and pointwise commutation rules.
+
+Mechanical anchors
+------------------
+
+  Syntax and kernel:
+    QStab/QHL/CodeLang.lean
+    QStab/QHL/CodeStabBinder.lean
+
+  Surface definitions and derivation:
+    QStab/QHL/CodeSurface.lean
+
+  Checked route:
+    surfaceCodeDistanceFamilyTheoremFromGenericCuts?
+    surfaceCodeDistanceFamilyCheckedAtGenericCuts
+
+  Build gates run after the current change:
+    lake build QStab.QHL.CodeSurface
+    lake build QStab
+
+
+1. Core Functional Syntax
+=========================
+
+Types
+-----
+
+  tau ::= Nat | Bool | Pauli | Stab
+
+  Pauli ::= I | X | Y | Z
+
+  A stabilizer is a finite-width Pauli string, represented semantically as
+
+      Stab == Nat -> Option Pauli
+
+  The Option accounts for partial evaluation.  A closed theorem over width n
+  only talks about stabilizers total up to n.
+
+Code terms
+----------
+
+The code generator is an OCaml-style, first-order recursive function body.
+The distinguished code environment has:
+
+  d : Nat    distance parameter
+  k : Nat    stabilizer index
+
+and each stabilizer body binds:
+
+  q : Nat    qubit index
+
+Grammar:
+
+  t,u ::= x
+        | n
+        | true | false
+        | I | X | Y | Z
+        | t + u | t - u | t * u | t / u | t % u
+        | t =Nat u | t < u | t <= u
+        | not t | t and u | t or u
+        | if t then u else v
+        | pmul(t,u)
+        | anti(t,u)
+        | stab(fun q => p)
+        | at(S,q)
+        | fold(n, fun i => S_i)
+        | rec(d,k)
+
+Typing highlights:
+
+  Gamma |- n : Nat
+  Gamma |- I : Pauli
+  Gamma,q:Nat |- p : Pauli
+  --------------------------------
+  Gamma |- stab(fun q => p) : Stab
+
+  Gamma |- S : Stab     Gamma |- q : Nat
+  ---------------------------------------
+  Gamma |- at(S,q) : Pauli
+
+  Gamma |- d : Nat      Gamma |- k : Nat
+  ---------------------------------------
+  Gamma |- rec(d,k) : Stab
+
+Code function
+-------------
+
+  CodeFn F = { body : Term Nat Nat -> Stab }
+
+Semantics is big-step with fuel:
+
+  F ; fuel ; rho |- t evals-to v
+
+The recursive call
+
+  rec(d,k)
+
+evaluates by calling the same code body under the environment (d,k), with
+decreased fuel.  Thus recursive families are semantic objects only through
+this evaluator; there is no external semantic Surface oracle.
+
+
+2. Stabilizer-Binder Assertion Syntax
+=====================================
+
+The open lower-bound proof quantifies over an arbitrary Pauli string E.  The
+logic therefore has a second term layer with one distinguished bound
+stabilizer variable.
+
+Stabilizer-binder terms
+-----------------------
+
+  e ::= close(t)
+      | E                         -- bound stabilizer
+      | if e then e1 else e2
+      | pmul(e1,e2)
+      | anti(e1,e2)
+      | e1 < e2
+      | stab(fun q => e)
+      | at(e,q)
+      | fold(n, fun i => e_i)
+      | applyNat(w, fun i => e_i)
+
+The constructor close(t) embeds an ordinary code term.  The variable E is the
+only extra variable introduced by the stabilizer binder.
+
+Derived stabilizer syntax
+-------------------------
+
+  one
+    = stab(fun q => I)
+
+  A * B
+    = stab(fun q => pmul(at(A,q), at(B,q)))
+
+  Prod_{i < n} A_i
+    = fold(n, fun i => A_i)
+
+  A[w/i]
+    = applyNat(w, fun i => A_i)
+
+These are derived forms.  They are not new semantic primitives.
+
+Formulas
+--------
+
+  A,B ::= top
+        | bot
+        | n1 =Nat n2
+        | b1 =Bool b2
+        | p1 =Pauli p2
+        | EqStabUpTo(n,S,T)
+        | CommutesUpTo(n,S,T)
+        | WeightLe(n,S,w)
+        | A and B
+        | A or B
+        | not A
+        | A -> B
+        | applyNat(w, fun i => A_i)
+        | forall i < n. A_i
+        | exists i < n. A_i
+
+Universal stabilizer formulas
+-----------------------------
+
+  ForallStab(n, A(E))
+
+means:
+
+  for every stabilizer E total up to width n, A(E) evaluates to true.
+
+Judgments
+---------
+
+  Gamma |- A
+
+    ordinary derivation in SFormula.Deriv.
+
+  F,fuel |-fam A
+
+    family derivation in FamilyDeriv, allowing generic derivations plus
+    checked closed bound-free facts against code body F.
+
+  F,fuel |-forall ForallStab(n,A)
+
+    universal stabilizer-family derivation in ForallStabFamilyDeriv.
+
+
+3. Generic Logical Rules
+========================
+
+This section lists the rule schemas used by the final derivation.  They are
+generic; none of them mentions Surface, row cuts, column cuts, or a particular
+code family.
+
+3.1 Structural and propositional rules
+--------------------------------------
+
+Hypothesis:
+
+      A in Gamma
+  ----------------  hyp
+      Gamma |- A
+
+Weakening:
+
+      Gamma |- A       Gamma subset Delta
+  ----------------------------------------  weaken
+      Delta |- A
+
+Truth and contradiction:
+
+  ----------------  top-I
+      Gamma |- top
+
+      Gamma |- bot
+  ----------------  bot-E
+      Gamma |- A
+
+Conjunction:
+
+      Gamma |- A      Gamma |- B
+  -------------------------------  and-I
+      Gamma |- A and B
+
+      Gamma |- A and B
+  --------------------  and-E1
+      Gamma |- A
+
+      Gamma |- A and B
+  --------------------  and-E2
+      Gamma |- B
+
+Disjunction:
+
+      Gamma |- A
+  ----------------  or-I1
+      Gamma |- A or B
+
+      Gamma |- B
+  ----------------  or-I2
+      Gamma |- A or B
+
+      Gamma |- A or B     A,Gamma |- C     B,Gamma |- C
+  ------------------------------------------------------  or-E
+      Gamma |- C
+
+Implication:
+
+      A,Gamma |- B
+  ----------------  imp-I
+      Gamma |- A -> B
+
+      Gamma |- A -> B      Gamma |- A
+  -----------------------------------  imp-E / mp
+      Gamma |- B
+
+Negation:
+
+      A,Gamma |- bot
+  -------------------  not-I
+      Gamma |- not A
+
+      Gamma |- A      Gamma |- not A
+  -----------------------------------  not-E
+      Gamma |- bot
+
+Boolean case split:
+
+      b = true,Gamma |- C      b = false,Gamma |- C
+  --------------------------------------------------  bool-cases
+      Gamma |- C
+
+
+3.2 Bounded quantifiers and beta/substitution
+---------------------------------------------
+
+Bounded forall introduction:
+
+      i < n, Gamma |- A_i
+  ------------------------  forall-lt-I
+      Gamma |- forall i < n. A_i
+
+Bounded forall elimination:
+
+      Gamma |- forall i < n. A_i     Gamma |- w < n
+  ---------------------------------------------------  forall-lt-E
+      Gamma |- applyNat(w, fun i => A_i)
+
+Object-language beta, introduction:
+
+      Gamma |- A[w/i]
+  ---------------------------  beta-I
+      Gamma |- applyNat(w,A)
+
+Object-language beta, elimination:
+
+      Gamma |- applyNat(w,A)
+  ---------------------------  beta-E
+      Gamma |- A[w/i]
+
+Bounded exists introduction:
+
+      Gamma |- w < n      Gamma |- applyNat(w,A)
+  -----------------------------------------------  exists-lt-I
+      Gamma |- exists i < n. A_i
+
+Bounded exists elimination:
+
+      Gamma |- exists i < n. A_i
+      A_i, i < n, Gamma |- C
+  -----------------------------  exists-lt-E
+      Gamma |- C
+
+Finite De Morgan:
+
+      Gamma |- not (forall i < n. not A_i)
+  ----------------------------------------  finite-DeMorgan
+      Gamma |- exists i < n. A_i
+
+
+3.3 Generic Nat/grid arithmetic rules
+-------------------------------------
+
+These are generic arithmetic facts about natural division, modulo, and the
+row-major pairing function.  They are not Surface-specific.
+
+Definitions:
+
+  idx_d(r,c) = d*r + c
+  row_d(q)   = q / d
+  col_d(q)   = q % d
+
+Rules:
+
+      Gamma |- q < d*d
+  ---------------------  div-lt-square
+      Gamma |- row_d(q) < d
+
+      Gamma |- q < d*d
+  ---------------------  mod-lt-square
+      Gamma |- col_d(q) < d
+
+      Gamma |- r < d      Gamma |- c < d
+  --------------------------------------  grid-lt-square
+      Gamma |- idx_d(r,c) < d*d
+
+      Gamma |- r < d      Gamma |- c < d
+  --------------------------------------  grid-div
+      Gamma |- row_d(idx_d(r,c)) = r
+
+      Gamma |- r < d      Gamma |- c < d
+  --------------------------------------  grid-mod
+      Gamma |- col_d(idx_d(r,c)) = c
+
+      Gamma |- q < d*d      Gamma |- row_d(q) = r
+  -------------------------------------------------------  grid-row-inverse
+      Gamma |- idx_d(r, col_d(q)) = q
+
+      Gamma |- q < d*d      Gamma |- col_d(q) = c
+  -------------------------------------------------------  grid-col-inverse
+      Gamma |- idx_d(row_d(q), c) = q
+
+Predecessor bound:
+
+      Gamma |- x < y      Gamma |- y < limit
+  -------------------------------------------  lt-closed-pred
+      Gamma |- x < limit - 1
+
+
+3.4 Stabilizer equality/product/fold algebra
+--------------------------------------------
+
+Equality:
+
+  -----------------------------  eq-refl
+      Gamma |- EqStabUpTo(n,A,A)
+
+      Gamma |- EqStabUpTo(n,A,B)
+  --------------------------------  eq-symm
+      Gamma |- EqStabUpTo(n,B,A)
+
+      Gamma |- EqStabUpTo(n,A,B)    Gamma |- EqStabUpTo(n,B,C)
+  ----------------------------------------------------------------  eq-trans
+      Gamma |- EqStabUpTo(n,A,C)
+
+Product congruence:
+
+      Gamma |- EqStabUpTo(n,A,A')     Gamma |- EqStabUpTo(n,B,B')
+  ----------------------------------------------------------------  mul-cong
+      Gamma |- EqStabUpTo(n,A*B,A'*B')
+
+Associativity/commutativity/self-cancel/unit:
+
+      Gamma |- A defined up to n
+      Gamma |- B defined up to n
+      Gamma |- C defined up to n
+  --------------------------------------------  mul-assoc
+      Gamma |- EqStabUpTo(n,(A*B)*C,A*(B*C))
+
+      Gamma |- A defined up to n      Gamma |- B defined up to n
+  ---------------------------------------------------------------  mul-comm
+      Gamma |- EqStabUpTo(n,A*B,B*A)
+
+      Gamma |- A defined up to n
+  --------------------------------  mul-self
+      Gamma |- EqStabUpTo(n,A*A,one)
+
+      Gamma |- A defined up to n
+  --------------------------------  mul-one-left
+      Gamma |- EqStabUpTo(n,one*A,A)
+
+      Gamma |- A defined up to n
+  --------------------------------  mul-one-right
+      Gamma |- EqStabUpTo(n,A*one,A)
+
+Fold:
+
+  -----------------------------------------  fold-zero
+      Gamma |- EqStabUpTo(n, Prod_{i<0} A_i, one)
+
+  ---------------------------------------------------------------  fold-succ
+      Gamma |- EqStabUpTo(n,
+        Prod_{i<m+1} A_i,
+        (Prod_{i<m} A_i) * A_m)
+
+
+3.5 Commutation rules
+---------------------
+
+Symmetry:
+
+      Gamma |- CommutesUpTo(n,A,B)
+  --------------------------------  comm-symm
+      Gamma |- CommutesUpTo(n,B,A)
+
+      Gamma |- not CommutesUpTo(n,A,B)
+  ------------------------------------  noncomm-symm
+      Gamma |- not CommutesUpTo(n,B,A)
+
+Transport across equality:
+
+      Gamma |- EqStabUpTo(n,A,B)
+      Gamma |- CommutesUpTo(n,A,C)
+  --------------------------------  comm-eq-left
+      Gamma |- CommutesUpTo(n,B,C)
+
+      Gamma |- EqStabUpTo(n,B,C)
+      Gamma |- CommutesUpTo(n,A,B)
+  --------------------------------  comm-eq-right
+      Gamma |- CommutesUpTo(n,A,C)
+
+The same transport exists for noncommutation.
+
+Product/fold commutation:
+
+      Gamma |- CommutesUpTo(n,A,C)
+      Gamma |- CommutesUpTo(n,B,C)
+  --------------------------------  comm-mul-left
+      Gamma |- CommutesUpTo(n,A*B,C)
+
+      Gamma |- forall i < k. CommutesUpTo(n,A_i,C)
+  ------------------------------------------------  comm-fold-left
+      Gamma |- CommutesUpTo(n, Prod_{i<k} A_i, C)
+
+Pointwise commutation:
+
+      Gamma |- forall q < n. LocalCommutes(A,B,q)
+  ------------------------------------------------  comm-pointwise
+      Gamma |- CommutesUpTo(n,A,B)
+
+
+3.6 Local Pauli rules
+---------------------
+
+The local predicate is:
+
+  LocalCommutes(A,B,q)
+    == anti(at(A,q), at(B,q)) = false
+
+Conditional stabilizer unfolding:
+
+      Gamma |- cond[q] = true
+  ---------------------------------------------------  ite-stab-then
+      Gamma |- at(stab(fun q => if cond then p else r), q) = p[q]
+
+      Gamma |- cond[q] = false
+  ---------------------------------------------------  ite-stab-else
+      Gamma |- at(stab(fun q => if cond then p else r), q) = r[q]
+
+Local commutation from identity:
+
+      Gamma |- at(A,q) = I
+  --------------------------------  local-left-I
+      Gamma |- LocalCommutes(A,B,q)
+
+Local commutation from non-anticommutation:
+
+      Gamma |- at(A,q) = p
+      Gamma |- not (anti(at(B,q),p) = true)
+  ------------------------------------------  local-left-eq-noanti
+      Gamma |- LocalCommutes(A,B,q)
+
+Substitution of equal qubit indices:
+
+      Gamma |- q1 = q2
+      Gamma |- not (anti(at(E,q1),p) = true)
+  ------------------------------------------------  noanti-subst
+      Gamma |- not (anti(at(E,q2),p) = true)
+
+Literal Pauli facts:
+
+  anti(p,q) is decided by the Pauli table.
+  pmul(p,q) is decided by the Pauli multiplication table.
+  anti(p,a) = true implies p != I.
+
+
+3.7 Finite counting rules
+-------------------------
+
+Support-surjective lower bound:
+
+      Gamma |- supportSurjective(k,n,E,rowOf)
+      Gamma |- limit < k
+  --------------------------------------------  finite-surjective-weight
+      Gamma |- not WeightLe(n,E,limit)
+
+Intuition:
+
+  If every label r < k is hit by some supported qubit q < n, then E has at
+  least k supported qubits.  Hence E cannot have weight at most limit when
+  limit < k.
+
+The logic also has an injective-slot version, but the current Surface distance
+lower bound uses the surjective form.
+
+
+3.8 Family derivation rules
+---------------------------
+
+The family layer combines symbolic derivations with checked closed facts about
+one recursive code AST.
+
+Core:
+
+      |- A
+  ------------  fam-core
+      F,fuel |-fam A
+
+Bound-free checked formula:
+
+      A is syntactically free of E
+      check(F,fuel,A) = true
+  --------------------------------  checked-bound-free
+      F,fuel |-fam A
+
+Cut:
+
+      A1,...,Ak |- B
+      F,fuel |-fam A1
+      ...
+      F,fuel |-fam Ak
+  ----------------------  fam-cut-k
+      F,fuel |-fam B
+
+Universal stabilizer intro:
+
+      F,fuel |-fam A(E)
+  --------------------------------------  forall-stab-family-I
+      F,fuel |-forall ForallStab(n,A(E))
+
+
+4. Recursive Surface Code Program
+=================================
+
+Only odd distances are canonical:
+
+  d = odd(m) = 2*m + 3
+  n = d*d
+  s = numStab(d) = d*d - 1
+
+Grid coordinates:
+
+  row(q) = q / d
+  col(q) = q % d
+  idx(r,c) = d*r + c
+
+The code generator has type:
+
+  Surface : Nat -> Nat -> Stab
+
+or equivalently:
+
+  Surface(d,k) = stab(fun q => SurfaceEntry(d,k,q)).
+
+4.1 Base entry
+--------------
+
+Let:
+
+  dm1       = d - 1
+  bulkCount = (d - 1)*(d - 1)
+  r         = k / dm1
+  c         = k % dm1
+  row       = q / d
+  col       = q % d
+
+Bulk plaquette kind:
+
+  kind(r,c) =
+    if (r+c) % 2 = 0 then Z else X
+
+Bulk entry:
+
+  bulk(d,k,q) =
+    if k < bulkCount and row in {r,r+1} and col in {c,c+1}
+    then kind(r,c)
+    else I
+
+Boundary index:
+
+  b    = k - bulkCount
+  half = (d-1) / 2
+
+Top X boundary:
+
+  topX(d,b,q) =
+    if row = 0 and col in {2*b,2*b+1}
+    then X
+    else I
+
+Right Z boundary:
+
+  rightZ(d,b,q) =
+    let bR = b - half in
+    if col = d-1 and row in {2*bR,2*bR+1}
+    then Z
+    else I
+
+Left Z boundary:
+
+  leftZ(d,b,q) =
+    let bL = b - 2*half in
+    if col = 0 and row in {2*bL+1,2*bL+2}
+    then Z
+    else I
+
+Bottom X boundary:
+
+  bottomX(d,b,q) =
+    let bB = b - 3*half in
+    if row = d-1 and col in {2*bB+1,2*bB+2}
+    then X
+    else I
+
+Base entry:
+
+  Base(d,k,q) =
+    if k < bulkCount then bulk(d,k,q)
+    else if b < half then topX(d,b,q)
+    else if b < 2*half then rightZ(d,b,q)
+    else if b < 3*half then leftZ(d,b,q)
+    else bottomX(d,b,q)
+
+4.2 Recursive entry
+-------------------
+
+For d >= 5, the inner distance is:
+
+  d' = d - 2.
+
+The inner grid embeds by removing the outer shell:
+
+  insideQ(q) =
+    idx_{d'}(row(q)-1, col(q)-1)
+
+The old stabilizers are promoted through rec(d',oldK) on the inner grid and
+are I outside the inner grid, except for the new boundary shell.
+
+Interior bulk cell:
+
+  If 1 <= r < d-2 and 1 <= c < d-2, then
+
+    oldK = (r-1)*(d'-1) + (c-1)
+
+  and the promoted entry is:
+
+    if 1 <= row(q) < d-1 and 1 <= col(q) < d-1
+    then at(rec(d',oldK), insideQ(q))
+    else I.
+
+Promoted boundary helper:
+
+  Promote(oldK, outerCondition, p)(q) =
+    if q is strictly inside the outer shell
+    then at(rec(d',oldK), insideQ(q))
+    else if outerCondition(q) then p else I.
+
+The four new shell cases are:
+
+  topCell:
+    r = 0 and c = 2*topB + 1 and topB < (d'-1)/2
+    oldK = innerBulk + topB
+    outerCondition: row = 0 and col in {2*topB+1, 2*topB+2}
+    Pauli: X
+
+  rightCell:
+    c = d-2 and r = 2*rightB + 1 and rightB < (d'-1)/2
+    oldK = innerBulk + innerHalf + rightB
+    outerCondition: col = d-1 and row in {2*rightB+1, 2*rightB+2}
+    Pauli: Z
+
+  leftCell:
+    c = 0 and r = 2*leftB + 2 and leftB < (d'-1)/2
+    oldK = innerBulk + 2*innerHalf + leftB
+    outerCondition: col = 0 and row in {2*leftB+2, 2*leftB+3}
+    Pauli: Z
+
+  bottomCell:
+    r = d-2 and c = 2*bottomB + 2 and bottomB < (d'-1)/2
+    oldK = innerBulk + 3*innerHalf + bottomB
+    outerCondition: row = d-1 and col in {2*bottomB+2, 2*bottomB+3}
+    Pauli: X
+
+Recursive entry:
+
+  RecEntry(d,k,q) =
+    if k < bulkCount then
+      if interiorCell then promoted interior rec(d-2,interiorK)
+      else if topCell then Promote(topK,topOuter,X)(q)
+      else if rightCell then Promote(rightK,rightOuter,Z)(q)
+      else if leftCell then Promote(leftK,leftOuter,Z)(q)
+      else if bottomCell then Promote(bottomK,bottomOuter,X)(q)
+      else Base(d,k,q)
+    else Base(d,k,q)
+
+Canonical Surface code AST:
+
+  Surface(d,k) =
+    if d < 5
+    then stab(fun q => Base(d,k,q))
+    else stab(fun q => RecEntry(d,k,q)).
+
+This is the AST whose evaluator is used by the checker.  It is not a semantic
+record such as NZSurfaceSpec or AlignedCodeSpec.
+
+
+5. Logical Operators and Code-Level Formula
+===========================================
+
+Logical operators:
+
+  LZ_d = stab(fun q =>
+           if row(q) = 0 then Z else I)
+
+  LX_d = stab(fun q =>
+           if col(q) = 0 then X else I)
+
+Code-level formula:
+
+  CodeLevel(d) =
+    RowsCommute(d)
+    and LogicalPair(d,LX_d,LZ_d)
+    and WeightExact(d,LX_d)
+    and WeightExact(d,LZ_d).
+
+Expanded:
+
+  RowsCommute(d) =
+    forall i < s. forall j < s.
+      CommutesUpTo(n, Surface(d,i), Surface(d,j)).
+
+  LogicalPair(d,LX,LZ) =
+    Normalizes(d,LX)
+    and Normalizes(d,LZ)
+    and not CommutesUpTo(n,LX,LZ).
+
+  Normalizes(d,E) =
+    forall i < s.
+      CommutesUpTo(n, Surface(d,i), E).
+
+  WeightExact(d,L) =
+    WeightLe(n,L,d) and not WeightLe(n,L,d-1).
+
+The checked code-level theorem object contains derivations of:
+
+  1. RowsCommute(d)
+  2. Normalizes(d,LX_d)
+  3. Normalizes(d,LZ_d)
+  4. not CommutesUpTo(n,LX_d,LZ_d)
+  5. WeightExact(d,LX_d)
+  6. WeightExact(d,LZ_d)
+
+The proof is obtained by odd-distance induction on d = 2*m+3:
+
+  Base:  d = 3 is executable from the AST.
+  Step:  shell-growth schema maps the theorem for d to the theorem for d+2.
+
+
+6. Open Lower-Bound Predicates
+==============================
+
+The open stabilizer variable is E.
+
+Normalizer/nontrivial predicates:
+
+  NormalizesE_d(E) =
+    forall i < s.
+      CommutesUpTo(n, Surface(d,i), E)
+
+  XNontrivial_d(E) =
+    NormalizesE_d(E) and not CommutesUpTo(n,E,LZ_d)
+
+  ZNontrivial_d(E) =
+    NormalizesE_d(E) and not CommutesUpTo(n,E,LX_d)
+
+Support predicates:
+
+  HasX(E,q) =
+    anti(at(E,q), Z) = true
+
+  HasZ(E,q) =
+    anti(at(E,q), X) = true
+
+  XRowOccupied_d(E,r) =
+    exists c < d. HasX(E, idx(r,c))
+
+  ZColOccupied_d(E,c) =
+    exists r < d. HasZ(E, idx(r,c))
+
+  XRowsOccupied_d(E) =
+    forall r < d. XRowOccupied_d(E,r)
+
+  ZColsOccupied_d(E) =
+    forall c < d. ZColOccupied_d(E,c)
+
+Weight lower predicates:
+
+  XRowsWeightLower_d(E) =
+    XRowsOccupied_d(E) ->
+      not WeightLe(n,E,d-1)
+
+  ZColsWeightLower_d(E) =
+    ZColsOccupied_d(E) ->
+      not WeightLe(n,E,d-1)
+
+Lower-bound goal:
+
+  DistanceLowerBound_d =
+    ForallStab(n,
+      (XNontrivial_d(E) -> not WeightLe(n,E,d-1))
+      and
+      (ZNontrivial_d(E) -> not WeightLe(n,E,d-1))).
+
+
+7. Cuts, Bridges, and Surface Geometric Formulas
+================================================
+
+These are Surface definitions in the assertion language, not trusted rules.
+
+Row and column cuts:
+
+  RowCut_d(r) =
+    stab(fun q =>
+      if row(q) = r then Z else I)
+
+  ColCut_d(c) =
+    stab(fun q =>
+      if col(q) = c then X else I)
+
+Bridge stabilizers:
+
+  RowBridge_d(r) =
+    RowCut_d(r) * RowCut_d(r+1)
+
+  ColBridge_d(c) =
+    ColCut_d(c) * ColCut_d(c+1)
+
+Bridge products:
+
+  RowBridgeProduct_d =
+    Prod_{r < d-1} RowBridge_d(r)
+
+  ColBridgeProduct_d =
+    Prod_{c < d-1} ColBridge_d(c)
+
+Telescoping formulas:
+
+  RowTel_d =
+    forall r < d.
+      EqStabUpTo(n,
+        Prod_{i < r} RowBridge_d(i),
+        RowCut_d(0) * RowCut_d(r))
+
+  ColTel_d =
+    forall c < d.
+      EqStabUpTo(n,
+        Prod_{i < c} ColBridge_d(i),
+        ColCut_d(0) * ColCut_d(c))
+
+Bridge-from-normalizer formulas:
+
+  RowBridgeFromNorm_d =
+    NormalizesE_d(E) ->
+      forall r < d-1. CommutesUpTo(n, RowBridge_d(r), E)
+
+  ColBridgeFromNorm_d =
+    NormalizesE_d(E) ->
+      forall c < d-1. CommutesUpTo(n, ColBridge_d(c), E)
+
+Cut-commutation formulas:
+
+  RowCutNoX_d =
+    forall r < d.
+      RowNoX_d(E,r) ->
+        CommutesUpTo(n, RowCut_d(r), E)
+
+  ColCutNoZ_d =
+    forall c < d.
+      ColNoZ_d(E,c) ->
+        CommutesUpTo(n, ColCut_d(c), E)
+
+where:
+
+  RowNoX_d(E,r) =
+    forall c < d.
+      not HasX(E, idx(r,c))
+
+  ColNoZ_d(E,c) =
+    forall r < d.
+      not HasZ(E, idx(r,c))
+
+
+8. Derived Cut-Commutation Proof
+================================
+
+This is the part recently repaired.  There is no rule:
+
+  "RowCutNoX" as a kernel axiom
+
+and no rule:
+
+  "ColCutNoZ" as a kernel axiom.
+
+Both are derived from generic pointwise and local Pauli rules.
+
+8.1 Row cut derivation
+----------------------
+
+Goal:
+
+  |- RowCutNoX_d
+
+Expanded:
+
+  |- forall r < d.
+       RowNoX_d(E,r) ->
+         CommutesUpTo(n, RowCut_d(r), E)
+
+Derivation:
+
+  1. Introduce arbitrary r < d by forall-lt-I.
+
+  2. Assume RowNoX_d(E,r).
+
+  3. By comm-pointwise, it suffices to show:
+
+       forall q < n. LocalCommutes(RowCut_d(r), E, q).
+
+  4. Introduce arbitrary q < n.
+
+  5. Case split on:
+
+       row(q) = r.
+
+     This is bool-cases on the Boolean term (row(q) =Nat r).
+
+  6. True branch: row(q) = r.
+
+       a. By mod-lt-square from q < d*d:
+
+            col(q) < d.
+
+       b. From RowNoX_d(E,r) and forall-lt-E at witness col(q):
+
+            not HasX(E, idx(r,col(q))).
+
+       c. By beta-E:
+
+            not anti(at(E, idx(r,col(q))), Z) = true.
+
+       d. By grid-row-inverse from q < d*d and row(q)=r:
+
+            idx(r,col(q)) = q.
+
+       e. By noanti-subst:
+
+            not anti(at(E,q), Z) = true.
+
+       f. By ite-stab-then:
+
+            at(RowCut_d(r),q) = Z.
+
+       g. By local-left-eq-noanti:
+
+            LocalCommutes(RowCut_d(r),E,q).
+
+  7. False branch: row(q) != r.
+
+       a. By ite-stab-else:
+
+            at(RowCut_d(r),q) = I.
+
+       b. By local-left-I:
+
+            LocalCommutes(RowCut_d(r),E,q).
+
+  8. By bool-cases, both branches prove the local goal.
+
+  9. By forall-lt-I over q and comm-pointwise:
+
+       CommutesUpTo(n, RowCut_d(r), E).
+
+ 10. By imp-I and forall-lt-I over r:
+
+       RowCutNoX_d.
+
+Compact tree:
+
+      [q<n] [RowNoX(r)]
+      --------------------------------------------  mod-lt-square, forall-lt-E, beta-E
+      not anti(at(E,idx(r,col(q))),Z)=true
+
+      [q<n] [row(q)=r]
+      --------------------------------------------  grid-row-inverse
+      idx(r,col(q)) = q
+
+      not anti(at(E,idx(r,col(q))),Z)=true
+      idx(r,col(q)) = q
+      --------------------------------------------  noanti-subst
+      not anti(at(E,q),Z)=true
+
+      [row(q)=r]
+      --------------------------------------------  ite-stab-then
+      at(RowCut(r),q)=Z
+
+      at(RowCut(r),q)=Z
+      not anti(at(E,q),Z)=true
+      --------------------------------------------  local-left-eq-noanti
+      LocalCommutes(RowCut(r),E,q)
+
+      [row(q)!=r]
+      --------------------------------------------  ite-stab-else
+      at(RowCut(r),q)=I
+
+      at(RowCut(r),q)=I
+      --------------------------------------------  local-left-I
+      LocalCommutes(RowCut(r),E,q)
+
+      true-branch    false-branch
+      --------------------------------------------  bool-cases
+      LocalCommutes(RowCut(r),E,q)
+
+      forall q<n. LocalCommutes(RowCut(r),E,q)
+      --------------------------------------------  comm-pointwise
+      CommutesUpTo(n,RowCut(r),E)
+
+8.2 Column cut derivation
+-------------------------
+
+Goal:
+
+  |- ColCutNoZ_d
+
+Expanded:
+
+  |- forall c < d.
+       ColNoZ_d(E,c) ->
+         CommutesUpTo(n, ColCut_d(c), E)
+
+The proof is the exact dual of the row proof.
+
+  * bool-cases splits on col(q) = c;
+  * div-lt-square gives row(q) < d;
+  * ColNoZ_d(E,c) instantiated at row(q) gives
+
+        not anti(at(E, idx(row(q),c)), X) = true;
+
+  * grid-col-inverse gives idx(row(q),c) = q;
+  * noanti-subst moves the no-anticommutation fact to q;
+  * ite-stab-then gives at(ColCut(c),q)=X in the true branch;
+  * local-left-eq-noanti closes the true branch;
+  * ite-stab-else gives at(ColCut(c),q)=I in the false branch;
+  * local-left-I closes the false branch;
+  * comm-pointwise closes the stabilizer commutation.
+
+Compact tree:
+
+      forall q<n. LocalCommutes(ColCut(c),E,q)
+      --------------------------------------------  comm-pointwise
+      CommutesUpTo(n,ColCut(c),E)
+
+and the local proof is by the same two bool-cases branches with X/Z and
+row/column exchanged.
+
+8.3 Cut-commutation family object
+---------------------------------
+
+The package used by the lower-bound proof is:
+
+  SurfaceCutCommuteFamilyDeriv_d =
+    {
+      rowNoXCommutes = fam-core(RowCutNoX derivation),
+      colNoZCommutes = fam-core(ColCutNoZ derivation)
+    }.
+
+This package has no trusted Surface-specific rule.  Its leaves are generic
+SFormula derivations.
+
+
+9. Telescoping, Bridge, and Counting Derivations
+================================================
+
+The following facts are used by the final derivation.
+
+9.1 Bound-free executable Surface facts
+---------------------------------------
+
+These formulas mention the recursive Surface code but not the arbitrary E.
+Therefore they are checked by the generic checked-bound-free family rule.
+
+  F_surface,fuel |-fam RowBridgeGenerated_d
+  F_surface,fuel |-fam ColBridgeGenerated_d
+  F_surface,fuel |-fam RowStripIndexInRange_d
+  F_surface,fuel |-fam ColStripIndexInRange_d
+  F_surface,fuel |-fam RowTel_d
+  F_surface,fuel |-fam ColTel_d
+
+The checker executes the formula under:
+
+  F_surface = Surface.body
+  fuel      = d + 2
+
+and first checks that the formula is syntactically free of E.
+
+9.2 Bridge factors from normalizer
+----------------------------------
+
+Generic symbolic derivations:
+
+  RowBridgeGenerated_d, RowStripIndexInRange_d
+    |- RowBridgeFromNorm_d
+
+  ColBridgeGenerated_d, ColStripIndexInRange_d
+    |- ColBridgeFromNorm_d
+
+Family derivations:
+
+  RowBridgeFromNormFamily_d =
+    fam-cut-2(
+      RowBridgeGenerated_d, RowStripIndexInRange_d
+      |- RowBridgeFromNorm_d,
+      checked-bound-free(RowBridgeGenerated_d),
+      checked-bound-free(RowStripIndexInRange_d))
+
+  ColBridgeFromNormFamily_d =
+    fam-cut-2(
+      ColBridgeGenerated_d, ColStripIndexInRange_d
+      |- ColBridgeFromNorm_d,
+      checked-bound-free(ColBridgeGenerated_d),
+      checked-bound-free(ColStripIndexInRange_d))
+
+9.3 Counting
+------------
+
+Generic symbolic derivations:
+
+  XRowsOccupied_d(E) |- not WeightLe(n,E,d-1)
+
+  ZColsOccupied_d(E) |- not WeightLe(n,E,d-1)
+
+They use finite-surjective-weight with:
+
+  rowOf(q) = q / d
+  colOf(q) = q % d
+
+and the arithmetic facts:
+
+  q < d*d implies q/d < d
+  q < d*d implies q%d < d
+  idx(r,c)/d = r
+  idx(r,c)%d = c
+
+These are generic arithmetic rules, not Surface-specific inference rules.
+
+
+10. Parity Propagation Derivations
+==================================
+
+10.1 X-side propagation
+-----------------------
+
+Goal:
+
+  XParityRows_d:
+    XNontrivial_d(E) -> XRowsOccupied_d(E)
+
+Available family facts:
+
+  RowCutNoX_d
+  RowTel_d
+  RowBridgeFromNorm_d
+
+Symbolic core:
+
+  RowCutNoX_d, RowTel_d, RowBridgeFromNorm_d
+    |- XParityRows_d
+
+Proof outline inside the symbolic core:
+
+  1. Assume XNontrivial_d(E).
+
+  2. Extract NormalizesE_d(E).
+
+  3. From RowBridgeFromNorm_d and NormalizesE_d(E), derive:
+
+       forall r < d-1. CommutesUpTo(n, RowBridge_d(r), E).
+
+  4. To show every row is occupied, fix r < d and reason by contradiction:
+
+       assume RowNoX_d(E,r).
+
+  5. From RowCutNoX_d:
+
+       CommutesUpTo(n, RowCut_d(r), E).
+
+  6. From RowTel_d:
+
+       Prod_{i<r} RowBridge_d(i) = RowCut_d(0) * RowCut_d(r).
+
+  7. From bridge-factor commutation and comm-fold-left:
+
+       CommutesUpTo(n, Prod_{i<r} RowBridge_d(i), E).
+
+  8. Transport commutation across telescoping equality, then use product
+     commutation algebra to force the relevant logical-row cut to commute
+     with E.
+
+  9. This contradicts:
+
+       not CommutesUpTo(n,E,LZ_d)
+
+     from XNontrivial_d(E), since the row-cut telescope connects the cut
+     product to the logical Z boundary.
+
+ 10. Therefore not RowNoX_d(E,r), which is exactly XRowOccupied_d(E,r) by
+     finite De Morgan.
+
+Family derivation:
+
+  XParityRowsFamily_d =
+    fam-cut-3(
+      RowCutNoX_d, RowTel_d, RowBridgeFromNorm_d |- XParityRows_d,
+      SurfaceCutCommuteFamilyDeriv_d.rowNoXCommutes,
+      checked-bound-free(RowTel_d),
+      RowBridgeFromNormFamily_d)
+
+10.2 Z-side propagation
+-----------------------
+
+Goal:
+
+  ZParityCols_d:
+    ZNontrivial_d(E) -> ZColsOccupied_d(E)
+
+Dual family derivation:
+
+  ZParityColsFamily_d =
+    fam-cut-3(
+      ColCutNoZ_d, ColTel_d, ColBridgeFromNorm_d |- ZParityCols_d,
+      SurfaceCutCommuteFamilyDeriv_d.colNoZCommutes,
+      checked-bound-free(ColTel_d),
+      ColBridgeFromNormFamily_d)
+
+The proof is the row proof with:
+
+  X support / rows / Z cuts / logical Z
+
+exchanged with:
+
+  Z support / columns / X cuts / logical X.
+
+
+11. Final Lower-Bound Derivation
+================================
+
+Let:
+
+  XParityRowsFamily_d
+  XRowsWeightLower_d
+  ZParityColsFamily_d
+  ZColsWeightLower_d
+
+be the four family derivations above.
+
+The symbolic body rule is:
+
+  XParityRows_d,
+  XRowsWeightLower_d,
+  ZParityCols_d,
+  ZColsWeightLower_d
+  ------------------------------------------------------------
+  (XNontrivial_d(E) -> not WeightLe(n,E,d-1))
+  and
+  (ZNontrivial_d(E) -> not WeightLe(n,E,d-1))
+
+Derivation:
+
+  X side:
+
+      XParityRows_d : XNontrivial_d(E) -> XRowsOccupied_d(E)
+      XRowsWeightLower_d : XRowsOccupied_d(E) -> not WeightLe(n,E,d-1)
+      ------------------------------------------------------------------  mp, imp-I
+      XNontrivial_d(E) -> not WeightLe(n,E,d-1)
+
+  Z side:
+
+      ZParityCols_d : ZNontrivial_d(E) -> ZColsOccupied_d(E)
+      ZColsWeightLower_d : ZColsOccupied_d(E) -> not WeightLe(n,E,d-1)
+      ------------------------------------------------------------------  mp, imp-I
+      ZNontrivial_d(E) -> not WeightLe(n,E,d-1)
+
+  Combine:
+
+      x-lower       z-lower
+      ----------------------  and-I
+      lower-bound body
+
+Family lower-bound derivation:
+
+  LowerBoundFamily_d =
+    forall-stab-family-I(
+      fam-cut-4(
+        body-rule,
+        XParityRowsFamily_d,
+        fam-core(XRowsWeightLower_d),
+        ZParityColsFamily_d,
+        fam-core(ZColsWeightLower_d)))
+
+This proves:
+
+  F_surface, d+2 |-forall DistanceLowerBound_d.
+
+
+12. Complete Code-Distance Theorem
+==================================
+
+For every odd Surface distance:
+
+  D.index = m
+  d = 2*m + 3
+
+define:
+
+  CodeLevelTheorem_d =
+    extract six fields from the odd-induction derivation of CodeLevel(d).
+
+  CutPackage_d =
+    SurfaceCutCommuteFamilyDeriv_d
+    built from generic local Pauli and pointwise rules.
+
+  LowerBound_d =
+    LowerBoundFamily_d(CutPackage_d).
+
+Complete theorem object:
+
+  SurfaceCodeDistanceFamilyTheorem_d =
+    {
+      codeLevel  = CodeLevelTheorem_d,
+      lowerBound = LowerBound_d
+    }.
+
+In derivation-tree form:
+
+              OddInduction(CodeLevel)
+              -----------------------  instantiate at m
+              CodeLevelTheorem_d
+
+              RowCutNoX_d       ColCutNoZ_d
+              ----------------------------------------  fam-core x2
+              SurfaceCutCommuteFamilyDeriv_d
+
+              SurfaceCutCommuteFamilyDeriv_d
+              RowTel_d
+              ColTel_d
+              RowBridgeFromNorm_d
+              ColBridgeFromNorm_d
+              XRowsWeightLower_d
+              ZColsWeightLower_d
+              ----------------------------------------  Sections 10-11
+              LowerBound_d
+
+              CodeLevelTheorem_d      LowerBound_d
+              -------------------------------------  theorem packaging
+              SurfaceCodeDistanceFamilyTheorem_d
+
+Semantic reading:
+
+  For every odd d >= 3:
+
+    1. all generated Surface stabilizers commute;
+    2. LX_d and LZ_d normalize the stabilizer group;
+    3. LX_d and LZ_d anticommute with each other;
+    4. weight(LX_d) = d and weight(LZ_d) = d;
+    5. for every Pauli string E total on d*d qubits:
+
+         if E normalizes all stabilizers and anticommutes with LZ_d,
+         then weight(E) >= d;
+
+         if E normalizes all stabilizers and anticommutes with LX_d,
+         then weight(E) >= d.
+
+Therefore the generated odd-distance Surface code has code distance d.
+
+
+13. What Is Not Hidden
+======================
+
+No Surface-specific trusted constructors
+----------------------------------------
+
+The final cut-commutation package does not use a kernel rule named:
+
+  gridRowZCutCommutesOfNoX
+  gridColXCutCommutesOfNoZ
+  SurfaceCutCommutes
+  SurfaceTelescopes
+
+The row and column cut facts are derived from:
+
+  bool-cases,
+  forall-lt introduction/elimination,
+  beta substitution,
+  generic grid arithmetic,
+  conditional stabilizer unfolding,
+  local Pauli commutation,
+  pointwise-to-global commutation.
+
+Checked-bound-free leaves
+-------------------------
+
+The family proof still uses checked-bound-free for closed Surface facts such
+as generated bridge equations and telescoping formulas.  This is deliberate:
+
+  * the rule is generic;
+  * it first checks the formula is syntactically free of the arbitrary bound E;
+  * it then executes the recursive Surface AST evaluator on the closed formula;
+  * it does not project a Lean forall proof or a Surface semantic record.
+
+The open facts involving arbitrary E, especially RowCutNoX_d and ColCutNoZ_d,
+are now explicit derivation trees.
+
+Legacy bridges excluded
+-----------------------
+
+The theorem route presented here does not depend on:
+
+  NZSurfaceSpec
+  AlignedCodeSpec
+  legacy Com/wpT*/H_Seq/H_Skip command logic
+  Surface-named cut-commutation kernel rules
+
+
+14. Review Checklist
+====================
+
+To review the proof, check the following questions in order.
+
+  1. Does the recursive Surface AST define Surface(d,k) by the core language
+     only?
+
+     Yes.  It uses Nat, Bool, Pauli, if/then/else, stab lambdas, and rec(d-2,k).
+
+  2. Are logical X/Z and cuts also AST stabilizers?
+
+     Yes.  They are stab lambdas over row(q) and col(q).
+
+  3. Is arbitrary E handled syntactically?
+
+     Yes.  E is the distinguished bound stabilizer variable in SFormula.
+
+  4. Are row/column cut commutation facts trusted?
+
+     No.  They are derived from generic local Pauli and pointwise commutation
+     rules.
+
+  5. Are telescoping and bridge-generation facts arbitrary semantic payloads?
+
+     No.  They are bound-free formulas checked by executing the recursive AST.
+
+  6. Is the final lower-bound proof a derivation tree?
+
+     Yes.  It is built by fam-cut-3, fam-cut-4, and forall-stab-family-I from
+     the listed derivations.
+
+  7. Does the final theorem combine upper and lower bounds?
+
+     Yes.  The code-level theorem proves weight(LX)=d and weight(LZ)=d, while
+     the lower-bound theorem proves every nontrivial normalizer has weight at
+     least d.
+

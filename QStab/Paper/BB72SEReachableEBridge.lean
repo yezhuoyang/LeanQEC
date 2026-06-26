@@ -18,12 +18,12 @@ open QStab QStab.Paper.BB72Instance QStab.Paper.BB72SEInstance ErrorVec
 open QStab.Paper.BB72ReachableEBridge
 
 /-- bb_se_allHooks has length 180. -/
-theorem bb_se_allHooks_length : bb_se_allHooks.length = 180 := by native_decide
+theorem bb_se_allHooks_length : bb_se_allHooks.length = 180 := by decide
 
 /-- Each SE X-mech is X-only. -/
 theorem bb_se_xMech_is_X_only :
     ∀ i : Fin 252, QStab.Paper.BB72BVBridge.is_X_only (bb_se_xMech i) = true := by
-  native_decide
+  decide
 
 /-- xContent fixes the 252 SE X-mechs. -/
 theorem xContent_seMech (i : Fin 252) :
