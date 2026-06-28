@@ -103,7 +103,8 @@ def DerivWF {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula arity}
       DerivWF implication cb fuel rho E ∧ DerivWF antecedent cb fuel rho E
   | .boolCases b _ left right =>
       (∃ bv, b.eval cb fuel rho E = some bv) ∧
-        DerivWF left cb fuel rho E ∧ DerivWF right cb fuel rho E
+        (b.eval cb fuel rho E = some true → DerivWF left cb fuel rho E) ∧
+          (b.eval cb fuel rho E = some false → DerivWF right cb fuel rho E)
   | .allNatLtIntro (Γ := Γ) n _ child =>
       ∃ bound, n.eval cb fuel rho E = some bound ∧
         ∀ x, x < bound →
@@ -306,7 +307,7 @@ theorem deriv_defined {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula a
   | mp implication antecedent ihI ihA =>
       exact ⟨ihI rho hWF.1, ihA rho hWF.2⟩
   | boolCases b C left right ihL ihR =>
-      exact ⟨hWF.1, ihL rho hWF.2.1, ihR rho hWF.2.2⟩
+      exact ⟨hWF.1, fun ht => ihL rho (hWF.2.1 ht), fun hf => ihR rho (hWF.2.2 hf)⟩
   | allNatLtIntro n A child ih =>
       obtain ⟨bound, hbound, hbody⟩ := hWF
       refine ⟨bound, hbound, fun x hx => ⟨ih (Env.cons x rho) (hbody x hx).1, ?_⟩⟩

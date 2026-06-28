@@ -3565,8 +3565,8 @@ def DefinedObligations {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula 
         antecedent.DefinedObligations codeBody fuel rho E
   | .boolCases b _ left right =>
       (exists bv, b.eval codeBody fuel rho E = some bv) /\
-        left.DefinedObligations codeBody fuel rho E /\
-          right.DefinedObligations codeBody fuel rho E
+        (b.eval codeBody fuel rho E = some true -> left.DefinedObligations codeBody fuel rho E) /\
+          (b.eval codeBody fuel rho E = some false -> right.DefinedObligations codeBody fuel rho E)
   | .allNatLtIntro (Γ := Γ) n _ child =>
       exists bound, n.eval codeBody fuel rho E = some bound /\
         forall x, x < bound ->
@@ -4203,12 +4203,12 @@ theorem sound {arity : Nat} {codeBody : Term 2 .stab} {fuel : Nat}
       intro hdef hctx
       rcases hdef with ⟨⟨bv, hb⟩, hLeftDef, hRightDef⟩
       cases bv
-      · exact ihRight hRightDef (fun F hF => by
+      · exact ihRight (hRightDef hb) (fun F hF => by
           cases hF with
           | head =>
               simp [SFormula.eval, hb, SC.b, STerm.eval, Term.eval]
           | tail _ htail => exact hctx F htail)
-      · exact ihLeft hLeftDef (fun F hF => by
+      · exact ihLeft (hLeftDef hb) (fun F hF => by
           cases hF with
           | head =>
               simp [SFormula.eval, hb, SC.b, STerm.eval, Term.eval]

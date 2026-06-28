@@ -1154,7 +1154,7 @@ Re-statements of the private `recLeaf*` reductions of
 selected leaf given the cell guards as `SFormula.Deriv` premises.  Built directly
 from the `*GuardTA` guard terms via `pauliIteSelectThen/Else`. -/
 
-private def recLeafIntS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafIntS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b true)))
@@ -1167,7 +1167,7 @@ private def recLeafIntS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : T
       (SFormula.Deriv.pauliIteSelectThen _ _ _ hInterior)
       (SFormula.Deriv.pauliIteSelectThen _ _ _ hInside))
 
-private def recLeafIntIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafIntIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b true)))
@@ -1181,7 +1181,7 @@ private def recLeafIntIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : 
       (SFormula.Deriv.pauliIteSelectThen _ _ _ hInterior)
       (SFormula.Deriv.pauliIteSelectElse _ _ _ hInside))
 
-private def recLeafTopS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafTopS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1197,7 +1197,7 @@ private def recLeafTopS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : T
         (SFormula.Deriv.pauliIteSelectThen _ _ _ hTop)
         (SFormula.Deriv.pauliIteSelectThen _ _ _ hInside)))
 
-private def recLeafTopNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafTopNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1214,7 +1214,7 @@ private def recLeafTopNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT :
         (SFormula.Deriv.pauliIteSelectThen _ _ _ hTop)
         (SFormula.Deriv.pauliIteSelectElse _ _ _ hInside)))
 
-private def recLeafRightS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafRightS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1233,7 +1233,7 @@ private def recLeafRightS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT :
           (SFormula.Deriv.pauliIteSelectThen _ _ _ hRight)
           (SFormula.Deriv.pauliIteSelectThen _ _ _ hInside))))
 
-private def recLeafRightNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafRightNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1253,7 +1253,7 @@ private def recLeafRightNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT
           (SFormula.Deriv.pauliIteSelectThen _ _ _ hRight)
           (SFormula.Deriv.pauliIteSelectElse _ _ _ hInside))))
 
-private def recLeafLeftS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafLeftS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1275,7 +1275,7 @@ private def recLeafLeftS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : 
             (SFormula.Deriv.pauliIteSelectThen _ _ _ hLeft)
             (SFormula.Deriv.pauliIteSelectThen _ _ _ hInside)))))
 
-private def recLeafLeftNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafLeftNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1298,7 +1298,7 @@ private def recLeafLeftNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT 
             (SFormula.Deriv.pauliIteSelectThen _ _ _ hLeft)
             (SFormula.Deriv.pauliIteSelectElse _ _ _ hInside)))))
 
-private def recLeafBottomS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafBottomS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1323,7 +1323,7 @@ private def recLeafBottomS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT 
               (SFormula.Deriv.pauliIteSelectThen _ _ _ hBottom)
               (SFormula.Deriv.pauliIteSelectThen _ _ _ hInside))))))
 
-private def recLeafBottomNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafBottomNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1349,7 +1349,7 @@ private def recLeafBottomNIS {arity : Nat} {Γ : List (SFormula arity)} (dT kT q
               (SFormula.Deriv.pauliIteSelectThen _ _ _ hBottom)
               (SFormula.Deriv.pauliIteSelectElse _ _ _ hInside))))))
 
-private def recLeafFallbackS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafFallbackS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
@@ -1372,7 +1372,7 @@ private def recLeafFallbackS {arity : Nat} {Γ : List (SFormula arity)} (dT kT q
             (SFormula.Deriv.pauliIteSelectElse _ _ _ hLeft)
             (SFormula.Deriv.pauliIteSelectElse _ _ _ hBottom)))))
 
-private def recLeafBoundaryS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recLeafBoundaryS {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b false))) :
     SFormula.Deriv Γ
@@ -2134,7 +2134,7 @@ private def interiorPbase {arity : Nat} (dT kT qT : Term arity .nat) : SFormula 
     (.and (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b true))
       (.eqBool (SC.closed (insideGuardTA dT qT)) (SC.b true)))
 
-private def flatStepInterior {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepInterior {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b true)))
     (hInside : SFormula.Deriv Γ (.eqBool (SC.closed (insideGuardTA dT qT)) (SC.b true)))
@@ -2675,7 +2675,7 @@ private def topImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Bool)
             have hcorr := topBandCorrNat (m + 1) kv qv hT' hIn'
             rw [hcorr, show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepTop {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepTop {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b true)))
@@ -2904,7 +2904,7 @@ private def rightImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Boo
             have hcorr := rightBandCorrNat (m + 1) kv qv hR' hIn'
             rw [hcorr, show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepRight {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepRight {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -3147,7 +3147,7 @@ private def leftImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Bool
             have hcorr := leftBandCorrNat (m + 1) kv qv hL' hIn'
             rw [hcorr, show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepLeft {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepLeft {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -3401,7 +3401,7 @@ private def bottomImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Bo
             have hcorr := bottomBandCorrNat (m + 1) kv qv hB' hIn'
             rw [hcorr, show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepBottom {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepBottom {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -3690,7 +3690,7 @@ private theorem bottomNI_kindFalseNat (M k : Nat) (hB : isBottomCell (2*M+3) k =
   simp only [baseKindVal, cellR, cellC, show 2*M+3-1 = 2*M+2 from by omega, decide_eq_false_iff_not]
   simp only [show 2*M+3-1 = 2*M+2 from by omega] at hr hc; omega
 
-private def flatStepInteriorNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepInteriorNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b true)))
     (hInside : SFormula.Deriv Γ (.eqBool (SC.closed (insideGuardTA dT qT)) (SC.b false)))
@@ -3817,7 +3817,7 @@ private def topNIImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Boo
             rw [show (oddDistance (m + 1)) = 2 * (m + 1) + 3 from rfl, ← hcorr,
               show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepTopNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepTopNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b true)))
@@ -3983,7 +3983,7 @@ private def rightNIImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : B
             rw [show (oddDistance (m + 1)) = 2 * (m + 1) + 3 from rfl, ← hcorr,
               show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepRightNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepRightNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -4154,7 +4154,7 @@ private def leftNIImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : Bo
             rw [show (oddDistance (m + 1)) = 2 * (m + 1) + 3 from rfl, ← hcorr,
               show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepLeftNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepLeftNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -4331,7 +4331,7 @@ private def bottomNIImpBand {fuel arity m : Nat} {kT qT : Term arity .nat} (v : 
             rw [show (oddDistance (m + 1)) = 2 * (m + 1) + 3 from rfl, ← hcorr,
               show (2 * (m + 1) + 3) = oddDistance (m + 1) from rfl, hPe]
 
-private def flatStepBottomNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def flatStepBottomNI {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hBulk : SFormula.Deriv Γ (.eqBool (SC.closed (bulkGuardTA dT kT)) (SC.b true)))
     (hInterior : SFormula.Deriv Γ (.eqBool (SC.closed (interiorCellGuardTA dT kT)) (SC.b false)))
     (hTop : SFormula.Deriv Γ (.eqBool (SC.closed (topCellGuardTA dT kT)) (SC.b false)))
@@ -4397,7 +4397,7 @@ classifier `baseLeafTreeTA dT kT qT`, by `boolCases` on every cell guard.  Each
 recursing branch composes the `recLeaf*S` reduction (giving the IH-flattened inner
 leaf) with the matching `flatStep*` self-similarity equality.  The fallback /
 boundary branches reduce both sides to `baseLeafTreeTA` directly. -/
-private def recFlatMasterD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
+def recFlatMasterD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli)
     -- the five IH-leaf equalities: `rowSymTreeA m inner = baseLeafTreeTA inner`
     (hLeqInt : SFormula.Deriv Γ

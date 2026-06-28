@@ -308,7 +308,8 @@ theorem allTermsGood_derivWF {arity : Nat} {Γ : List (SFormula arity)}
   | notElim positive negative ihP ihN => exact ⟨ihP rho hG.1, ihN rho hG.2⟩
   | impIntro child ih => exact ⟨hG.1, ih rho hG.2⟩
   | mp implication antecedent ihI ihA => exact ⟨ihI rho hG.1, ihA rho hG.2⟩
-  | boolCases b C left right ihL ihR => exact ⟨hG.1, ihL rho hG.2.1, ihR rho hG.2.2⟩
+  | boolCases b C left right ihL ihR =>
+      exact ⟨hG.1, fun _ => ihL rho hG.2.1, fun _ => ihR rho hG.2.2⟩
   | allNatLtIntro n A child ih =>
       obtain ⟨bound, hbound, hbody⟩ := hG
       exact ⟨bound, hbound, fun x hx => ⟨ih (Env.cons x rho) (hbody x hx).1, (hbody x hx).2⟩⟩

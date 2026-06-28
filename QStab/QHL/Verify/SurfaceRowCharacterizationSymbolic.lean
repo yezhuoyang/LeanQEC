@@ -1795,6 +1795,44 @@ theorem instantiateTopNat_codeSubstAt_one_baseEntryCond {arity : Nat}
     Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
     Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, bulkGuardTA, bulkCountTA, dm1TA]
 
+/-! ### Head-form lemmas for `recursiveEntry` (analogue of the `baseEntry` head-form)
+
+The recursive peels' lam body is `codeSubstAt dT kT 1 recursiveEntry`.  As with
+`baseEntry`, we expose its head `ite` with a single cheap `codeSubstAt_ite` step,
+keeping the children folded as `codeSubstAt …`, so the peel `_WF`s never whnf-reduce
+`codeSubstAt … recursiveEntry`.  The bulk-then child `recEntryThen` is the recursing
+subtree (a `RecOk` tree, NOT `PurePauli`); its totality is discharged from a
+`RecEvalData` downstream, not from purity. -/
+
+/-- Head condition of `recursiveEntry`'s top `ite` (= the bulk guard `k < (d-1)²`). -/
+def recEntryCond : Term 3 .bool :=
+  match SurfaceASTPublic.recursiveEntry with | .ite c _ _ => c | _ => .boolLit true
+/-- Head then-branch of `recursiveEntry` (the bulk-then subtree; recursing). -/
+def recEntryThen : Term 3 .pauli :=
+  match SurfaceASTPublic.recursiveEntry with | .ite _ t _ => t | _ => .pauliLit Pauli.I
+/-- Head else-branch of `recursiveEntry` (= `baseEntry`). -/
+def recEntryElse : Term 3 .pauli :=
+  match SurfaceASTPublic.recursiveEntry with | .ite _ _ e => e | _ => .pauliLit Pauli.I
+
+theorem recursiveEntry_head_eq :
+    SurfaceASTPublic.recursiveEntry = Term.ite recEntryCond recEntryThen recEntryElse := rfl
+
+/-- Head `ite` of `codeSubstAt dT kT 1 recursiveEntry`, children kept folded.  Cheap. -/
+theorem codeSubstAt_one_recursiveEntry_head {arity : Nat} (dT kT : Term arity .nat) :
+    codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry
+      = Term.ite (codeSubstAt dT kT 1 recEntryCond)
+          (codeSubstAt dT kT 1 recEntryThen) (codeSubstAt dT kT 1 recEntryElse) := by
+  rw [recursiveEntry_head_eq, codeSubstAt_ite]
+
+/-- The instantiated head condition of `codeSubstAt 1 recursiveEntry` IS `bulkGuardTA`. -/
+theorem instantiateTopNat_codeSubstAt_one_recEntryCond {arity : Nat}
+    (dT kT qT : Term arity .nat) :
+    Term.instantiateTopNat qT (codeSubstAt dT kT 1 recEntryCond) = bulkGuardTA dT kT := by
+  simp only [recEntryCond, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, bulkGuardTA, bulkCountTA, dm1TA]
+
 /-- Deriv-level bulk `Z`-plaquette peel. -/
 def recBasePeelD_Z {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term arity .nat)
     (hq : SFormula.PureNatTerm qT)
@@ -1898,13 +1936,14 @@ def recTopIPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term ari
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.I))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectThen _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -1922,13 +1961,14 @@ def recRightZPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term a
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.Z))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -1950,13 +1990,14 @@ def recRightIPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term a
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.I))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -1977,13 +2018,14 @@ def recLeftZPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term ar
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.Z))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -2008,13 +2050,14 @@ def recLeftIPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term ar
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.I))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -2037,13 +2080,14 @@ def recBottomXPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term 
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.X))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -2068,13 +2112,14 @@ def recBottomIPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term 
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.I))) := by
-  simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN,
-    Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, orEqSucc, orEqPair]
+  rw [codeSubstAt_one_baseEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_baseEntryCond]; exact hBulk)) ?_
+  simp only [baseEntryElse, SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
+    SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
+    Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    band3, orEqSucc, orEqPair, Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
     Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← topClassGuardTA_simp]; exact hTopClass))
@@ -2417,29 +2462,57 @@ def bottomOuterGuardTA {arity : Nat} (dT kT qT : Term arity .nat) : Term arity .
     (orEqSucc (colTA dT qT)
       (.add (.mul (.natLit 2) (.div (.sub (cTA dT kT) (.natLit 2)) (.natLit 2))) (.natLit 2)))
 
-/-- The recursive-case guarded `ite`-tree of resolved leaves at a symbolic index.
+/-! The recursive-case guarded `ite`-tree of resolved leaves at a symbolic index.
 Mirrors the cell-kind structure of `recursiveEntry`; the recursing inside-cells
 carry the supplied IH-resolved leaves `pInt/pTop/pRight/pLeft/pBottom`, the
 promoted-not-inside cells carry their `ite outer kind I` form, and the fallback /
-out-of-bulk branches carry `baseLeafTreeTA`. -/
+out-of-bulk branches carry `baseLeafTreeTA`.
+
+`recLeafTreeTA` decomposed cell-by-cell (the paper's region decomposition): each
+`recCell*ChainTA` is one cell — `ite <cell?> (inside ? IH : outer-Pauli) <next cell>` —
+chained interior → top → right → left → bottom → `baseLeafTreeTA`.  Naming the cells lets
+each cell's totality be proved once (see `recCell*_total`), so deep leaves never re-derive
+the nested chain.  These are definitionally the corresponding subtrees of the old monolithic
+`recLeafTreeTA`, so nothing downstream changes. -/
+
+def recBottomChainTA {arity : Nat} (dT kT qT : Term arity .nat) (pBottom : Term arity .pauli) :
+    Term arity .pauli :=
+  .ite (bottomCellGuardTA dT kT)
+    (.ite (insideGuardTA dT qT) pBottom
+      (.ite (bottomOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))
+    (baseLeafTreeTA dT kT qT)
+
+def recLeftChainTA {arity : Nat} (dT kT qT : Term arity .nat) (pLeft pBottom : Term arity .pauli) :
+    Term arity .pauli :=
+  .ite (leftCellGuardTA dT kT)
+    (.ite (insideGuardTA dT qT) pLeft
+      (.ite (leftOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))
+    (recBottomChainTA dT kT qT pBottom)
+
+def recRightChainTA {arity : Nat} (dT kT qT : Term arity .nat)
+    (pRight pLeft pBottom : Term arity .pauli) : Term arity .pauli :=
+  .ite (rightCellGuardTA dT kT)
+    (.ite (insideGuardTA dT qT) pRight
+      (.ite (rightOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))
+    (recLeftChainTA dT kT qT pLeft pBottom)
+
+def recTopChainTA {arity : Nat} (dT kT qT : Term arity .nat)
+    (pTop pRight pLeft pBottom : Term arity .pauli) : Term arity .pauli :=
+  .ite (topCellGuardTA dT kT)
+    (.ite (insideGuardTA dT qT) pTop
+      (.ite (topOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))
+    (recRightChainTA dT kT qT pRight pLeft pBottom)
+
+def recInteriorChainTA {arity : Nat} (dT kT qT : Term arity .nat)
+    (pInt pTop pRight pLeft pBottom : Term arity .pauli) : Term arity .pauli :=
+  .ite (interiorCellGuardTA dT kT)
+    (.ite (insideGuardTA dT qT) pInt (.pauliLit Pauli.I))
+    (recTopChainTA dT kT qT pTop pRight pLeft pBottom)
+
 def recLeafTreeTA {arity : Nat} (dT kT qT : Term arity .nat)
     (pInt pTop pRight pLeft pBottom : Term arity .pauli) : Term arity .pauli :=
   .ite (bulkGuardTA dT kT)
-    (.ite (interiorCellGuardTA dT kT)
-      (.ite (insideGuardTA dT qT) pInt (.pauliLit Pauli.I))
-      (.ite (topCellGuardTA dT kT)
-        (.ite (insideGuardTA dT qT) pTop
-          (.ite (topOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))
-        (.ite (rightCellGuardTA dT kT)
-          (.ite (insideGuardTA dT qT) pRight
-            (.ite (rightOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))
-          (.ite (leftCellGuardTA dT kT)
-            (.ite (insideGuardTA dT qT) pLeft
-              (.ite (leftOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))
-            (.ite (bottomCellGuardTA dT kT)
-              (.ite (insideGuardTA dT qT) pBottom
-                (.ite (bottomOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))
-              (baseLeafTreeTA dT kT qT))))))
+    (recInteriorChainTA dT kT qT pInt pTop pRight pLeft pBottom)
     (baseLeafTreeTA dT kT qT)
 
 /-! ### Deriv-level recursive-entry peels
@@ -2461,21 +2534,24 @@ def recInteriorPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed pInt)) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  -- HEAD-FORM (see `recInteriorIPeelD`): keep `codeSubstAt … recursiveEntry` folded.
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectThen _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
       (SFormula.Deriv.pauliIteSelectThen _ _ _ (by
-        simp only [Nat.lt_irrefl, dite_false, dite_true]
+        try simp only [Nat.lt_irrefl, dite_false, dite_true]
         rw [← insideGuardTA_simp]; exact hInside))
       (by
-        simp only [Nat.lt_irrefl, dite_false, dite_true]
+        try simp only [Nat.lt_irrefl, dite_false, dite_true]
         exact ih))
 
 /-- Deriv-level interior-not-inside peel → `I`. -/
@@ -2489,17 +2565,21 @@ def recInteriorIPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Ter
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (.pauliLit Pauli.I))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  -- HEAD-FORM: expose only the bulk `ite`, keep children folded as `codeSubstAt …` so the
+  -- `_WF` never whnf-reduces `codeSubstAt … recursiveEntry`; expand only the selected branch.
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectThen _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (by
-      simp only [Nat.lt_irrefl, dite_false, dite_true]
+      try simp only [Nat.lt_irrefl, dite_false, dite_true]
       exact SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← insideGuardTA_simp]; exact hInside))
 
 /-- Deriv-level top-promoted-inside peel, finished by the IH `pTop`. -/
@@ -2516,13 +2596,16 @@ def recTopPromotedPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : T
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed pTop)) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  -- HEAD-FORM (see `recInteriorIPeelD`): keep `codeSubstAt … recursiveEntry` folded.
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2542,15 +2625,17 @@ def recTopPromotedNotInsidePeelD {arity : Nat} {Γ : List (SFormula arity)} (dT 
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (.ite (topOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  -- HEAD-FORM (see `recInteriorIPeelD`): keep `codeSubstAt … recursiveEntry` folded.
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
     eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
-    topOuterGuardTA, rowTA, colTA, cTA, dm1TA]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    topOuterGuardTA, rowTA, colTA, cTA, dm1TA,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2572,14 +2657,15 @@ def recRightPromotedPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT :
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed pRight)) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2603,15 +2689,16 @@ def recRightPromotedNotInsidePeelD {arity : Nat} {Γ : List (SFormula arity)} (d
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (.ite (rightOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
     eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
-    rightOuterGuardTA, rowTA, colTA, rTA, dm1TA]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    rightOuterGuardTA, rowTA, colTA, rTA, dm1TA,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2636,14 +2723,15 @@ def recLeftPromotedPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : 
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed pLeft)) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2670,15 +2758,16 @@ def recLeftPromotedNotInsidePeelD {arity : Nat} {Γ : List (SFormula arity)} (dT
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (.ite (leftOuterGuardTA dT kT qT) (.pauliLit Pauli.Z) (.pauliLit Pauli.I)))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
     eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
-    leftOuterGuardTA, rowTA, colTA, rTA, dm1TA]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    leftOuterGuardTA, rowTA, colTA, rTA, dm1TA,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2706,14 +2795,15 @@ def recBottomPromotedPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT 
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed pBottom)) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2743,15 +2833,16 @@ def recBottomPromotedNotInsidePeelD {arity : Nat} {Γ : List (SFormula arity)} (
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (.ite (bottomOuterGuardTA dT kT qT) (.pauliLit Pauli.X) (.pauliLit Pauli.I)))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
     eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
-    bottomOuterGuardTA, rowTA, colTA, cTA, dm1TA]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    bottomOuterGuardTA, rowTA, colTA, cTA, dm1TA,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -2862,20 +2953,20 @@ def baseBoundaryStripD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Te
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (baseLeafTreeTA dT kT qT))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
-    SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
-    codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
+  -- HEAD-FORM: bulk=false selects the recursive entry's else branch (= baseEntry).
+  rw [codeSubstAt_one_recursiveEntry_head]
   refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq (baseBulkSelectFalseD dT kT qT hBulk))
+    (SFormula.Deriv.stabAtClosedIteLamEqElse _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk))
     ?_
-  rw [show Term.instantiateTopNat qT (codeSubstAt dT kT 1 SurfaceASTPublic.baseEntry)
+  rw [show Term.instantiateTopNat qT (codeSubstAt dT kT 1 recEntryElse)
         = baseLeafTreeTA dT kT qT from by
-    simp only [SurfaceASTPublic.baseEntry, SurfaceASTPublic.k, SurfaceASTPublic.d,
-      SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q, codeSubstAt, liftTopN, Term.weaken,
-      Nat.reduceLT, Nat.reduceEqDiff, reduceDIte, eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq,
+    simp only [recEntryElse, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.baseEntry,
+      SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
+      codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
+      eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
       Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-      baseLeafTreeTA, bulkGuardTA, bulkCountTA, dm1TA, baseBulkBandGuardTA, band3, orEqSucc,
+      baseLeafTreeTA, bulkGuardTA, bulkCountTA, dm1TA, baseBulkBandGuardTA,
       baseKindGuardTA, topClassGuardTA, baseBTA, baseHalfTA, topBandGuardTA, rightClassGuardTA,
       rightBandGuardTA, leftClassGuardTA, leftBandGuardTA, orEqPair, bottomBandGuardTA]]
   exact baseLeafSelfEq dT kT qT
@@ -2894,14 +2985,15 @@ def recFallbackPeelD {arity : Nat} {Γ : List (SFormula arity)} (dT kT qT : Term
         (.stabAt (SC.closed (.stabLam (codeSubstAt dT kT 1 SurfaceASTPublic.recursiveEntry)))
           (SC.closed qT))
         (SC.closed (baseLeafTreeTA dT kT qT))) := by
-  simp only [SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
+  rw [codeSubstAt_one_recursiveEntry_head]
+  refine SFormula.Deriv.eqPauliTrans _ _ _
+    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq
+      (by rw [instantiateTopNat_codeSubstAt_one_recEntryCond]; exact hBulk)) ?_
+  simp only [recEntryThen, SurfaceASTPublic.recursiveEntry, SurfaceASTPublic.promotedBoundaryEntry,
     SurfaceASTPublic.k, SurfaceASTPublic.d, SurfaceASTPublic.q, C.Entry.k, C.Entry.d, C.Entry.q,
     codeSubstAt, liftTopN, Term.weaken, Nat.reduceLT, Nat.reduceEqDiff, reduceDIte,
-    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le]
-  refine SFormula.Deriv.eqPauliTrans _ _ _
-    (SFormula.Deriv.stabAtClosedIteLamEqThen _ _ _ qT hq (baseBulkSelectTrueD dT kT qT hBulk)) ?_
-  simp only [Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift,
-    Nat.lt_irrefl, dite_false, dite_true]
+    eq_mp_eq_cast, eq_mpr_eq_cast, cast_eq, band3, band4, orEqSucc, le,
+    Term.instantiateTopNat, Term.instantiateNatAt, instTop_lift, Nat.lt_irrefl, dite_false, dite_true]
   refine SFormula.Deriv.eqPauliTrans _ _ _
     (SFormula.Deriv.pauliIteSelectElse _ _ _ (by rw [← interiorCellGuardTA_simp]; exact hInterior))
     (SFormula.Deriv.eqPauliTrans _ _ _
@@ -3614,7 +3706,9 @@ def surfaceRowEntryCharSymbolicA {fuel arity : Nat} :
         (.stabAt (SC.closed (.recCall D.dT kT)) (SC.closed qT))
         (SC.closed (rowSymTreeA m D.dT kT qT)))
   | 0, D, kT, qT, hk, hq => by
-      have h := baseRowConvergeA (fuel := fuel) (SC.n (nQubits (oddDistance 0))) D.dT kT qT
+      -- Local projection width `qT + 1`: the `eqPauliProj` side-condition becomes
+      -- `qv < qv + 1` (trivial), so no global `nQubits` range / descent witness is needed.
+      have h := baseRowConvergeA (fuel := fuel) (SC.succClosed qT) D.dT kT qT
         D.pure hk hq (distLtFiveTrue_of_DistAtA D)
       simpa only [rowSymTreeA] using h
   | m + 1, D, kT, qT, hk, hq => by
@@ -3664,7 +3758,7 @@ def surfaceRowEntryCharSymbolicA {fuel arity : Nat} :
         refine PureFamilyDerivA.eqPauliTrans _ _ _
           (PureFamilyDerivA.closedStabAtSplit (.recCall (recInnerDTA D.dT) (bottomKTA D.dT kT)) (innerQTA D.dT qT)) ?_
         simpa only [promotedInnerRefA, recInnerDTA, DistAtA.pred] using this
-      have h := recRowConvergeA (fuel := fuel) (SC.n (nQubits (oddDistance (m + 1)))) D.dT kT qT
+      have h := recRowConvergeA (fuel := fuel) (SC.succClosed qT) D.dT kT qT
         (rowSymTreeA m (innerDTA D.dT) (interiorKTA D.dT kT) (innerQTA D.dT qT))
         (rowSymTreeA m (recInnerDTA D.dT) (topKTA D.dT kT) (innerQTA D.dT qT))
         (rowSymTreeA m (recInnerDTA D.dT) (rightKTA D.dT kT) (innerQTA D.dT qT))

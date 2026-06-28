@@ -107,6 +107,21 @@ theorem derivWF_boolCases {arity : Nat} {Γ : List (SFormula arity)}
     {cb : Term 2 .stab} {fuel : Nat} {rho : Env arity} {E : PartialStabilizer}
     (hb : ∃ bv, b.eval cb fuel rho E = some bv)
     (hl : DerivWF left cb fuel rho E) (hr : DerivWF right cb fuel rho E) :
+    DerivWF (SFormula.Deriv.boolCases b C left right) cb fuel rho E :=
+  ⟨hb, fun _ => hl, fun _ => hr⟩
+
+/-- Conditional `boolCases` definedness: each branch's `DerivWF` need hold only when its
+guard's `eval` selects it.  The scaffold uses this so a commutator leaf in the `b = true`
+branch may assume `b` evals `true` (supplying the `ContextHolds` its wrest needs), without
+proving the inactive branch's obligations off-region. -/
+theorem derivWF_boolCases_cond {arity : Nat} {Γ : List (SFormula arity)}
+    (b : STerm arity .bool) (C : SFormula arity)
+    {left : SFormula.Deriv (.eqBool b (SC.b true) :: Γ) C}
+    {right : SFormula.Deriv (.eqBool b (SC.b false) :: Γ) C}
+    {cb : Term 2 .stab} {fuel : Nat} {rho : Env arity} {E : PartialStabilizer}
+    (hb : ∃ bv, b.eval cb fuel rho E = some bv)
+    (hl : b.eval cb fuel rho E = some true → DerivWF left cb fuel rho E)
+    (hr : b.eval cb fuel rho E = some false → DerivWF right cb fuel rho E) :
     DerivWF (SFormula.Deriv.boolCases b C left right) cb fuel rho E := ⟨hb, hl, hr⟩
 
 /-- `DerivWF (applyNatSubstitutionBeta x A hx child)` from the child. -/

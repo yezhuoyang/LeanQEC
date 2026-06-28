@@ -778,6 +778,48 @@ theorem codeEntry_total :
       have hd : 2 ≤ 2 * (n + 1) + 3 := by omega
       exact recursiveEntry_recOk.eval_total hd hinner
 
+/-- **Unbounded code-entry totality.**  The Surface stabilizer row evaluates to *some*
+Pauli at **every** qubit index `q` — there is no `q < (2m+3)²` restriction.  Out of
+range the row returns `Pauli.I`: the recursive leaf's `recCall` is *bulk-guarded*
+(`1 ≤ q/d < d-1 ∧ 1 ≤ q%d < d-1`), so when it actually recurses the inner index
+`innerQ = (q/d-1)(d-2)+(q%d-1) < (d-2)²` is automatically in range (the bounded
+`InnerTotal` suffices), and when the guard fails the else-branch is a pure Pauli.
+The proof is `codeEntry_total`'s verbatim, with the unused `q < (2m+3)²` hypothesis
+dropped and the inner totality fed the (now unconditional) IH.  This is what makes
+the recCall-stab split lemmas hold for **all** qubits (boundary/corner included),
+removing the need for any bulk-restricted descent witness. -/
+theorem codeEntry_total_all :
+    ∀ (m k f : Nat), m + 1 ≤ f →
+      ∀ q, ∃ p, Surface.code.evalEntry? f (2 * m + 3) k q = some p := by
+  intro m
+  induction m with
+  | zero =>
+      intro k f hf q
+      obtain ⟨f', rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
+      simp only [CodeFn.evalEntry?, CodeFn.evalStabilizer?]
+      rw [body_eval_code]
+      simp only [bind, Option.bind]
+      have h3 : (2 * 0 + 3) < 5 := by omega
+      simp only [h3, if_true]
+      exact baseEntry_purePauli.eval_total Surface.code.body (f' + 1)
+        (Env.cons q (Env.code (2 * 0 + 3) k))
+  | succ n ih =>
+      intro k f hf q
+      obtain ⟨f', rfl⟩ : ∃ f', f = f' + 1 := ⟨f - 1, by omega⟩
+      have hf' : n + 1 ≤ f' := by omega
+      simp only [CodeFn.evalEntry?, CodeFn.evalStabilizer?]
+      rw [body_eval_code]
+      simp only [bind, Option.bind]
+      have hge5 : ¬ (2 * (n + 1) + 3) < 5 := by omega
+      simp only [hge5, if_false]
+      have hinner : InnerTotal f' (2 * (n + 1) + 3) := by
+        intro Kv qv _hqv
+        have hd2 : (2 * (n + 1) + 3) - 2 = 2 * n + 3 := by omega
+        rw [hd2]
+        exact ih Kv f' hf' qv
+      have hd : 2 ≤ 2 * (n + 1) + 3 := by omega
+      exact recursiveEntry_recOk.eval_total hd hinner
+
 /-! ## The reusable `recCall` convergence lemma
 
 This is the definedness fact behind the `recUnfold` obligations: at an odd Surface
@@ -854,6 +896,30 @@ theorem recCall_total_symbolicDK (m fuel : Nat) (hfuel : m + 2 ≤ fuel) {arity 
   refine ⟨_, rfl, ?_⟩
   intro q hq
   obtain ⟨p, hp⟩ := codeEntry_total m kv f' hf' q hq
+  refine ⟨p, ?_⟩
+  simpa [CodeFn.evalEntry?, CodeFn.evalStabilizer?, body_eval_code, bind, Option.bind] using hp
+
+/-- **All-width `recCall` convergence (symbolic distance + index).**  Exactly
+`recCall_total_symbolicDK`, but with NO `q < (2m+3)²` bound: the row is total at
+*every* qubit index `q` (out of range it returns `Pauli.I`), via `codeEntry_total_all`.
+This is the totality that lets a per-qubit row-select use the *local* projection width
+`SC.succClosed qT = qv + 1` (so the `eqPauliProj` side-condition `qv < qv + 1` is
+trivial) instead of the global stabilizer width `nQubits` — sidestepping the descent /
+∀-`qT'` witness problem entirely. -/
+theorem recCall_total_symbolicDK_all (m fuel : Nat) (hfuel : m + 2 ≤ fuel) {arity : Nat}
+    {dT kT : Term arity .nat} (rho : Env arity)
+    (hdAll : ∀ fuel', Term.eval Surface.code.body fuel' dT rho = some (2 * m + 3))
+    (hk : SFormula.PureNatTerm kT) :
+    ∃ sa, Term.eval Surface.code.body fuel
+        (.recCall dT kT) rho = some sa ∧
+      ∀ q, ∃ p, sa q = some p := by
+  obtain ⟨f', rfl⟩ : ∃ f', fuel = f' + 1 := ⟨fuel - 1, by omega⟩
+  have hf' : m + 1 ≤ f' := by omega
+  obtain ⟨kv, hkv⟩ := hk.eval_total Surface.code.body f' rho
+  rw [QHL.CodeLang.Verify.CodeEvalHelpers.eval_recCall_succ (hdAll f') hkv, body_eval_code]
+  refine ⟨_, rfl, ?_⟩
+  intro q
+  obtain ⟨p, hp⟩ := codeEntry_total_all m kv f' hf' q
   refine ⟨p, ?_⟩
   simpa [CodeFn.evalEntry?, CodeFn.evalStabilizer?, body_eval_code, bind, Option.bind] using hp
 
