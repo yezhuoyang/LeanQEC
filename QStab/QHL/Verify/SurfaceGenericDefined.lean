@@ -98,7 +98,8 @@ def DerivWF {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula arity}
   | .notElim positive negative =>
       DerivWF positive cb fuel rho E ∧ DerivWF negative cb fuel rho E
   | .impIntro (A := A) child =>
-      SFormula.Deriv.FormulaDefined cb fuel rho E A ∧ DerivWF child cb fuel rho E
+      SFormula.Deriv.FormulaDefined cb fuel rho E A ∧
+        (A.eval cb fuel rho E = some true → DerivWF child cb fuel rho E)
   | .mp implication antecedent =>
       DerivWF implication cb fuel rho E ∧ DerivWF antecedent cb fuel rho E
   | .boolCases b _ left right =>
@@ -303,7 +304,7 @@ theorem deriv_defined {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula a
   | notElim positive negative ihP ihN =>
       exact ⟨ihP rho hWF.1, ihN rho hWF.2⟩
   | impIntro child ih =>
-      exact ⟨hWF.1, ih rho hWF.2⟩
+      exact ⟨hWF.1, fun ht => ih rho (hWF.2 ht)⟩
   | mp implication antecedent ihI ihA =>
       exact ⟨ihI rho hWF.1, ihA rho hWF.2⟩
   | boolCases b C left right ihL ihR =>
@@ -586,7 +587,7 @@ def DerivWFP {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (∀ (row : Nat),
           Term.eval cb fuel (cut telRowVar) (Env.cons row Env.empty) =
             some (fun q => some (g row q)))
-  | .foldDisjoint lhs body _outerBound width _N =>
+  | .foldDisjoint lhs body outerBound width N =>
       ∃ (g : Nat → Nat → Nat → Pauli) (t : Nat → Nat → Pauli),
         (∀ (row iv : Nat),
           STerm.eval cb fuel body (Env.cons iv (Env.cons row Env.empty)) E =
@@ -594,7 +595,7 @@ def DerivWFP {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (∀ (row : Nat),
           STerm.eval cb fuel lhs (Env.cons row Env.empty) E =
             some (fun q => some (t row q))) ∧
-        (∀ (row q : Nat),
+        (∀ (row : Nat), row < outerBound → ∀ (q : Nat), q < N →
           partialStabilizerFold width (fun i => fun q => some (g row i q)) q =
             some (t row q))
   | .cut1 Dcore hA =>

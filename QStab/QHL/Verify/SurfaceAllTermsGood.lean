@@ -306,7 +306,7 @@ theorem allTermsGood_derivWF {arity : Nat} {Γ : List (SFormula arity)}
       exact ⟨ihD rho hG.1, ihL rho hG.2.1, ihR rho hG.2.2⟩
   | notIntro child ih => exact ⟨hG.1, ih rho hG.2⟩
   | notElim positive negative ihP ihN => exact ⟨ihP rho hG.1, ihN rho hG.2⟩
-  | impIntro child ih => exact ⟨hG.1, ih rho hG.2⟩
+  | impIntro child ih => exact ⟨hG.1, fun _ => ih rho hG.2⟩
   | mp implication antecedent ihI ihA => exact ⟨ihI rho hG.1, ihA rho hG.2⟩
   | boolCases b C left right ihL ihR =>
       exact ⟨hG.1, fun _ => ihL rho hG.2.1, fun _ => ihR rho hG.2.2⟩
@@ -549,7 +549,7 @@ def AllTermsGoodP {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (∀ (row : Nat),
           Term.eval cb fuel (cut telRowVar) (Env.cons row Env.empty) =
             some (fun q => some (g row q)))
-  | .foldDisjoint lhs body _outerBound width _N =>
+  | .foldDisjoint lhs body outerBound width N =>
       ∃ (g : Nat → Nat → Nat → Pauli) (t : Nat → Nat → Pauli),
         (∀ (row iv : Nat),
           STerm.eval cb fuel body (Env.cons iv (Env.cons row Env.empty)) E =
@@ -557,7 +557,7 @@ def AllTermsGoodP {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (∀ (row : Nat),
           STerm.eval cb fuel lhs (Env.cons row Env.empty) E =
             some (fun q => some (t row q))) ∧
-        (∀ (row q : Nat),
+        (∀ (row : Nat), row < outerBound → ∀ (q : Nat), q < N →
           partialStabilizerFold width (fun i => fun q => some (g row i q)) q =
             some (t row q))
   | .cut1 Dcore hA =>

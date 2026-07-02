@@ -3559,7 +3559,8 @@ def DefinedObligations {arity : Nat} {Γ : List (SFormula arity)} {A : SFormula 
         negative.DefinedObligations codeBody fuel rho E
   | .impIntro (A := A) child =>
       FormulaDefined codeBody fuel rho E A /\
-        child.DefinedObligations codeBody fuel rho E
+        (A.eval codeBody fuel rho E = some true ->
+          child.DefinedObligations codeBody fuel rho E)
   | .mp implication antecedent =>
       implication.DefinedObligations codeBody fuel rho E /\
         antecedent.DefinedObligations codeBody fuel rho E
@@ -4192,7 +4193,7 @@ theorem sound {arity : Nat} {codeBody : Term 2 .stab} {fuel : Nat}
       cases aVal
       · simp [SFormula.eval, hA]
       · simp [SFormula.eval, hA]
-        exact ih hChildDef (fun C hC => by
+        exact ih (hChildDef hA) (fun C hC => by
           cases hC with
           | head => exact hA
           | tail _ htail => exact hctx C htail)

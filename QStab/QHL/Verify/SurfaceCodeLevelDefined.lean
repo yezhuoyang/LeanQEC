@@ -81,6 +81,17 @@ theorem derivWF_impIntro {arity : Nat} {Γ : List (SFormula arity)}
     {cb : Term 2 .stab} {fuel : Nat} {rho : Env arity} {E : PartialStabilizer}
     (hA : SFormula.Deriv.FormulaDefined cb fuel rho E A)
     (hchild : DerivWF child cb fuel rho E) :
+    DerivWF (SFormula.Deriv.impIntro child) cb fuel rho E := ⟨hA, fun _ => hchild⟩
+
+/-- Conditional `impIntro` definedness: the child's `DerivWF` need hold only when the
+antecedent `A` evals `true`.  Mirrors `derivWF_boolCases_cond`; lets a family body
+`impIntro (… guards …)` assume the guard's truth, supplying the `ContextHolds` its
+inner `allNatLtIntroBounded` needs, without proving it off the guard's region. -/
+theorem derivWF_impIntro_cond {arity : Nat} {Γ : List (SFormula arity)}
+    {A B : SFormula arity} {child : SFormula.Deriv (A :: Γ) B}
+    {cb : Term 2 .stab} {fuel : Nat} {rho : Env arity} {E : PartialStabilizer}
+    (hA : SFormula.Deriv.FormulaDefined cb fuel rho E A)
+    (hchild : A.eval cb fuel rho E = some true → DerivWF child cb fuel rho E) :
     DerivWF (SFormula.Deriv.impIntro child) cb fuel rho E := ⟨hA, hchild⟩
 
 /-- `DerivWF (notElim positive negative)` from both children. -/

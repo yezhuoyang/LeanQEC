@@ -367,6 +367,351 @@ def compileGadgetOrdered {nq : Nat} (scheme : Scheme)
   | .Flag, .flag a f => compileFlagOrdered sigma a f
   | _, _ => []
 
+/-! ## Reverse-order compilation derivations
+
+The executable compiler above still returns circuits in execution order.  The
+proof-producing compiler, however, should construct those circuits from right
+to left: at every rule application the already-built suffix is known, so the
+rule can compute the current detector/back-action effect of faults introduced
+by the newly prepended fragment.
+
+The derivations below are the PL-style rule skeleton for that proof-producing
+compiler.  A `prepend` node adds the next source-scheduled fragment in front of
+an already compiled suffix; the accompanying equality lemmas pin the derivation
+to the executable compiler equations consumed by VCGen.
+-/
+
+/-- Reverse derivation for a concrete instrumented circuit: build the suffix
+first, then prepend one instruction. -/
+inductive ReverseCircuitDeriv {nq : Nat} : FCircuit nq -> FCircuit nq -> Type where
+  | nil : ReverseCircuitDeriv [] []
+  | prepend {instr : FInstr nq} {rest suffix : FCircuit nq} :
+      ReverseCircuitDeriv rest suffix ->
+        ReverseCircuitDeriv (instr :: rest) (instr :: suffix)
+
+namespace ReverseCircuitDeriv
+
+theorem circuit_eq {nq : Nat} {fc circuit : FCircuit nq}
+    (d : ReverseCircuitDeriv fc circuit) : circuit = fc := by
+  induction d with
+  | nil => rfl
+  | prepend _ ih =>
+      simp [ih]
+
+def ofCircuit {nq : Nat} : (fc : FCircuit nq) -> ReverseCircuitDeriv fc fc
+  | [] => .nil
+  | _ :: rest => .prepend (ofCircuit rest)
+
+end ReverseCircuitDeriv
+
+/-- Reverse derivation for `(xs.map chunk).flatten`: recursively compile the
+tail first, then prepend the chunk for the next written schedule element. -/
+inductive ReverseFlattenMapDeriv {nq : Nat} {α : Type}
+    (chunk : α -> FCircuit nq) : List α -> FCircuit nq -> Type where
+  | nil : ReverseFlattenMapDeriv chunk [] []
+  | prepend {x : α} {xs : List α} {suffix : FCircuit nq} :
+      ReverseFlattenMapDeriv chunk xs suffix ->
+        ReverseFlattenMapDeriv chunk (x :: xs) (chunk x ++ suffix)
+
+namespace ReverseFlattenMapDeriv
+
+theorem circuit_eq {nq : Nat} {α : Type} {chunk : α -> FCircuit nq}
+    {xs : List α} {circuit : FCircuit nq}
+    (d : ReverseFlattenMapDeriv chunk xs circuit) :
+    circuit = (xs.map chunk).flatten := by
+  induction d with
+  | nil => rfl
+  | prepend _ ih =>
+      simp [ih]
+
+def ofList {nq : Nat} {α : Type} (chunk : α -> FCircuit nq) :
+    (xs : List α) -> ReverseFlattenMapDeriv chunk xs (xs.map chunk).flatten
+  | [] => .nil
+  | x :: xs => by
+      simpa [List.flatten] using
+        ReverseFlattenMapDeriv.prepend (ofList chunk xs)
+
+end ReverseFlattenMapDeriv
+
+/-- Reverse rule family for the standard/NZ stabilizer interactions.  The base
+suffix is the final readout; each rule prepends the next written Pauli slot. -/
+inductive StandardReverseSlotsDeriv {nq : Nat} (anc : Fin nq) :
+    List (ScheduledPauli nq) -> FCircuit nq -> Type where
+  | readout : StandardReverseSlotsDeriv anc [] (flagMeasZ anc)
+  | prependSlot {slot : ScheduledPauli nq} {slots : List (ScheduledPauli nq)}
+      {suffix : FCircuit nq} :
+      StandardReverseSlotsDeriv anc slots suffix ->
+        StandardReverseSlotsDeriv anc (slot :: slots) (zParitySlot anc slot ++ suffix)
+
+namespace StandardReverseSlotsDeriv
+
+theorem circuit_eq {nq : Nat} {anc : Fin nq}
+    {slots : List (ScheduledPauli nq)} {suffix : FCircuit nq}
+    (d : StandardReverseSlotsDeriv anc slots suffix) :
+    suffix = (slots.map (zParitySlot anc)).flatten ++ flagMeasZ anc := by
+  induction d with
+  | readout =>
+      rfl
+  | prependSlot _ ih =>
+      simp [ih, List.append_assoc]
+
+def ofSlots {nq : Nat} (anc : Fin nq) :
+    (slots : List (ScheduledPauli nq)) ->
+      StandardReverseSlotsDeriv anc slots
+        ((slots.map (zParitySlot anc)).flatten ++ flagMeasZ anc)
+  | [] => by
+      simpa using StandardReverseSlotsDeriv.readout (anc := anc)
+  | slot :: slots => by
+      simpa [List.flatten, List.append_assoc] using
+        StandardReverseSlotsDeriv.prependSlot (ofSlots anc slots)
+
+end StandardReverseSlotsDeriv
+
+/-- Complete reverse derivation for the standard/NZ scheme. -/
+inductive StandardReverseCompileDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (anc : Fin nq) : FCircuit nq -> Type where
+  | prependPrep {suffix : FCircuit nq} :
+      StandardReverseSlotsDeriv anc sigma.slots suffix ->
+        StandardReverseCompileDeriv sigma anc (prep0 anc ++ suffix)
+
+namespace StandardReverseCompileDeriv
+
+theorem circuit_eq {nq : Nat} {sigma : RuleSchedule nq} {anc : Fin nq}
+    {circuit : FCircuit nq} (d : StandardReverseCompileDeriv sigma anc circuit) :
+    circuit = compileStandardOrdered sigma anc := by
+  cases d with
+  | prependPrep slots =>
+      have hslots := slots.circuit_eq
+      simp [compileStandardOrdered, hslots]
+
+def ofSchedule {nq : Nat} (sigma : RuleSchedule nq) (anc : Fin nq) :
+    StandardReverseCompileDeriv sigma anc (compileStandardOrdered sigma anc) := by
+  simpa [compileStandardOrdered] using
+    StandardReverseCompileDeriv.prependPrep
+      (StandardReverseSlotsDeriv.ofSlots anc sigma.slots)
+
+end StandardReverseCompileDeriv
+
+abbrev KnillReverseCompileDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (ancillas : List (Fin nq)) (circuit : FCircuit nq) : Type :=
+  ReverseFlattenMapDeriv
+    (fun sa : ScheduledPauli nq × Fin nq => knillSlot sa.1 sa.2)
+    (List.zip sigma.slots ancillas) circuit
+
+def compileKnillOrderedReverseDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (ancillas : List (Fin nq)) :
+    KnillReverseCompileDeriv sigma ancillas (compileKnillOrdered sigma ancillas) := by
+  simpa [compileKnillOrdered] using
+    ReverseFlattenMapDeriv.ofList
+      (fun sa : ScheduledPauli nq × Fin nq => knillSlot sa.1 sa.2)
+      (List.zip sigma.slots ancillas)
+
+abbrev ShorCouplingReverseDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (cat : List (Fin nq)) (circuit : FCircuit nq) : Type :=
+  ReverseFlattenMapDeriv
+    (fun sc : ScheduledPauli nq × Fin nq => shorCouplingSlot sc.1 sc.2)
+    (List.zip sigma.slots cat) circuit
+
+def shorCouplingReverseDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (cat : List (Fin nq)) :
+    ShorCouplingReverseDeriv sigma cat
+      (((List.zip sigma.slots cat).map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten) :=
+  ReverseFlattenMapDeriv.ofList
+    (fun sc : ScheduledPauli nq × Fin nq => shorCouplingSlot sc.1 sc.2)
+    (List.zip sigma.slots cat)
+
+abbrev RawMeasReverseDeriv {nq : Nat}
+    (qs : List (Fin nq)) (circuit : FCircuit nq) : Type :=
+  ReverseFlattenMapDeriv rawMeasZ qs circuit
+
+def rawMeasReverseDeriv {nq : Nat} (qs : List (Fin nq)) :
+    RawMeasReverseDeriv qs (qs.map rawMeasZ).flatten :=
+  ReverseFlattenMapDeriv.ofList rawMeasZ qs
+
+/-- Complete reverse derivation for the Shor scheme.  The interaction and raw
+measurement tails are themselves reverse list derivations; the fixed cat-check
+prefix is then prepended to the known suffix. -/
+inductive ShorReverseCompileDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (cat : List (Fin nq)) (verifier : Fin nq) :
+    FCircuit nq -> Type where
+  | nilCat : cat = [] -> ShorReverseCompileDeriv sigma cat verifier []
+  | consCat (c0 : Fin nq) (rest : List (Fin nq))
+      (hcat : cat = c0 :: rest)
+      {coupling raw : FCircuit nq} :
+      ShorCouplingReverseDeriv sigma (c0 :: rest) coupling ->
+        RawMeasReverseDeriv (c0 :: rest) raw ->
+          ShorReverseCompileDeriv sigma cat verifier
+            (let cat' := c0 :: rest
+             let last := cat'.getLast (by simp)
+             orderedCatPrepZ cat' ++
+             prepP verifier ++
+             cnot verifier c0 ++
+             cnot verifier last ++
+             hadamard verifier ++
+             flagMeasZ verifier ++
+             coupling ++ raw)
+
+namespace ShorReverseCompileDeriv
+
+theorem circuit_eq {nq : Nat} {sigma : RuleSchedule nq}
+    {cat : List (Fin nq)} {verifier : Fin nq} {circuit : FCircuit nq}
+    (d : ShorReverseCompileDeriv sigma cat verifier circuit) :
+    circuit = compileShorOrdered sigma cat verifier := by
+  cases d with
+  | nilCat hcat =>
+      subst hcat
+      rfl
+  | consCat c0 rest hcat couplingDeriv rawDeriv =>
+      subst hcat
+      have hcoupling := couplingDeriv.circuit_eq
+      have hraw := rawDeriv.circuit_eq
+      simp [compileShorOrdered, hcoupling, hraw, List.append_assoc]
+
+def ofSchedule {nq : Nat}
+    (sigma : RuleSchedule nq) (cat : List (Fin nq)) (verifier : Fin nq) :
+    ShorReverseCompileDeriv sigma cat verifier (compileShorOrdered sigma cat verifier) := by
+  cases cat with
+  | nil =>
+      exact ShorReverseCompileDeriv.nilCat rfl
+  | cons c0 rest =>
+      simpa [compileShorOrdered, List.append_assoc] using
+        ShorReverseCompileDeriv.consCat (sigma := sigma) (verifier := verifier)
+          c0 rest rfl
+          (shorCouplingReverseDeriv sigma (c0 :: rest))
+          (rawMeasReverseDeriv (c0 :: rest))
+
+end ShorReverseCompileDeriv
+
+/-- Reverse derivation for the flag scheme.  The two halves are separate list
+derivations so the rule remembers the written schedule order around the flag
+couplings. -/
+inductive FlagReverseCompileDeriv {nq : Nat}
+    (sigma : RuleSchedule nq) (anc flag : Fin nq) : FCircuit nq -> Type where
+  | build
+      {firstHalf secondHalf : FCircuit nq}
+      (half : Nat)
+      (hhalf : half = sigma.slots.length / 2)
+      (first :
+        ReverseFlattenMapDeriv (zParitySlot anc) (sigma.slots.take half) firstHalf)
+      (second :
+        ReverseFlattenMapDeriv (zParitySlot anc) (sigma.slots.drop half) secondHalf) :
+      FlagReverseCompileDeriv sigma anc flag
+        (prep0 anc ++
+         prepP flag ++
+         firstHalf ++
+         cnot flag anc ++
+         secondHalf ++
+         cnot flag anc ++
+         flagMeasZ anc ++
+         hadamard flag ++
+         flagMeasZ flag)
+
+namespace FlagReverseCompileDeriv
+
+theorem circuit_eq {nq : Nat} {sigma : RuleSchedule nq}
+    {anc flag : Fin nq} {circuit : FCircuit nq}
+    (d : FlagReverseCompileDeriv sigma anc flag circuit) :
+    circuit = compileFlagOrdered sigma anc flag := by
+  cases d with
+  | build half hhalf first second =>
+      subst hhalf
+      have hfirst := first.circuit_eq
+      have hsecond := second.circuit_eq
+      simp [compileFlagOrdered, hfirst, hsecond, List.append_assoc]
+
+def ofSchedule {nq : Nat}
+    (sigma : RuleSchedule nq) (anc flag : Fin nq) :
+    FlagReverseCompileDeriv sigma anc flag (compileFlagOrdered sigma anc flag) := by
+  let half := sigma.slots.length / 2
+  simpa [compileFlagOrdered, half, List.append_assoc] using
+    FlagReverseCompileDeriv.build (sigma := sigma) (anc := anc) (flag := flag)
+      half rfl
+      (ReverseFlattenMapDeriv.ofList (zParitySlot anc) (sigma.slots.take half))
+      (ReverseFlattenMapDeriv.ofList (zParitySlot anc) (sigma.slots.drop half))
+
+end FlagReverseCompileDeriv
+
+/-- Scheme dispatcher for reverse compilation derivations. -/
+inductive GadgetReverseCompileDeriv {nq : Nat}
+    (scheme : Scheme) (sigma : RuleSchedule nq) (anc : AncillaConfig nq) :
+    FCircuit nq -> Type where
+  | nz (a : Fin nq) :
+      scheme = .NZ ->
+        anc = .nz a ->
+          StandardReverseCompileDeriv sigma a (compileStandardOrdered sigma a) ->
+            GadgetReverseCompileDeriv scheme sigma anc (compileStandardOrdered sigma a)
+  | knill (ancillas : List (Fin nq)) :
+      scheme = .Knill ->
+        anc = .knill ancillas ->
+          KnillReverseCompileDeriv sigma ancillas (compileKnillOrdered sigma ancillas) ->
+            GadgetReverseCompileDeriv scheme sigma anc (compileKnillOrdered sigma ancillas)
+  | shor (cat : List (Fin nq)) (verifier : Fin nq) :
+      scheme = .Shor ->
+        anc = .shor cat verifier ->
+          ShorReverseCompileDeriv sigma cat verifier (compileShorOrdered sigma cat verifier) ->
+            GadgetReverseCompileDeriv scheme sigma anc (compileShorOrdered sigma cat verifier)
+  | flag (a f : Fin nq) :
+      scheme = .Flag ->
+        anc = .flag a f ->
+          FlagReverseCompileDeriv sigma a f (compileFlagOrdered sigma a f) ->
+            GadgetReverseCompileDeriv scheme sigma anc (compileFlagOrdered sigma a f)
+  | mismatch :
+      compileGadgetOrdered scheme sigma anc = [] ->
+        GadgetReverseCompileDeriv scheme sigma anc []
+
+namespace GadgetReverseCompileDeriv
+
+theorem circuit_eq {nq : Nat} {scheme : Scheme} {sigma : RuleSchedule nq}
+    {anc : AncillaConfig nq} {circuit : FCircuit nq}
+    (d : GadgetReverseCompileDeriv scheme sigma anc circuit) :
+    circuit = compileGadgetOrdered scheme sigma anc := by
+  cases d with
+  | nz a hscheme hanc _ =>
+      subst hscheme
+      subst hanc
+      simp [compileGadgetOrdered]
+  | knill ancillas hscheme hanc _ =>
+      subst hscheme
+      subst hanc
+      simp [compileGadgetOrdered]
+  | shor cat verifier hscheme hanc _ =>
+      subst hscheme
+      subst hanc
+      simp [compileGadgetOrdered]
+  | flag a f hscheme hanc _ =>
+      subst hscheme
+      subst hanc
+      simp [compileGadgetOrdered]
+  | mismatch h =>
+      exact h.symm
+
+def ofOrdered {nq : Nat} (scheme : Scheme)
+    (sigma : RuleSchedule nq) (anc : AncillaConfig nq) :
+    GadgetReverseCompileDeriv scheme sigma anc (compileGadgetOrdered scheme sigma anc) := by
+  cases scheme <;> cases anc
+  · exact GadgetReverseCompileDeriv.nz _ rfl rfl
+      (StandardReverseCompileDeriv.ofSchedule sigma _)
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.knill _ rfl rfl
+      (compileKnillOrderedReverseDeriv sigma _)
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.shor _ _ rfl rfl
+      (ShorReverseCompileDeriv.ofSchedule sigma _ _)
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.mismatch rfl
+  · exact GadgetReverseCompileDeriv.flag _ _ rfl rfl
+      (FlagReverseCompileDeriv.ofSchedule sigma _ _)
+
+end GadgetReverseCompileDeriv
+
 /-- Strict compiler entry point for one source stabilizer gadget.  The target
 circuit type itself records the fresh helper budget, and the only helper
 indices are generated by `freshAncillaConfig`. -/
@@ -440,6 +785,23 @@ def compileGadgetBlock {n total : Nat} (scheme : Scheme) (sigma : RuleSchedule n
   compileGadgetOrdered scheme (liftSchedule (k := total) sigma)
     (blockAncillaConfig scheme sigma start hfit)
 
+def compileFreshGadgetReverseDeriv {n : Nat} (scheme : Scheme) (sigma : RuleSchedule n) :
+    GadgetReverseCompileDeriv scheme (freshRuleSchedule scheme sigma)
+      (freshAncillaConfig scheme sigma) (compileFreshGadget scheme sigma) := by
+  simpa [compileFreshGadget] using
+    GadgetReverseCompileDeriv.ofOrdered scheme
+      (freshRuleSchedule scheme sigma) (freshAncillaConfig scheme sigma)
+
+def compileGadgetBlockReverseDeriv {n total : Nat}
+    (scheme : Scheme) (sigma : RuleSchedule n)
+    (start : Nat) (hfit : start + helperCount scheme sigma ≤ total) :
+    GadgetReverseCompileDeriv scheme (liftSchedule (k := total) sigma)
+      (blockAncillaConfig scheme sigma start hfit)
+      (compileGadgetBlock scheme sigma start hfit) := by
+  simpa [compileGadgetBlock] using
+    GadgetReverseCompileDeriv.ofOrdered scheme (liftSchedule (k := total) sigma)
+      (blockAncillaConfig scheme sigma start hfit)
+
 def compileProgramAux {n total : Nat} :
     (start : Nat) -> (program : XZProgram n) ->
       start + programHelperCount program ≤ total -> FCircuit (n + total)
@@ -468,6 +830,29 @@ inductive ProgramCompileDeriv {n total : Nat} :
       ProgramCompileDeriv (start + programHelperCount first) second c2 ->
       ProgramCompileDeriv start (.seq first second) (c1 ++ c2)
 
+/-- Full-program reverse compilation derivation.
+
+At a sequence node the second subprogram is derived first, because it is the
+known suffix needed when classifying faults introduced by the first subprogram.
+The resulting circuit is still the ordinary execution-order concatenation. -/
+inductive ProgramReverseCompileDeriv {n total : Nat} :
+    Nat -> XZProgram n -> FCircuit (n + total) -> Type where
+  | skip (start : Nat) (hfit : start ≤ total) :
+      ProgramReverseCompileDeriv start .skip []
+  | meas (start : Nat) (scheme : Scheme) (sigma : RuleSchedule n)
+      (hfit : start + helperCount scheme sigma ≤ total) :
+      GadgetReverseCompileDeriv scheme (liftSchedule (k := total) sigma)
+        (blockAncillaConfig scheme sigma start hfit)
+        (compileGadgetBlock scheme sigma start hfit) ->
+          ProgramReverseCompileDeriv start (.meas scheme sigma)
+            (compileGadgetBlock scheme sigma start hfit)
+  | seq {start : Nat} {first second : XZProgram n}
+      {c1 c2 : FCircuit (n + total)} :
+      ProgramReverseCompileDeriv
+        (start + programHelperCount first) second c2 ->
+      ProgramReverseCompileDeriv start first c1 ->
+        ProgramReverseCompileDeriv start (.seq first second) (c1 ++ c2)
+
 def compileProgramAuxDeriv {n total : Nat} :
     (start : Nat) -> (program : XZProgram n) ->
       (hfit : start + programHelperCount program ≤ total) ->
@@ -485,6 +870,26 @@ def compileProgramAuxDeriv {n total : Nat} :
 def compileProgramDeriv {n : Nat} (program : XZProgram n) :
     ProgramCompileDeriv 0 program (compileProgram program) :=
   compileProgramAuxDeriv 0 program (by simp)
+
+def compileProgramAuxReverseDeriv {n total : Nat} :
+    (start : Nat) -> (program : XZProgram n) ->
+      (hfit : start + programHelperCount program ≤ total) ->
+      ProgramReverseCompileDeriv start program (compileProgramAux start program hfit)
+  | start, .skip, hfit => by
+      exact ProgramReverseCompileDeriv.skip start (by simpa [programHelperCount] using hfit)
+  | start, .meas scheme sigma, hfit =>
+      ProgramReverseCompileDeriv.meas start scheme sigma hfit
+        (compileGadgetBlockReverseDeriv scheme sigma start hfit)
+  | start, .seq first second, hfit => by
+      exact ProgramReverseCompileDeriv.seq
+        (compileProgramAuxReverseDeriv (start + programHelperCount first) second
+          (by simp [programHelperCount] at hfit ⊢; omega))
+        (compileProgramAuxReverseDeriv start first
+          (by simp [programHelperCount] at hfit ⊢; omega))
+
+def compileProgramReverseDeriv {n : Nat} (program : XZProgram n) :
+    ProgramReverseCompileDeriv 0 program (compileProgram program) :=
+  compileProgramAuxReverseDeriv 0 program (by simp)
 
 /-! ## Detector-parity correctness statements
 

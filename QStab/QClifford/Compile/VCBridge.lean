@@ -1,5 +1,6 @@
 import QStab.QClifford.Compile.Calculus
 import QStab.QClifford.PCC.VCGen
+import QStab.QHL.Target.Soundness
 
 /-!
 # Compiler-to-VCGen bridge
@@ -97,11 +98,53 @@ theorem xorBools_map_detectors_eq_detectorXor {nq : Nat} (slots : List Nat)
   rw [detectorXor_foldl_eq_xorBools]
   simp
 
+theorem detectorXor_shifted_range_eq_fromAcc {nq : Nat} (start len : Nat)
+    (es : ErrorState nq) :
+    detectorXor ((List.range len).map fun i => start + i) es =
+      detectorXorFromAcc start len es false := by
+  induction len with
+  | zero =>
+      rfl
+  | succ len ih =>
+      simpa [detectorXor, List.range_succ, detectorXorFromAcc_succ_end, Nat.add_assoc] using ih
+
+theorem xorBools_finRange_shift_eq_fromAcc {nq : Nat} (start len : Nat)
+    (es : ErrorState nq) :
+    xorBools ((List.finRange len).map fun f => es.detectors (start + f.val)) =
+      detectorXorFromAcc start len es false := by
+  calc
+    xorBools ((List.finRange len).map fun f => es.detectors (start + f.val))
+        = detectorXor ((List.finRange len).map fun f => start + f.val) es := by
+          rw [← xorBools_map_detectors_eq_detectorXor]
+          simp [List.map_map, Function.comp_def]
+    _ = detectorXor ((List.range len).map fun i => start + i) es := by
+          congr 1
+          change List.map ((fun i : Nat => start + i) ∘ (fun f : Fin len => f.val))
+              (List.finRange len) =
+            List.map (fun i : Nat => start + i) (List.range len)
+          rw [← List.map_map]
+          rw [List.map_coe_finRange_eq_range]
+    _ = detectorXorFromAcc start len es false :=
+          detectorXor_shifted_range_eq_fromAcc start len es
+
+theorem xorBools_finRange_shift_succ_eq_fromAcc {nq : Nat} (start len : Nat)
+    (es : ErrorState nq) :
+    xorBools ((List.finRange len).map fun f => es.detectors (start + (f.val + 1))) =
+      detectorXorFromAcc (start + 1) len es false := by
+  simpa [Nat.add_assoc, Nat.add_comm, Nat.add_left_comm] using
+    xorBools_finRange_shift_eq_fromAcc (start + 1) len es
+
 theorem flagMeasZ_detector_cursor {nq : Nat} (anc : Fin nq) (es : ErrorState nq)
     (start : Nat) (hcursor : es.detectorCursor = start) :
     (propagateCircuit (eraseFaults (flagMeasZ anc)) es).detectors start =
       hasXComp (es.paulis anc) := by
   simp [flagMeasZ, eraseFaults, propagateCircuit, propagateGate, hcursor]
+
+theorem flagTail_preserves_detector_at {nq : Nat} (flag : Fin nq) (es : ErrorState nq)
+    (start : Nat) (hcursor : es.detectorCursor = start + 1) :
+    (propagateCircuit (eraseFaults (hadamard flag ++ flagMeasZ flag)) es).detectors start =
+      es.detectors start := by
+  simp [hadamard, flagMeasZ, eraseFaults, propagateCircuit, propagateGate, hcursor]
 
 /-- One-stabilizer PCC spec generated from one fresh compiled gadget.  The
 stabilizer row is supplied by the source-side schedule elaborator; the circuit,
@@ -661,6 +704,50 @@ def fullProgramCodeSpec {n : Nat} (program : XZProgram n)
   d := 1
   d_pos := by decide
 
+theorem finRange_flatMap_get {α β : Type} (xs : List α) (f : α → List β) :
+    (List.finRange xs.length).flatMap (fun i => f (xs.get i)) = xs.flatMap f := by
+  rw [← List.flatMap_map]
+  rw [← List.ofFn_eq_map]
+  rw [List.ofFn_get]
+
+theorem compileProgramAux_eq_flatMap_programMeasuresAtAux
+    {n totalHelpers totalFlags : Nat}
+    (helperStart detectorStart : Nat) (program : XZProgram n)
+    (helperFit : helperStart + programHelperCount program ≤ totalHelpers)
+    (detectorFit : detectorStart + programDetectorCount program ≤ totalFlags) :
+    compileProgramAux helperStart program helperFit =
+      (programMeasuresAtAux helperStart detectorStart program helperFit detectorFit).flatMap
+        (fun m => compileGadgetBlock m.scheme m.schedule m.helperStart m.helperFit) := by
+  induction program generalizing helperStart detectorStart with
+  | skip =>
+      simp [compileProgramAux, programMeasuresAtAux]
+  | meas scheme schedule =>
+      simp [compileProgramAux, programMeasuresAtAux]
+  | seq first second ihFirst ihSecond =>
+      simp [compileProgramAux, programMeasuresAtAux, List.flatMap_append]
+      rw [ihFirst helperStart detectorStart]
+      rw [ihSecond (helperStart + programHelperCount first)
+        (detectorStart + programDetectorCount first)]
+
+theorem compileProgram_eq_programMeasuresAt_flatMap {n : Nat} (program : XZProgram n) :
+    compileProgram program =
+      (programMeasuresAt program).flatMap
+        (fun m => compileGadgetBlock m.scheme m.schedule m.helperStart m.helperFit) := by
+  exact compileProgramAux_eq_flatMap_programMeasuresAtAux 0 0 program (by simp) (by simp)
+
+theorem specCircuit_fullProgramCodeSpec {n : Nat} (program : XZProgram n)
+    (hdisjoint : fullProgramReadoutDisjoint program) :
+    specCircuit (fullProgramCodeSpec program hdisjoint) = compileProgram program := by
+  unfold specCircuit fullProgramCodeSpec programNumStab
+  let f : ProgramMeasureAt n (programHelperCount program) (programDetectorCount program) →
+      FCircuit (n + programHelperCount program) :=
+    fun m => compileGadgetBlock m.scheme m.schedule m.helperStart m.helperFit
+  have hget := finRange_flatMap_get (programMeasuresAt program) f
+  change (List.finRange (programMeasuresAt program).length).flatMap
+      (fun i => f ((programMeasuresAt program).get i)) = compileProgram program
+  rw [hget]
+  exact (compileProgram_eq_programMeasuresAt_flatMap program).symm
+
 @[simp] theorem dataOnlyPauli_fullProgramCodeSpec {n : Nat} (program : XZProgram n)
     (hdisjoint : fullProgramReadoutDisjoint program)
     (E : Fin (n + programHelperCount program) → Pauli)
@@ -676,6 +763,23 @@ def fullProgramVCInput {n : Nat} (program : XZProgram n)
     VCInput (n + programHelperCount program) :=
   VCInput.ofPCC (compileProgram program) (fullProgramCodeSpec program hdisjoint)
     .unconditional hnq hnumStab
+
+theorem fullProgram_vcgen_programEq {n : Nat}
+    (program : XZProgram n) (hdisjoint : fullProgramReadoutDisjoint program)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (fullProgramVCInput program hdisjoint hnq hnumStab)).denoteSlot .programEq := by
+  simpa [vcgen, GeneratedVCs.denoteSlot, VCSlot.denote, fullProgramVCInput,
+    VCInput.toCodeSpec_ofPCC] using
+    (specCircuit_fullProgramCodeSpec program hdisjoint).symm
+
+theorem fullProgram_vcgen_wf {n : Nat}
+    (program : XZProgram n) (hdisjoint : fullProgramReadoutDisjoint program)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (fullProgramVCInput program hdisjoint hnq hnumStab)).denoteSlot .wf := by
+  change WellFormed (compileProgram program) (fullProgramCodeSpec program hdisjoint)
+  rfl
 
 def fullProgramEmbeddedSynCorrect {n : Nat} (program : XZProgram n)
     (hdisjoint : fullProgramReadoutDisjoint program) : Prop :=
@@ -703,6 +807,32 @@ theorem freshDataQ_ne_blockHelperQ {n total start width : Nat}
   simp [freshDataQ, blockHelperQ] at hv
   have hq := q.isLt
   omega
+
+theorem blockShorCat_nodup {n total start w : Nat}
+    (hfit : start + (w + 1) ≤ total) :
+    (blockShorCat n total start w hfit).Nodup := by
+  unfold blockShorCat
+  refine List.Nodup.map ?_ (List.nodup_finRange w)
+  intro a b h
+  apply Fin.ext
+  have hv := congrArg Fin.val h
+  simp [blockHelperQ] at hv
+  omega
+
+theorem mem_blockShorCat_helper {n total start w : Nat}
+    (hfit : start + (w + 1) ≤ total) {q : Fin (n + total)}
+    (hmem : q ∈ blockShorCat n total start w hfit) :
+    ∃ a : Fin w,
+      q =
+        blockHelperQ n total start (w + 1) hfit
+          ⟨a.val, by exact Nat.lt_trans a.isLt (Nat.lt_succ_self w)⟩ := by
+  have hmem' :
+      q ∈ (List.finRange w).map (fun a =>
+        blockHelperQ n total start (w + 1) hfit
+          ⟨a.val, by exact Nat.lt_trans a.isLt (Nat.lt_succ_self w)⟩) := by
+    simpa [blockShorCat] using hmem
+  rcases List.mem_map.mp hmem' with ⟨a, _ha, rfl⟩
+  exact ⟨a, rfl⟩
 
 @[simp] theorem ProgramMeasureAt.dataOnlyStateAtDetector_freshDataQ
     {n totalHelpers totalFlags : Nat} (m : ProgramMeasureAt n totalHelpers totalFlags)
@@ -738,6 +868,81 @@ def ProgramMeasureAt.embeddedSynCorrect {n totalHelpers totalFlags : Nat}
         (propagateCircuit (eraseFaults (compileGadgetBlock m.scheme m.schedule
           m.helperStart m.helperFit)) (m.dataOnlyStateAtDetector E)) =
       vectorParity (scheduleRow (k := totalHelpers) m.schedule) E
+
+def ProgramMeasureAt.embeddedBlockCircuit {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) : Circuit (n + totalHelpers) :=
+  eraseFaults (compileGadgetBlock m.scheme m.schedule m.helperStart m.helperFit)
+
+def ProgramMeasureAt.embeddedDetectorPre {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) :
+    QHL.Target.AssertionC (n + totalHelpers) :=
+  fun es => ∃ E : Fin (n + totalHelpers) → Pauli, es = m.dataOnlyStateAtDetector E
+
+def ProgramMeasureAt.embeddedDetectorPost {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) :
+    QHL.Target.AssertionC (n + totalHelpers) :=
+  fun es =>
+    ∀ E : Fin (n + totalHelpers) → Pauli,
+      es = propagateCircuit m.embeddedBlockCircuit (m.dataOnlyStateAtDetector E) →
+        m.embeddedDetectorBit es =
+          vectorParity (scheduleRow (k := totalHelpers) m.schedule) E
+
+def ProgramMeasureAt.embeddedDetectorWPDeriv {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) :
+    QHL.Target.DerivC (n + totalHelpers)
+      (fun es => m.embeddedDetectorPost (propagateCircuit m.embeddedBlockCircuit es))
+      m.embeddedBlockCircuit
+      m.embeddedDetectorPost :=
+  circuitWPDeriv m.embeddedBlockCircuit m.embeddedDetectorPost
+
+/-- A real target Hoare derivation certificate for one embedded compiled
+stabilizer block.  The derivation itself is produced by the QClifford WP rules;
+the only non-syntactic side condition is the standard consequence proof that
+the generated precondition implies the generated weakest precondition. -/
+structure ProgramMeasureAt.EmbeddedHoareCertificate {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) where
+  pre_implies_wp :
+    ∀ es,
+      m.embeddedDetectorPre es →
+        m.embeddedDetectorPost (propagateCircuit m.embeddedBlockCircuit es)
+  deriv :
+    QHL.Target.DerivC (n + totalHelpers)
+      m.embeddedDetectorPre
+      m.embeddedBlockCircuit
+      m.embeddedDetectorPost :=
+    QHL.Target.DerivC.C_Consequence
+      m.embeddedDetectorWPDeriv
+      pre_implies_wp
+      (fun _ h => h)
+
+theorem ProgramMeasureAt.EmbeddedHoareCertificate.to_embeddedSynCorrect
+    {n totalHelpers totalFlags : Nat}
+    {m : ProgramMeasureAt n totalHelpers totalFlags}
+    (cert : m.EmbeddedHoareCertificate) :
+    m.embeddedSynCorrect := by
+  intro E
+  have hHoare := QHL.Target.hoare_sound_c cert.deriv
+  have hPost :=
+    hHoare
+      (m.dataOnlyStateAtDetector E)
+      (propagateCircuit m.embeddedBlockCircuit (m.dataOnlyStateAtDetector E))
+      (QHL.Target.cevalC_of_propagateCircuit m.embeddedBlockCircuit
+        (m.dataOnlyStateAtDetector E))
+      ⟨E, rfl⟩
+  simpa [ProgramMeasureAt.embeddedSynCorrect,
+    ProgramMeasureAt.embeddedDetectorPost, ProgramMeasureAt.embeddedBlockCircuit]
+    using hPost E rfl
+
+def ProgramMeasureAt.embeddedHoareCertificateOfCorrect {n totalHelpers totalFlags : Nat}
+    {m : ProgramMeasureAt n totalHelpers totalFlags}
+    (hcorrect : m.embeddedSynCorrect) :
+    m.EmbeddedHoareCertificate where
+  pre_implies_wp := by
+    intro es hpre
+    rcases hpre with ⟨E0, rfl⟩
+    intro E hEq
+    rw [hEq]
+    exact hcorrect E
 
 theorem ProgramMeasureAt.embeddedSynCorrect_of_detector {n totalHelpers totalFlags : Nat}
     (m : ProgramMeasureAt n totalHelpers totalFlags)
@@ -841,6 +1046,646 @@ theorem ProgramMeasureAt.embeddedSynCorrect_NZ {n totalHelpers totalFlags : Nat}
     compiledReadoutFlags, compiledDetectorCount, ProgramMeasureAt.shiftFlag, xorBools]
     using hfinal
 
+theorem ProgramMeasureAt.embeddedSynCorrect_Knill {n totalHelpers totalFlags : Nat}
+    (sigma : RuleSchedule n) (helperStart detectorStart : Nat)
+    (helperFit : helperStart + helperCount .Knill sigma ≤ totalHelpers)
+    (detectorFit : detectorStart + compiledDetectorCount .Knill sigma ≤ totalFlags) :
+    (⟨.Knill, sigma, helperStart, detectorStart, helperFit, detectorFit⟩ :
+      ProgramMeasureAt n totalHelpers totalFlags).embeddedSynCorrect := by
+  apply ProgramMeasureAt.embeddedSynCorrect_of_detector
+  intro E
+  let m : ProgramMeasureAt n totalHelpers totalFlags :=
+    ⟨.Knill, sigma, helperStart, detectorStart, helperFit, detectorFit⟩
+  let w : Nat := sigma.slots.length
+  let slots : List (ScheduledPauli (n + totalHelpers)) :=
+    (liftSchedule (k := totalHelpers) sigma).slots
+  let ancillas : List (Fin (n + totalHelpers)) :=
+    blockHelpers n totalHelpers helperStart w helperFit
+  let pairs : List (ScheduledPauli (n + totalHelpers) × Fin (n + totalHelpers)) :=
+    List.zip slots ancillas
+  let es0 : ErrorState (n + totalHelpers) := m.dataOnlyStateAtDetector E
+  let globalE : Fin (n + totalHelpers) → Pauli := fun q => es0.paulis q
+  have hslot_mem :
+      ∀ slot, slot ∈ slots →
+        ∃ src, src ∈ sigma.slots ∧ slot = liftSlot (k := totalHelpers) src := by
+    intro slot hmem
+    have hmem' : slot ∈ sigma.slots.map (liftSlot (k := totalHelpers)) := by
+      simpa [slots, liftSchedule] using hmem
+    rcases List.mem_map.mp hmem' with ⟨src, hsrc, rfl⟩
+    exact ⟨src, hsrc, rfl⟩
+  have hanc_mem :
+      ∀ anc, anc ∈ ancillas → ∃ a : Fin w, anc = blockHelperQ n totalHelpers helperStart w helperFit a := by
+    intro anc hmem
+    have hmem' :
+        anc ∈ (List.finRange w).map (blockHelperQ n totalHelpers helperStart w helperFit) := by
+      simpa [ancillas, blockHelpers] using hmem
+    rcases List.mem_map.mp hmem' with ⟨a, _ha, rfl⟩
+    exact ⟨a, rfl⟩
+  have hslot_ne_anc :
+      ∀ slotPair, slotPair ∈ pairs →
+        ∀ ancPair, ancPair ∈ pairs → slotPair.1.qubit ≠ ancPair.2 := by
+    intro slotPair hslotPair ancPair hancPair
+    have hs_mem : slotPair.1 ∈ slots := (List.of_mem_zip hslotPair).1
+    have ha_mem : ancPair.2 ∈ ancillas := (List.of_mem_zip hancPair).2
+    rcases hslot_mem slotPair.1 hs_mem with ⟨src, _hsrc, hsrcEq⟩
+    rcases hanc_mem ancPair.2 ha_mem with ⟨a, haEq⟩
+    rw [hsrcEq, haEq]
+    simpa [liftSlot] using
+      (freshDataQ_ne_blockHelperQ (n := n) (total := totalHelpers)
+        (start := helperStart) (width := w) helperFit src.qubit a)
+  have hself : ∀ pair, pair ∈ pairs → pair.1.qubit ≠ pair.2 := by
+    intro pair hmem
+    exact hslot_ne_anc pair hmem pair hmem
+  have hdata : ∀ pair, pair ∈ pairs → es0.paulis pair.1.qubit = globalE pair.1.qubit := by
+    intro pair _hmem
+    rfl
+  have hcursor : es0.detectorCursor = detectorStart := by
+    simp [es0, m]
+  have hchain :=
+    knillPairsCircuit_chain pairs globalE false es0 detectorStart hcursor hdata hself hslot_ne_anc
+  have hpairs_len : pairs.length = w := by
+    simp [pairs, slots, ancillas, blockHelpers, liftSchedule, w]
+  have hslots_le_ancillas : slots.length ≤ ancillas.length := by
+    simp [slots, ancillas, blockHelpers, liftSchedule, w]
+  have hmapPairs : pairs.map Prod.fst = slots := by
+    simpa [pairs] using List.map_fst_zip hslots_le_ancillas
+  have hglobal :
+      globalE =
+        fun q : Fin (n + totalHelpers) =>
+          (dataInputState (k := totalHelpers)
+            (fun q : Fin n => E (freshDataQ n totalHelpers q))).paulis q := by
+    funext q
+    by_cases hq : q.val < n
+    · have hqeq : freshDataQ n totalHelpers ⟨q.val, hq⟩ = q := Fin.ext rfl
+      simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+        stateOfPauliAtDetector, dataInputState, hq, hqeq]
+    · simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+        stateOfPauliAtDetector, dataInputState, hq]
+  have hparity :
+      scheduleParityList (pairs.map Prod.fst) globalE false =
+        scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := by
+    rw [hmapPairs, hglobal]
+    simpa [slots] using
+      scheduleParityList_liftSchedule (k := totalHelpers) sigma
+        (fun q : Fin n => E (freshDataQ n totalHelpers q))
+  have hcompiled :
+      propagateCircuit (eraseFaults (compileGadgetBlock .Knill sigma helperStart helperFit)) es0 =
+        propagateCircuit (eraseFaults (knillPairsCircuit pairs)) es0 := by
+    simp [compileGadgetBlock, compileGadgetOrdered, compileKnillOrdered,
+      blockAncillaConfig, blockHelpers, knillPairsCircuit, pairs, slots, ancillas, w]
+  change
+    m.embeddedDetectorBit
+        (propagateCircuit (eraseFaults (compileGadgetBlock .Knill sigma helperStart helperFit)) es0) =
+      scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q))
+  rw [hcompiled]
+  calc
+    m.embeddedDetectorBit (propagateCircuit (eraseFaults (knillPairsCircuit pairs)) es0)
+        = detectorXorFromAcc detectorStart w
+            (propagateCircuit (eraseFaults (knillPairsCircuit pairs)) es0) false := by
+          simp [m, ProgramMeasureAt.embeddedDetectorBit, ProgramMeasureAt.shiftedReadout,
+            compiledReadoutFlags, compiledDetectorCount, ProgramMeasureAt.shiftFlag,
+            xorBools_finRange_shift_eq_fromAcc, Function.comp_def, w]
+    _ = detectorXorFromAcc detectorStart pairs.length
+            (propagateCircuit (eraseFaults (knillPairsCircuit pairs)) es0) false := by
+          rw [hpairs_len]
+    _ = scheduleParityList (pairs.map Prod.fst) globalE false := hchain.1
+    _ = scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := hparity
+
+theorem ProgramMeasureAt.embeddedSynCorrect_Flag {n totalHelpers totalFlags : Nat}
+    (sigma : RuleSchedule n) (helperStart detectorStart : Nat)
+    (helperFit : helperStart + helperCount .Flag sigma ≤ totalHelpers)
+    (detectorFit : detectorStart + compiledDetectorCount .Flag sigma ≤ totalFlags) :
+    (⟨.Flag, sigma, helperStart, detectorStart, helperFit, detectorFit⟩ :
+      ProgramMeasureAt n totalHelpers totalFlags).embeddedSynCorrect := by
+  apply ProgramMeasureAt.embeddedSynCorrect_of_detector
+  intro E
+  let m : ProgramMeasureAt n totalHelpers totalFlags :=
+    ⟨.Flag, sigma, helperStart, detectorStart, helperFit, detectorFit⟩
+  let anc : Fin (n + totalHelpers) :=
+    blockHelperQ n totalHelpers helperStart 2 helperFit ⟨0, by decide⟩
+  let flg : Fin (n + totalHelpers) :=
+    blockHelperQ n totalHelpers helperStart 2 helperFit ⟨1, by decide⟩
+  let slots : List (ScheduledPauli (n + totalHelpers)) :=
+    (liftSchedule (k := totalHelpers) sigma).slots
+  let half : Nat := slots.length / 2
+  let first := slots.take half
+  let second := slots.drop half
+  let es0 : ErrorState (n + totalHelpers) := m.dataOnlyStateAtDetector E
+  let globalE : Fin (n + totalHelpers) → Pauli := fun q => es0.paulis q
+  let esPrepA := propagateCircuit (eraseFaults (prep0 anc)) es0
+  let esPrepF := propagateCircuit (eraseFaults (prepP flg)) esPrepA
+  let esFirst := propagateCircuit (eraseFaults (zParitySlotsCircuit anc first)) esPrepF
+  let esFlag1 := propagateCircuit (eraseFaults (cnot flg anc)) esFirst
+  let esSecond := propagateCircuit (eraseFaults (zParitySlotsCircuit anc second)) esFlag1
+  let esFlag2 := propagateCircuit (eraseFaults (cnot flg anc)) esSecond
+  let esSynd := propagateCircuit (eraseFaults (flagMeasZ anc)) esFlag2
+  have hprepA := prep0_state_for_chain anc es0
+  have hprepF := prepP_state_for_chain flg esPrepA
+  have hanc_ne_flg : anc ≠ flg := by
+    intro h
+    have hv := congrArg Fin.val h
+    simp [anc, flg, blockHelperQ] at hv
+  have hflg_ne_anc : flg ≠ anc := fun h => hanc_ne_flg h.symm
+  have hslots_ne_anc : ∀ slot, slot ∈ slots → slot.qubit ≠ anc := by
+    intro slot hmem
+    have hmem' : slot ∈ sigma.slots.map (liftSlot (k := totalHelpers)) := by
+      simpa [slots, liftSchedule] using hmem
+    rcases List.mem_map.mp hmem' with ⟨src, _hsrc, rfl⟩
+    simpa [anc, liftSlot] using
+      (freshDataQ_ne_blockHelperQ (n := n) (total := totalHelpers)
+        (start := helperStart) (width := 2) helperFit src.qubit ⟨0, by decide⟩)
+  have hslots_ne_flg : ∀ slot, slot ∈ slots → slot.qubit ≠ flg := by
+    intro slot hmem
+    have hmem' : slot ∈ sigma.slots.map (liftSlot (k := totalHelpers)) := by
+      simpa [slots, liftSchedule] using hmem
+    rcases List.mem_map.mp hmem' with ⟨src, _hsrc, rfl⟩
+    simpa [flg, liftSlot] using
+      (freshDataQ_ne_blockHelperQ (n := n) (total := totalHelpers)
+        (start := helperStart) (width := 2) helperFit src.qubit ⟨1, by decide⟩)
+  have hfirst_ne_anc : ∀ slot, slot ∈ first → slot.qubit ≠ anc := by
+    intro slot hmem
+    exact hslots_ne_anc slot (by simpa [first] using List.mem_of_mem_take hmem)
+  have hsecond_ne_anc : ∀ slot, slot ∈ second → slot.qubit ≠ anc := by
+    intro slot hmem
+    exact hslots_ne_anc slot (by simpa [second] using List.mem_of_mem_drop hmem)
+  have hdataPrepF : ∀ q : Fin (n + totalHelpers), q ≠ anc → esPrepF.paulis q = globalE q := by
+    intro q hqAnc
+    by_cases hqFlg : q = flg
+    · subst q
+      have hclean : esPrepF.paulis flg = xOfBool false := by
+        simpa [esPrepF] using hprepF.1
+      simpa [globalE, es0, m, flg] using hclean
+    · have hF : esPrepF.paulis q = esPrepA.paulis q := by
+        simpa [esPrepF] using hprepF.2.1 q hqFlg
+      have hA : esPrepA.paulis q = es0.paulis q := by
+        simpa [esPrepA] using hprepA.2.1 q hqAnc
+      simpa [globalE] using hF.trans hA
+  have hancPrepF : esPrepF.paulis anc = xOfBool false := by
+    have hF : esPrepF.paulis anc = esPrepA.paulis anc := by
+      simpa [esPrepF] using hprepF.2.1 anc hanc_ne_flg
+    have hA : esPrepA.paulis anc = xOfBool false := by
+      simpa [esPrepA] using hprepA.1
+    exact hF.trans hA
+  have hfirst :=
+    zParitySlotsCircuit_chain anc first globalE false esPrepF
+      hfirst_ne_anc hdataPrepF hancPrepF
+  have hreadFirst := zParitySlotsCircuit_preserves_readout anc first esPrepF
+  have hflagFirst : esFirst.paulis flg = xOfBool false := by
+    have h := hfirst.2 flg hflg_ne_anc
+    simpa [esFirst, globalE, es0, m, flg] using h
+  have hancFirst :
+      esFirst.paulis anc = xOfBool (scheduleParityList first globalE false) := by
+    simpa [esFirst] using hfirst.1
+  have hflag1 :=
+    cleanFlagCnot_preserves_anc flg anc esFirst
+      (scheduleParityList first globalE false) hflg_ne_anc hflagFirst hancFirst
+  have hdataFlag1 : ∀ q : Fin (n + totalHelpers), q ≠ anc → esFlag1.paulis q = globalE q := by
+    intro q hqAnc
+    by_cases hqFlg : q = flg
+    · subst q
+      have h := hflag1.2.1
+      simpa [esFlag1, globalE, es0, m, flg] using h
+    · have hC : esFlag1.paulis q = esFirst.paulis q := by
+        simpa [esFlag1] using hflag1.2.2.1 q hqAnc hqFlg
+      have hF : esFirst.paulis q = globalE q := hfirst.2 q hqAnc
+      exact hC.trans hF
+  have hancFlag1 :
+      esFlag1.paulis anc = xOfBool (scheduleParityList first globalE false) := by
+    simpa [esFlag1] using hflag1.1
+  have hsecond :=
+    zParitySlotsCircuit_chain anc second globalE
+      (scheduleParityList first globalE false) esFlag1
+      hsecond_ne_anc hdataFlag1 hancFlag1
+  have hreadSecond := zParitySlotsCircuit_preserves_readout anc second esFlag1
+  have hflagSecond : esSecond.paulis flg = xOfBool false := by
+    have h := hsecond.2 flg hflg_ne_anc
+    simpa [esSecond, globalE, es0, m, flg] using h
+  have hancSecond :
+      esSecond.paulis anc =
+        xOfBool (scheduleParityList second globalE
+          (scheduleParityList first globalE false)) := by
+    simpa [esSecond] using hsecond.1
+  have hflag2 :=
+    cleanFlagCnot_preserves_anc flg anc esSecond
+      (scheduleParityList second globalE (scheduleParityList first globalE false))
+      hflg_ne_anc hflagSecond hancSecond
+  have hancFlag2 :
+      esFlag2.paulis anc =
+        xOfBool (scheduleParityList second globalE
+          (scheduleParityList first globalE false)) := by
+    simpa [esFlag2] using hflag2.1
+  have hcursorPrepF : esPrepF.detectorCursor = detectorStart := by
+    have hpa : esPrepA.detectorCursor = detectorStart := by
+      calc
+        esPrepA.detectorCursor = es0.detectorCursor := by
+          simpa [esPrepA] using hprepA.2.2.2
+        _ = detectorStart := by simp [es0, m]
+    calc
+      esPrepF.detectorCursor = esPrepA.detectorCursor := by
+        simpa [esPrepF] using hprepF.2.2.2
+      _ = detectorStart := hpa
+  have hcursorFirst : esFirst.detectorCursor = detectorStart := by
+    calc
+      esFirst.detectorCursor = esPrepF.detectorCursor := by
+        simpa [esFirst] using hreadFirst.2
+      _ = detectorStart := hcursorPrepF
+  have hcursorFlag1 : esFlag1.detectorCursor = detectorStart := by
+    calc
+      esFlag1.detectorCursor = esFirst.detectorCursor := by
+        simpa [esFlag1] using hflag1.2.2.2.2
+      _ = detectorStart := hcursorFirst
+  have hcursorSecond : esSecond.detectorCursor = detectorStart := by
+    calc
+      esSecond.detectorCursor = esFlag1.detectorCursor := by
+        simpa [esSecond] using hreadSecond.2
+      _ = detectorStart := hcursorFlag1
+  have hcursorFlag2 : esFlag2.detectorCursor = detectorStart := by
+    calc
+      esFlag2.detectorCursor = esSecond.detectorCursor := by
+        simpa [esFlag2] using hflag2.2.2.2.2
+      _ = detectorStart := hcursorSecond
+  have hsplit :
+      scheduleParityList second globalE (scheduleParityList first globalE false) =
+        scheduleParityList slots globalE false := by
+    simpa [first, second] using scheduleParityList_take_drop slots half globalE false
+  have hglobal :
+      globalE =
+        fun q : Fin (n + totalHelpers) =>
+          (dataInputState (k := totalHelpers)
+            (fun q : Fin n => E (freshDataQ n totalHelpers q))).paulis q := by
+    funext q
+    by_cases hq : q.val < n
+    · have hqeq : freshDataQ n totalHelpers ⟨q.val, hq⟩ = q := Fin.ext rfl
+      simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+        stateOfPauliAtDetector, dataInputState, hq, hqeq]
+    · simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+        stateOfPauliAtDetector, dataInputState, hq]
+  have hparity :
+      scheduleParityList slots globalE false =
+        scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := by
+    rw [hglobal]
+    simpa [slots] using
+      scheduleParityList_liftSchedule (k := totalHelpers) sigma
+        (fun q : Fin n => E (freshDataQ n totalHelpers q))
+  have hsynd :
+      esSynd.detectors detectorStart =
+        scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := by
+    calc
+      esSynd.detectors detectorStart = hasXComp (esFlag2.paulis anc) := by
+        simpa [esSynd] using flagMeasZ_detector_cursor anc esFlag2 detectorStart hcursorFlag2
+      _ = hasXComp
+            (xOfBool (scheduleParityList second globalE
+              (scheduleParityList first globalE false))) := by
+            rw [hancFlag2]
+      _ = scheduleParityList second globalE (scheduleParityList first globalE false) := by
+            simp
+      _ = scheduleParityList slots globalE false := hsplit
+      _ = scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := hparity
+  have hcursorSynd : esSynd.detectorCursor = detectorStart + 1 := by
+    simp [esSynd, flagMeasZ, eraseFaults, propagateCircuit, propagateGate, hcursorFlag2]
+  have htail :
+      (propagateCircuit (eraseFaults (hadamard flg ++ flagMeasZ flg)) esSynd).detectors
+          detectorStart =
+        scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := by
+    rw [flagTail_preserves_detector_at flg esSynd detectorStart hcursorSynd]
+    exact hsynd
+  have hcompiled :
+      propagateCircuit
+          (eraseFaults
+            (prep0 anc ++ prepP flg ++ zParitySlotsCircuit anc first ++ cnot flg anc ++
+              zParitySlotsCircuit anc second ++ cnot flg anc ++ flagMeasZ anc ++
+              hadamard flg ++ flagMeasZ flg))
+          es0 =
+        propagateCircuit (eraseFaults (hadamard flg ++ flagMeasZ flg)) esSynd := by
+    simp [zParitySlotsCircuit, esPrepA, esPrepF, esFirst, esFlag1, esSecond,
+      esFlag2, esSynd, eraseFaults_append, QHL.Target.propagateCircuit_append]
+  have hblock :
+      propagateCircuit (eraseFaults (compileGadgetBlock .Flag sigma helperStart helperFit)) es0 =
+        propagateCircuit
+          (eraseFaults
+            (prep0 anc ++ prepP flg ++ zParitySlotsCircuit anc first ++ cnot flg anc ++
+              zParitySlotsCircuit anc second ++ cnot flg anc ++ flagMeasZ anc ++
+              hadamard flg ++ flagMeasZ flg))
+          es0 := by
+    simp [compileGadgetBlock, compileGadgetOrdered, compileFlagOrdered, blockAncillaConfig,
+      anc, flg, slots, half, first, second, zParitySlotsCircuit]
+  change
+    m.embeddedDetectorBit
+        (propagateCircuit (eraseFaults (compileGadgetBlock .Flag sigma helperStart helperFit)) es0) =
+      scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q))
+  rw [hblock, hcompiled]
+  simpa [m, ProgramMeasureAt.embeddedDetectorBit, ProgramMeasureAt.shiftedReadout,
+    compiledReadoutFlags, compiledDetectorCount, ProgramMeasureAt.shiftFlag, xorBools]
+    using htail
+
+theorem ProgramMeasureAt.embeddedSynCorrect_Shor {n totalHelpers totalFlags : Nat}
+    (sigma0 : RuleSchedule n) (helperStart detectorStart : Nat)
+    (helperFit : helperStart + helperCount .Shor sigma0 ≤ totalHelpers)
+    (detectorFit : detectorStart + compiledDetectorCount .Shor sigma0 ≤ totalFlags) :
+    (⟨.Shor, sigma0, helperStart, detectorStart, helperFit, detectorFit⟩ :
+      ProgramMeasureAt n totalHelpers totalFlags).embeddedSynCorrect := by
+  apply ProgramMeasureAt.embeddedSynCorrect_of_detector
+  intro E
+  cases sigma0 with
+  | mk sourceSlots0 =>
+    cases sourceSlots0 with
+    | nil =>
+        simp [ProgramMeasureAt.embeddedDetectorBit, ProgramMeasureAt.shiftedReadout, xorBools,
+          compiledReadoutFlags, compiledDetectorCount, compileGadgetBlock, compileGadgetOrdered,
+          compileShorOrdered, blockAncillaConfig, blockShorCat, scheduleParity]
+    | cons first rest =>
+        let sourceSlots := first :: rest
+        let sigma : RuleSchedule n := ⟨sourceSlots⟩
+        let m : ProgramMeasureAt n totalHelpers totalFlags :=
+          ⟨.Shor, sigma, helperStart, detectorStart, helperFit, detectorFit⟩
+        let w : Nat := sourceSlots.length
+        let slots : List (ScheduledPauli (n + totalHelpers)) :=
+          (liftSchedule (k := totalHelpers) sigma).slots
+        let cat : List (Fin (n + totalHelpers)) :=
+          blockShorCat n totalHelpers helperStart w helperFit
+        let verifier : Fin (n + totalHelpers) :=
+          blockHelperQ n totalHelpers helperStart (w + 1) helperFit
+            ⟨w, Nat.lt_succ_self w⟩
+        let pairs : List (ScheduledPauli (n + totalHelpers) × Fin (n + totalHelpers)) :=
+          List.zip slots cat
+        let es0 : ErrorState (n + totalHelpers) := m.dataOnlyStateAtDetector E
+        let globalE : Fin (n + totalHelpers) → Pauli := fun q => es0.paulis q
+        have hw_pos : 0 < w := by simp [w, sourceSlots]
+        have hcat_len : cat.length = w := by simp [cat, blockShorCat]
+        cases hcatShape : cat with
+        | nil =>
+            have : w = 0 := by
+              simpa [hcatShape] using hcat_len.symm
+            omega
+        | cons c0 catRest =>
+            let cat' : List (Fin (n + totalHelpers)) := c0 :: catRest
+            let last : Fin (n + totalHelpers) := cat'.getLast (by simp [cat'])
+            let esCat := propagateCircuit (eraseFaults (orderedCatPrepZ cat')) es0
+            let esPrepV := propagateCircuit (eraseFaults (prepP verifier)) esCat
+            let esCnot1 := propagateCircuit (eraseFaults (cnot verifier c0)) esPrepV
+            let esCnot2 := propagateCircuit (eraseFaults (cnot verifier last)) esCnot1
+            let esHad := propagateCircuit (eraseFaults (hadamard verifier)) esCnot2
+            let esPrefix := propagateCircuit (eraseFaults (flagMeasZ verifier)) esHad
+            let esCoupled := propagateCircuit (eraseFaults (shorCouplingPairsCircuit pairs)) esPrefix
+            have hcat_eq : cat = cat' := by simp [cat', hcatShape]
+            have hcatClean0 : ∀ q, q ∈ cat → es0.paulis q = Pauli.I := by
+              intro q hmem
+              rcases mem_blockShorCat_helper (n := n) (total := totalHelpers)
+                  (start := helperStart) (w := w) helperFit hmem with ⟨a, rfl⟩
+              simp [es0, m]
+            have hverClean0 : es0.paulis verifier = Pauli.I := by
+              simp [es0, m, verifier]
+            have hcatPrep :=
+              orderedCatPrepZ_clean_preserves_all cat' es0 (by
+                intro q hmem
+                exact hcatClean0 q (by simpa [hcat_eq] using hmem))
+            have hesCatPaulis : esCat.paulis = es0.paulis := by
+              simpa [esCat] using hcatPrep.1
+            have hesCatCursor : esCat.detectorCursor = detectorStart := by
+              calc
+                esCat.detectorCursor = es0.detectorCursor := by
+                  simpa [esCat] using hcatPrep.2.2
+                _ = detectorStart := by simp [es0, m]
+            have hprepV := prepP_state_for_chain verifier esCat
+            have hesPrepVPaulis : esPrepV.paulis = es0.paulis := by
+              funext q
+              by_cases hq : q = verifier
+              · subst q
+                simpa [esPrepV, hesCatPaulis, hverClean0, xOfBool] using hprepV.1
+              · have hpres := hprepV.2.1 q hq
+                rw [hpres, hesCatPaulis]
+            have hesPrepVCursor : esPrepV.detectorCursor = detectorStart := by
+              calc
+                esPrepV.detectorCursor = esCat.detectorCursor := by
+                  simpa [esPrepV] using hprepV.2.2.2
+                _ = detectorStart := hesCatCursor
+            have hc0CleanPrep : esPrepV.paulis c0 = Pauli.I := by
+              rw [hesPrepVPaulis]
+              exact hcatClean0 c0 (by simp [hcat_eq, cat'])
+            have hverCleanPrep : esPrepV.paulis verifier = Pauli.I := by
+              rw [hesPrepVPaulis]
+              exact hverClean0
+            have hcnot1 :=
+              cleanCnot_preserves_all verifier c0 esPrepV hverCleanPrep hc0CleanPrep
+            have hesCnot1Paulis : esCnot1.paulis = es0.paulis := by
+              calc
+                esCnot1.paulis = esPrepV.paulis := by simpa [esCnot1] using hcnot1.1
+                _ = es0.paulis := hesPrepVPaulis
+            have hesCnot1Cursor : esCnot1.detectorCursor = detectorStart := by
+              calc
+                esCnot1.detectorCursor = esPrepV.detectorCursor := by
+                  simpa [esCnot1] using hcnot1.2.2
+                _ = detectorStart := hesPrepVCursor
+            have hlast_mem_cat : last ∈ cat := by
+              have hlast : last ∈ cat' := by
+                simp [last, cat']
+              simpa [hcat_eq] using hlast
+            have hlastClean : esCnot1.paulis last = Pauli.I := by
+              rw [hesCnot1Paulis]
+              exact hcatClean0 last hlast_mem_cat
+            have hverCleanCnot1 : esCnot1.paulis verifier = Pauli.I := by
+              rw [hesCnot1Paulis]
+              exact hverClean0
+            have hcnot2 :=
+              cleanCnot_preserves_all verifier last esCnot1 hverCleanCnot1 hlastClean
+            have hesCnot2Paulis : esCnot2.paulis = es0.paulis := by
+              calc
+                esCnot2.paulis = esCnot1.paulis := by simpa [esCnot2] using hcnot2.1
+                _ = es0.paulis := hesCnot1Paulis
+            have hesCnot2Cursor : esCnot2.detectorCursor = detectorStart := by
+              calc
+                esCnot2.detectorCursor = esCnot1.detectorCursor := by
+                  simpa [esCnot2] using hcnot2.2.2
+                _ = detectorStart := hesCnot1Cursor
+            have hverCleanCnot2 : esCnot2.paulis verifier = Pauli.I := by
+              rw [hesCnot2Paulis]
+              exact hverClean0
+            have hhad := hadamard_clean_preserves_all verifier esCnot2 hverCleanCnot2
+            have hesHadPaulis : esHad.paulis = es0.paulis := by
+              calc
+                esHad.paulis = esCnot2.paulis := by simpa [esHad] using hhad.1
+                _ = es0.paulis := hesCnot2Paulis
+            have hesHadCursor : esHad.detectorCursor = detectorStart := by
+              calc
+                esHad.detectorCursor = esCnot2.detectorCursor := by
+                  simpa [esHad] using hhad.2.2
+                _ = detectorStart := hesCnot2Cursor
+            have hverCleanHad : esHad.paulis verifier = Pauli.I := by
+              rw [hesHadPaulis]
+              exact hverClean0
+            have hflag := flagMeasZ_clean_cursor verifier esHad detectorStart
+              hverCleanHad hesHadCursor
+            have hesPrefixPaulis : esPrefix.paulis = es0.paulis := by
+              calc
+                esPrefix.paulis = esHad.paulis := by simpa [esPrefix] using hflag.2.2
+                _ = es0.paulis := hesHadPaulis
+            have hesPrefixCursor : esPrefix.detectorCursor = detectorStart + 1 := by
+              simpa [esPrefix] using hflag.2.1
+            have hslot_mem :
+                ∀ slot, slot ∈ slots →
+                  ∃ src, src ∈ sourceSlots ∧ slot = liftSlot (k := totalHelpers) src := by
+              intro slot hmem
+              have hmem' : slot ∈ sourceSlots.map (liftSlot (k := totalHelpers)) := by
+                simpa [slots, sigma, liftSchedule] using hmem
+              rcases List.mem_map.mp hmem' with ⟨src, hsrc, rfl⟩
+              exact ⟨src, hsrc, rfl⟩
+            have hslot_ne_cat :
+                ∀ slotPair, slotPair ∈ pairs →
+                  ∀ catPair, catPair ∈ pairs → slotPair.1.qubit ≠ catPair.2 := by
+              intro slotPair hslotPair catPair hcatPair
+              have hs_mem : slotPair.1 ∈ slots := (List.of_mem_zip hslotPair).1
+              have hc_mem : catPair.2 ∈ cat := (List.of_mem_zip hcatPair).2
+              rcases hslot_mem slotPair.1 hs_mem with ⟨src, _hsrc, hsrcEq⟩
+              rcases mem_blockShorCat_helper (n := n) (total := totalHelpers)
+                  (start := helperStart) (w := w) helperFit hc_mem with ⟨a, haEq⟩
+              rw [hsrcEq, haEq]
+              simpa [liftSlot] using
+                (freshDataQ_ne_blockHelperQ (n := n) (total := totalHelpers)
+                  (start := helperStart) (width := w + 1) helperFit src.qubit
+                  ⟨a.val, by exact Nat.lt_trans a.isLt (Nat.lt_succ_self w)⟩)
+            have hcat_nodup : cat.Nodup := by
+              simpa [cat] using
+                blockShorCat_nodup (n := n) (total := totalHelpers)
+                  (start := helperStart) (w := w) helperFit
+            have hpairs_nodup : pairs.Nodup := by
+              exact zip_nodup_of_right_nodup slots cat hcat_nodup
+            have hcat_ne :
+                ∀ pairA, pairA ∈ pairs →
+                  ∀ pairB, pairB ∈ pairs → pairA ≠ pairB → pairA.2 ≠ pairB.2 := by
+              exact zip_right_ne_of_right_nodup slots cat hcat_nodup
+            have hcouple :=
+              shorCouplingPairsCircuit_chain pairs globalE esPrefix hpairs_nodup
+                (by
+                  intro pair hmem
+                  simpa [globalE] using congrFun hesPrefixPaulis pair.1.qubit)
+                (by
+                  intro pair hmem
+                  have hc_mem : pair.2 ∈ cat := (List.of_mem_zip hmem).2
+                  rw [hesPrefixPaulis]
+                  simpa [xOfBool] using hcatClean0 pair.2 hc_mem)
+                (by
+                  intro pair hmem
+                  exact hslot_ne_cat pair hmem pair hmem)
+                hslot_ne_cat hcat_ne
+            have hcoupledCursor : esCoupled.detectorCursor = detectorStart + 1 := by
+              calc
+                esCoupled.detectorCursor = esPrefix.detectorCursor := by
+                  simpa [esCoupled] using hcouple.2.2.2
+                _ = detectorStart + 1 := hesPrefixCursor
+            have hraw :=
+              rawMeasZPairsCircuit_chain pairs globalE false esCoupled (detectorStart + 1)
+                hcoupledCursor (by
+                  intro pair hmem
+                  simpa [esCoupled] using hcouple.1 pair hmem)
+            have hslots_le_cat : slots.length ≤ cat.length := by
+              simp [slots, cat, sigma, liftSchedule, blockShorCat, w, sourceSlots]
+            have hcat_le_slots : cat.length ≤ slots.length := by
+              simp [slots, cat, sigma, liftSchedule, blockShorCat, w, sourceSlots]
+            have hmapPairs : pairs.map Prod.fst = slots := by
+              simpa [pairs] using List.map_fst_zip hslots_le_cat
+            have hrawPairs : rawMeasZPairsCircuit pairs = (cat.map rawMeasZ).flatten := by
+              have hsnd : pairs.map Prod.snd = cat := by
+                simpa [pairs] using List.map_snd_zip hcat_le_slots
+              unfold rawMeasZPairsCircuit
+              rw [← hsnd]
+              simp [List.map_map, Function.comp_def]
+            have hrawPairsCat : rawMeasZPairsCircuit pairs = (cat'.map rawMeasZ).flatten := by
+              rw [hrawPairs, hcat_eq]
+            have hpairs_len : pairs.length = w := by
+              simp [pairs, slots, cat, sigma, liftSchedule, blockShorCat, w, sourceSlots]
+            have hglobal :
+                globalE =
+                  fun q : Fin (n + totalHelpers) =>
+                    (dataInputState (k := totalHelpers)
+                      (fun q : Fin n => E (freshDataQ n totalHelpers q))).paulis q := by
+              funext q
+              by_cases hq : q.val < n
+              · have hqeq : freshDataQ n totalHelpers ⟨q.val, hq⟩ = q := Fin.ext rfl
+                simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+                  stateOfPauliAtDetector, dataInputState, hq, hqeq]
+              · simp [globalE, es0, m, ProgramMeasureAt.dataOnlyStateAtDetector,
+                  stateOfPauliAtDetector, dataInputState, hq]
+            have hparity :
+                scheduleParityList (pairs.map Prod.fst) globalE false =
+                  scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := by
+              rw [hmapPairs, hglobal]
+              simpa [slots, sigma, w] using
+                scheduleParityList_liftSchedule (k := totalHelpers) sigma
+                  (fun q : Fin n => E (freshDataQ n totalHelpers q))
+            have hcompiledCircuit :
+                eraseFaults (compileGadgetBlock .Shor sigma helperStart helperFit) =
+                  eraseFaults (orderedCatPrepZ cat') ++
+                    eraseFaults (prepP verifier) ++
+                    eraseFaults (cnot verifier c0) ++
+                    eraseFaults (cnot verifier last) ++
+                    eraseFaults (hadamard verifier) ++
+                    eraseFaults (flagMeasZ verifier) ++
+                    eraseFaults (shorCouplingPairsCircuit pairs) ++
+                    eraseFaults ((cat'.map rawMeasZ).flatten) := by
+              simp only [compileGadgetBlock, compileGadgetOrdered, compileShorOrdered,
+                blockAncillaConfig, sigma, sourceSlots, w, cat, hcatShape, cat', last,
+                verifier, pairs, slots, shorCouplingPairsCircuit]
+              exact eraseFaults_append8 (orderedCatPrepZ (c0 :: catRest)) (prepP verifier)
+                (cnot verifier c0) (cnot verifier ((c0 :: catRest).getLast (by simp)))
+                (hadamard verifier) (flagMeasZ verifier)
+                ((List.map (fun pair => shorCouplingSlot pair.1 pair.2)
+                  ((liftSchedule { slots := first :: rest }).slots.zip (c0 :: catRest))).flatten)
+                ((List.map rawMeasZ (c0 :: catRest)).flatten)
+            have hcompiled :
+                propagateCircuit (eraseFaults (compileGadgetBlock .Shor sigma helperStart helperFit)) es0 =
+                  propagateCircuit (eraseFaults (rawMeasZPairsCircuit pairs)) esCoupled := by
+              rw [hrawPairsCat, hcompiledCircuit]
+              simpa [esCat, esPrepV, esCnot1, esCnot2, esHad, esPrefix, esCoupled] using
+                (propagateCircuit_append8 (eraseFaults (orderedCatPrepZ cat'))
+                  (eraseFaults (prepP verifier)) (eraseFaults (cnot verifier c0))
+                  (eraseFaults (cnot verifier last)) (eraseFaults (hadamard verifier))
+                  (eraseFaults (flagMeasZ verifier))
+                  (eraseFaults (shorCouplingPairsCircuit pairs))
+                  (eraseFaults ((cat'.map rawMeasZ).flatten)) es0)
+            change
+              m.embeddedDetectorBit
+                (propagateCircuit (eraseFaults (compileGadgetBlock .Shor sigma helperStart helperFit)) es0) =
+                scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q))
+            rw [hcompiled]
+            calc
+              m.embeddedDetectorBit
+                  (propagateCircuit (eraseFaults (rawMeasZPairsCircuit pairs)) esCoupled)
+                  = detectorXorFromAcc (detectorStart + 1) w
+                      (propagateCircuit (eraseFaults (rawMeasZPairsCircuit pairs)) esCoupled)
+                      false := by
+                    simp [m, ProgramMeasureAt.embeddedDetectorBit,
+                      ProgramMeasureAt.shiftedReadout, compiledReadoutFlags,
+                      compiledDetectorCount, ProgramMeasureAt.shiftFlag,
+                      xorBools_finRange_shift_succ_eq_fromAcc, Function.comp_def,
+                      sigma, sourceSlots, w]
+              _ = detectorXorFromAcc (detectorStart + 1) pairs.length
+                      (propagateCircuit (eraseFaults (rawMeasZPairsCircuit pairs)) esCoupled)
+                      false := by
+                    rw [hpairs_len]
+              _ = scheduleParityList (pairs.map Prod.fst) globalE false := hraw.1
+              _ = scheduleParity sigma (fun q : Fin n => E (freshDataQ n totalHelpers q)) := hparity
+
+theorem ProgramMeasureAt.embeddedSynCorrect_auto {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) :
+    m.embeddedSynCorrect := by
+  cases m with
+  | mk scheme schedule helperStart detectorStart helperFit detectorFit =>
+      cases scheme
+      · exact ProgramMeasureAt.embeddedSynCorrect_NZ schedule helperStart detectorStart
+          helperFit detectorFit
+      · exact ProgramMeasureAt.embeddedSynCorrect_Knill schedule helperStart detectorStart
+          helperFit detectorFit
+      · exact ProgramMeasureAt.embeddedSynCorrect_Shor schedule helperStart detectorStart
+          helperFit detectorFit
+      · exact ProgramMeasureAt.embeddedSynCorrect_Flag schedule helperStart detectorStart
+          helperFit detectorFit
+
+def ProgramMeasureAt.embeddedHoareCertificate_auto {n totalHelpers totalFlags : Nat}
+    (m : ProgramMeasureAt n totalHelpers totalFlags) :
+    m.EmbeddedHoareCertificate :=
+  ProgramMeasureAt.embeddedHoareCertificateOfCorrect
+    (ProgramMeasureAt.embeddedSynCorrect_auto m)
+
 theorem fullProgramEmbeddedSynCorrect_of_blocks {n : Nat} (program : XZProgram n)
     (hdisjoint : fullProgramReadoutDisjoint program)
     (hblocks :
@@ -870,6 +1715,58 @@ theorem fullProgram_vcgen_syn_of_embeddedSynCorrect {n : Nat}
   apply vcgen_syn_of_semantic_syn
   simpa [fullProgramVCInput, VCInput.toCodeSpec_ofPCC] using hsyn
 
+def fullProgramBlockHoareCertificates {n : Nat} (program : XZProgram n) :
+    ∀ i : Fin (programNumStab program),
+      ((programMeasuresAt program).get i).EmbeddedHoareCertificate :=
+  fun i => ProgramMeasureAt.embeddedHoareCertificate_auto ((programMeasuresAt program).get i)
+
+theorem fullProgramEmbeddedSynCorrect_of_hoareBlocks {n : Nat}
+    (program : XZProgram n) (hdisjoint : fullProgramReadoutDisjoint program)
+    (hblocks :
+      ∀ i : Fin (programNumStab program),
+        ((programMeasuresAt program).get i).EmbeddedHoareCertificate) :
+    fullProgramEmbeddedSynCorrect program hdisjoint :=
+  fullProgramEmbeddedSynCorrect_of_blocks program hdisjoint
+    (fun i => (hblocks i).to_embeddedSynCorrect)
+
+/-- Full-program generated syndrome certificate: `programEq` and `wf` are
+closed for the compiler-generated spec, and each `.syn` leaf is backed by a real
+QClifford `DerivC` derivation for the corresponding embedded stabilizer block. -/
+def fullProgramSyndromeHoareCertificate {n : Nat}
+    (program : XZProgram n) (hdisjoint : fullProgramReadoutDisjoint program)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    SyndromeHoareCertificate (fullProgramVCInput program hdisjoint hnq hnumStab) where
+  programEq := fullProgram_vcgen_programEq program hdisjoint hnq hnumStab
+  wf := fullProgram_vcgen_wf program hdisjoint hnq hnumStab
+  deriv := by
+    intro i
+    refine QHL.Target.DerivC.C_Consequence
+      (circuitWPDeriv
+        (eraseFaults ((fullProgramCodeSpec program hdisjoint).gadget i))
+        (syndromeHoarePost (fullProgramVCInput program hdisjoint hnq hnumStab) i))
+      ?_ ?_
+    · intro es hpre
+      rcases hpre with ⟨E0, rfl⟩
+      intro E hEq
+      rw [hEq]
+      have hsyn :
+          fullProgramEmbeddedSynCorrect program hdisjoint :=
+        fullProgramEmbeddedSynCorrect_of_hoareBlocks program hdisjoint
+          (fullProgramBlockHoareCertificates program)
+      have hlocal := hsyn i E
+      simpa [fullProgramVCInput, VCInput.toCodeSpec_ofPCC, gadgetMeasFlip]
+        using hlocal
+    · intro es h
+      exact h
+
+theorem fullProgram_vcgen_syn_of_hoareCertificate {n : Nat}
+    (program : XZProgram n) (hdisjoint : fullProgramReadoutDisjoint program)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (fullProgramVCInput program hdisjoint hnq hnumStab)).denoteSlot .syn :=
+  (fullProgramSyndromeHoareCertificate program hdisjoint hnq hnumStab).syn
+
 def generatedFullProgramCodeSpec {n : Nat} (program : XZProgram n) :
     CodeSpec (n + programHelperCount program) :=
   fullProgramCodeSpec program (fullProgramReadoutDisjoint_auto program)
@@ -880,6 +1777,50 @@ def generatedFullProgramVCInput {n : Nat} (program : XZProgram n)
     VCInput (n + programHelperCount program) :=
   fullProgramVCInput program (fullProgramReadoutDisjoint_auto program) hnq hnumStab
 
+theorem generatedFullProgram_vcgen_programEq {n : Nat}
+    (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .programEq :=
+  fullProgram_vcgen_programEq program (fullProgramReadoutDisjoint_auto program) hnq hnumStab
+
+theorem generatedFullProgram_vcgen_wf {n : Nat}
+    (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .wf :=
+  fullProgram_vcgen_wf program (fullProgramReadoutDisjoint_auto program) hnq hnumStab
+
+def generatedFullProgramSyndromeHoareCertificate {n : Nat}
+    (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    SyndromeHoareCertificate (generatedFullProgramVCInput program hnq hnumStab) :=
+  fullProgramSyndromeHoareCertificate program (fullProgramReadoutDisjoint_auto program)
+    hnq hnumStab
+
+structure ProgramCompilationHoareSynCertificate {n : Nat} (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) where
+  circuit : FCircuit (n + programHelperCount program)
+  compileDeriv : ProgramCompileDeriv 0 program circuit
+  programEq : (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .programEq
+  wf : (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .wf
+  hoareSyn : SyndromeHoareCertificate (generatedFullProgramVCInput program hnq hnumStab)
+  syn : (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .syn :=
+    hoareSyn.syn
+
+def XZProgram.generatedCompilationHoareSynCertificate {n : Nat}
+    (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    ProgramCompilationHoareSynCertificate program hnq hnumStab where
+  circuit := compileProgram program
+  compileDeriv := compileProgramDeriv program
+  programEq := generatedFullProgram_vcgen_programEq program hnq hnumStab
+  wf := generatedFullProgram_vcgen_wf program hnq hnumStab
+  hoareSyn := generatedFullProgramSyndromeHoareCertificate program hnq hnumStab
+
 def generatedFullProgramEmbeddedSynCorrect {n : Nat} (program : XZProgram n) : Prop :=
   fullProgramEmbeddedSynCorrect program (fullProgramReadoutDisjoint_auto program)
 
@@ -887,12 +1828,22 @@ def generatedFullProgramBlocksSynCorrect {n : Nat} (program : XZProgram n) : Pro
   ∀ i : Fin (programNumStab program),
     ((programMeasuresAt program).get i).embeddedSynCorrect
 
+theorem generatedFullProgramBlocksSynCorrect_auto {n : Nat} (program : XZProgram n) :
+    generatedFullProgramBlocksSynCorrect program := by
+  intro i
+  exact ProgramMeasureAt.embeddedSynCorrect_auto ((programMeasuresAt program).get i)
+
 theorem generatedFullProgram_embeddedSynCorrect_of_blocks {n : Nat}
     (program : XZProgram n)
     (hblocks : generatedFullProgramBlocksSynCorrect program) :
     generatedFullProgramEmbeddedSynCorrect program := by
   exact fullProgramEmbeddedSynCorrect_of_blocks program
     (fullProgramReadoutDisjoint_auto program) hblocks
+
+theorem generatedFullProgramEmbeddedSynCorrect_auto {n : Nat} (program : XZProgram n) :
+    generatedFullProgramEmbeddedSynCorrect program := by
+  exact generatedFullProgram_embeddedSynCorrect_of_blocks program
+    (generatedFullProgramBlocksSynCorrect_auto program)
 
 theorem generatedFullProgram_vcgen_syn_of_embeddedSynCorrect {n : Nat}
     (program : XZProgram n)
@@ -911,6 +1862,13 @@ theorem generatedFullProgram_vcgen_syn_of_blocks {n : Nat}
     (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .syn := by
   exact generatedFullProgram_vcgen_syn_of_embeddedSynCorrect program hnq hnumStab
     (generatedFullProgram_embeddedSynCorrect_of_blocks program hblocks)
+
+theorem generatedFullProgram_vcgen_syn {n : Nat}
+    (program : XZProgram n)
+    (hnq : 0 < n + programHelperCount program)
+    (hnumStab : 0 < programNumStab program) :
+    (vcgen (generatedFullProgramVCInput program hnq hnumStab)).denoteSlot .syn := by
+  exact (generatedFullProgramSyndromeHoareCertificate program hnq hnumStab).syn
 
 /-! ## Concrete generated syndrome VC example -/
 

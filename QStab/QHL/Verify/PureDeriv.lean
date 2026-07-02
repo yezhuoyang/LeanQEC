@@ -1840,7 +1840,7 @@ private theorem partialStabilizerFold_pointwiseCongr {n : Nat}
 
 /-- The fold of a totally-defined body collapses to `some` of the semantic
     `partialStabilizerFold` of the pointwise interpretation `g`. -/
-private theorem stabFoldEval_total (cb : Term 2 .stab) (fuel : Nat)
+theorem stabFoldEval_total (cb : Term 2 .stab) (fuel : Nat)
     (E : PartialStabilizer) (body : STerm 2 .stab) (width row : Nat)
     (g : Nat -> Nat -> Pauli)
     (hbody : forall (iv : Nat),
@@ -1883,21 +1883,21 @@ theorem foldDisjointF_eval (cb : Term 2 .stab) (fuel : Nat) (E : PartialStabiliz
     (hlhs : forall (row : Nat),
       STerm.eval cb fuel lhs (Env.cons row Env.empty) E =
         some (fun q => some (t row q)))
-    (hunion : forall (row q : Nat),
+    (hunion : forall (row : Nat), row < outerBound -> forall (q : Nat), q < N ->
       partialStabilizerFold width (fun i => fun q => some (g row i q)) q =
         some (t row q)) :
     (foldDisjointF lhs body outerBound width N).eval cb fuel Env.empty E = some true := by
   simp only [foldDisjointF, SFormula.eval, SC.n, STerm.eval, Term.eval]
   apply allNatLt_complete
-  intro row _hrow
+  intro row hrow
   -- The `eqStabUpTo` body at this fixed `row`: reduce the leading `some N` bind,
   -- the LHS operand via totality, and the fold operand via `stabFoldEval_total`.
   have hfold := stabFoldEval_total cb fuel E body width row (g row) (hbody row)
   simp only [SC.n] at hfold
   simp only [bind, Option.bind, hlhs row, hfold]
   apply stabEqUpTo_complete
-  intro q _hq
-  exact ⟨t row q, rfl, hunion row q⟩
+  intro q hq
+  exact ⟨t row q, rfl, hunion row hrow q hq⟩
 
 #print axioms foldDisjointF_eval
 
@@ -2651,7 +2651,7 @@ def DefinedObligations {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (forall (row : Nat),
           Term.eval cb fuel (cut telRowVar) (Env.cons row Env.empty) =
             some (fun q => some (g row q)))
-  | .foldDisjoint lhs body _outerBound width _N =>
+  | .foldDisjoint lhs body outerBound width N =>
       exists (g : Nat -> Nat -> Nat -> Pauli) (t : Nat -> Nat -> Pauli),
         (forall (row iv : Nat),
           STerm.eval cb fuel body (Env.cons iv (Env.cons row Env.empty)) E =
@@ -2659,7 +2659,7 @@ def DefinedObligations {cb : Term 2 .stab} {fuel : Nat} {A : SFormula 0}
         (forall (row : Nat),
           STerm.eval cb fuel lhs (Env.cons row Env.empty) E =
             some (fun q => some (t row q))) /\
-        (forall (row q : Nat),
+        (forall (row : Nat), row < outerBound -> forall (q : Nat), q < N ->
           partialStabilizerFold width (fun i => fun q => some (g row i q)) q =
             some (t row q))
   | .cut1 Dcore hA =>

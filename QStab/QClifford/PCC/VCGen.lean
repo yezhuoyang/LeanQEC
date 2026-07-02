@@ -1,5 +1,6 @@
 import QStab.QClifford.PCC.Basic
 import QStab.QHL.Assertion.Barrier
+import QStab.QHL.Target.Soundness
 
 /-!
 # QClifford PCC verification-condition generation
@@ -823,6 +824,69 @@ def vcgen {nq : Nat} (input : VCInput nq) : GeneratedVCs input where
   hoare := hoareSkeleton input
   slots := [.programEq, .wf, .syn, .ftDistance, .reach]
 
+/-! ## Hoare-backed syndrome discharges -/
+
+/-- Precondition for the Hoare proof of one generated syndrome gadget: the
+state contains an arbitrary data Pauli, no helper error, and the detector cursor
+is positioned at the generated start slot for this stabilizer. -/
+def syndromeHoarePre {nq : Nat} (input : VCInput nq)
+    (i : Fin input.toCodeSpec.numStab) : QHL.Target.AssertionC nq :=
+  fun es =>
+    ∃ E : Fin nq -> Pauli,
+      es =
+        stateOfDataPauliAtDetector input.toCodeSpec
+          (input.toCodeSpec.gadgetDetectorStart i) E
+
+/-- Postcondition for the Hoare proof of one generated syndrome gadget: running
+the generated gadget from any data-only Pauli state produces exactly the
+anticommutation parity with the generated stabilizer row. -/
+def syndromeHoarePost {nq : Nat} (input : VCInput nq)
+    (i : Fin input.toCodeSpec.numStab) : QHL.Target.AssertionC nq :=
+  fun es =>
+    ∀ E : Fin nq -> Pauli,
+      es =
+          propagateCircuit (eraseFaults (input.toCodeSpec.gadget i))
+            (stateOfDataPauliAtDetector input.toCodeSpec
+              (input.toCodeSpec.gadgetDetectorStart i) E) ->
+        syndromeBit input.toCodeSpec es i =
+          parity input.toCodeSpec (input.toCodeSpec.stabilizer i) E
+
+/-- A producer-side proof-carrying syndrome certificate.  Unlike
+`FHoareSkeleton`, this contains real QClifford Hoare derivation trees.  The
+`programEq` and `wf` fields bind those local gadget proofs to the generated
+program/spec pair consumed by VCGen. -/
+structure SyndromeHoareCertificate {nq : Nat} (input : VCInput nq) where
+  programEq : (vcgen input).denoteSlot .programEq
+  wf : (vcgen input).denoteSlot .wf
+  deriv :
+    ∀ i : Fin input.toCodeSpec.numStab,
+      QHL.Target.DerivC nq
+        (syndromeHoarePre input i)
+        (eraseFaults (input.toCodeSpec.gadget i))
+        (syndromeHoarePost input i)
+
+/-- A real target Hoare derivation tree for every generated gadget discharges
+the `.syn` VC slot. -/
+theorem SyndromeHoareCertificate.syn {nq : Nat} {input : VCInput nq}
+    (cert : SyndromeHoareCertificate input) :
+    (vcgen input).denoteSlot .syn := by
+  intro i E
+  have hHoare := QHL.Target.hoare_sound_c (cert.deriv i)
+  have hPost :=
+    hHoare
+      (stateOfDataPauliAtDetector input.toCodeSpec
+        (input.toCodeSpec.gadgetDetectorStart i) E)
+      (propagateCircuit (eraseFaults (input.toCodeSpec.gadget i))
+        (stateOfDataPauliAtDetector input.toCodeSpec
+          (input.toCodeSpec.gadgetDetectorStart i) E))
+      (QHL.Target.cevalC_of_propagateCircuit
+        (eraseFaults (input.toCodeSpec.gadget i))
+        (stateOfDataPauliAtDetector input.toCodeSpec
+          (input.toCodeSpec.gadgetDetectorStart i) E))
+      ⟨E, rfl⟩
+  simpa [vcgen, GeneratedVCs.denoteSlot, VCSlot.denote, gadgetMeasFlip,
+    syndromeHoarePost] using hPost E rfl
+
 /-- Producer discharge record for the barrier-free VC interface.
 
 The field types refer to `vcgen input`, so this is proof evidence for the
@@ -847,6 +911,24 @@ verifier and is retained only for backward-compatibility of downstream code that
 pattern-matches on it.  Both constructors carry the same `DischargedVCs`. -/
 inductive VCGen {nq : Nat} (input : VCInput nq) : Type where
   | mk : DischargedVCs input -> VCGen input
+
+/-- Build a full VCGen discharge from a Hoare-backed syndrome certificate plus
+the remaining non-syndrome obligations.  This is the checked path intended for
+compiled QStab programs: `.programEq`, `.wf`, and `.syn` come from the generated
+program/spec pair and real target Hoare derivation trees. -/
+def VCGen.ofSyndromeHoareCertificate {nq : Nat} {input : VCInput nq}
+    (cert : SyndromeHoareCertificate input)
+    (ftDistance : (vcgen input).denoteSlot .ftDistance)
+    (reachScript : List (Option Pauli))
+    (reachOk : (vcgen input).denoteSlot .reach reachScript) :
+    VCGen input :=
+  .mk
+    { reachScript := reachScript
+      programEq := cert.programEq
+      wf := cert.wf
+      syn := cert.syn
+      ftDistance := ftDistance
+      reachOk := reachOk }
 
 /-- Trusted VCGen soundness theorem.
 
@@ -954,7 +1036,7 @@ def VCGen.ofDistanceCertificate {nq : Nat} {C : FCircuit nq} {spec : CodeSpec nq
       wf := by simpa [vcgen] using cert.wf
       syn := by simpa [vcgen] using cert.syn
       ftDistance := by
-        simp only [vcgen, GeneratedVCs.denoteSlot, VCSlot.denote, VCInput.toCodeSpec_ofPCC]
+        simp only [GeneratedVCs.denoteSlot, VCSlot.denote, VCInput.toCodeSpec_ofPCC]
         exact ftDistance_of_certificate cert hnq hnumStab
       reachScript := cert.reachScript
       reachOk := by simpa [vcgen] using cert.reachOk }
@@ -971,7 +1053,7 @@ def VCGen.ofDistanceCertificate' {nq : Nat} {C : FCircuit nq} {spec : CodeSpec n
       wf := by simpa [vcgen] using cert.wf
       syn := by simpa [vcgen] using cert.syn
       ftDistance := by
-        simp only [vcgen, GeneratedVCs.denoteSlot, VCSlot.denote, VCInput.toCodeSpec_ofPCC]
+        simp only [GeneratedVCs.denoteSlot, VCSlot.denote, VCInput.toCodeSpec_ofPCC]
         exact ftDistance_of_certificate' cert hnq hnumStab
       reachScript := cert.reachScript
       reachOk := by simpa [vcgen] using cert.reachOk }

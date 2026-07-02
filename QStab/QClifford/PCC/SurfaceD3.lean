@@ -919,6 +919,14 @@ theorem surfaceSyntax_dataVector_eq (es : ErrorState 10) :
   funext q
   simp [dataVector, surfaceSyntax_isData_eq]
 
+theorem surfaceSyntax_flagSlot_eq (f : Fin 8) :
+    surfaceSyntaxSpec.flagSlot f = surfaceSpec.flagSlot f := rfl
+
+theorem surfaceSyntax_dataOnly_eq (E : Fin 10 -> Pauli) :
+    dataOnlyPauli surfaceSyntaxSpec E = dataOnlyPauli surfaceSpec E := by
+  funext q
+  simp [dataOnlyPauli, surfaceSyntax_isData_eq]
+
 theorem surfaceSyntax_prodStab_eq (mask : Fin surfaceSyntaxSpec.numStab -> Bool) :
     prodStab surfaceSyntaxSpec mask = prodStab surfaceSpec mask := by
   funext q
@@ -1001,7 +1009,8 @@ theorem surfaceSyntax_syn :
   intro i E
   have h := surfaceSyn i E
   simpa [gadgetMeasFlip, parity, syndromeBit, surfaceSyntax_readout_eq,
-    surfaceSyntax_detectorStart_eq, surfaceSyntax_gadget_eq, surfaceSyntax_stabilizer_eq]
+    surfaceSyntax_detectorStart_eq, surfaceSyntax_gadget_eq, surfaceSyntax_stabilizer_eq,
+    surfaceSyntax_flagSlot_eq, surfaceSyntax_dataOnly_eq, stateOfDataPauliAtDetector]
     using h
 
 theorem surfaceSyntax_step :

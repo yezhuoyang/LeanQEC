@@ -1,7 +1,9 @@
 import QStab.QHL.Verify.SurfaceRowCharacterizationSym
 import QStab.QHL.Verify.SurfaceNormalizers
 import QStab.QHL.Verify.SurfaceRowsCommute
+import QStab.QHL.Verify.SurfaceRowsCommuteDefined
 import QStab.QHL.Verify.SurfaceBridges
+import QStab.QHL.Verify.SurfaceLowerDefined
 
 /-!
 # Surface-code distance — PROVER DELIVERABLE (fill in the gaps)
@@ -85,11 +87,7 @@ def proverWitness : ParametricSurfaceWitness where
     -- the `rows` overlap dispatcher.
     codeLevelPureFromGeneratedRows D
       (rows := rowsCommuteSym D) (xNorm := xNormScaffold D) (zNorm := zNormScaffold D)
-  codeLevelDefined := by
-    -- GOAL: ∀ D E, (codeLevel D).DefinedObligations E
-    -- Discharge the tree's definedness side-conditions (recUnfold nodes need the
-    -- recCall defined up to n; core nodes need the SFormula.Deriv definedness).
-    sorry
+  codeLevelDefined := fun D E => codeLevelDefinedAux D E
   lowerBound := fun D =>
     -- GOAL: ∀ D, PureForallStabDeriv code.body (bridgeProofFuel D)
     --                                (distanceLowerBoundForallStabF D)
@@ -105,10 +103,7 @@ def proverWitness : ParametricSurfaceWitness where
         colBridgeGenerated := colBridgeGeneratedPure D
         colStripIndexInRange := colStripRangePure D
         colCutTelescoping := colCutTelescopingPure D }
-  lowerDefined := by
-    -- GOAL: ∀ D E n, width.eval … = some n → TotalUpTo n E →
-    --                  (lowerBound D).DefinedObligations E
-    sorry
+  lowerDefined := fun D E n hWidth hTotal => lowerDefinedAux D E n hWidth hTotal
 
 /-- **The final, parametric, faithful distance theorem.**
 
