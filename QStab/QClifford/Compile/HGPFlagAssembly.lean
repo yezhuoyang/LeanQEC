@@ -247,6 +247,101 @@ theorem hgpFlag_leafClean (d : Nat) (hd : 2 ≤ d) :
   obtain ⟨i, rfl, rfl⟩ := hgpSchemeProgram_measLeaf Scheme.Flag d hd sc sg hml
   exact ⟨flagBlock_cab _ _ _, flagBlock_PDA _ _ _⟩
 
+/-! ## Generalized anc-fault chain hook (helpers allowed in the chain)
+
+The Flag block's ancilla chain contains the `flag` **helper** control (from
+`cnot flag anc`), so `chain_residual_hook`'s data-only requirement is too
+strong.  This drops it: the head control site is now split — a *data* control
+gives a weight-`≤ 1` residual (excluded), a *helper* control gives a weight-`0`
+residual (excluded) — and the anc site still yields the `Z` suffix hook (helper
+entries in the suffix are invisible to the data residual). -/
+theorem chain_residual_hook_gen {P : QECParams} {total : Nat} (a : Fin (P.n + total))
+    (hancHelper : P.n ≤ a.val) (tail : FCircuit (P.n + total))
+    (htail : ∀ (es : ErrorState (P.n + total)) (q'' : Fin P.n),
+      (propagateCircuit (eraseFaults tail) es).paulis (freshDataQ P.n total q'') =
+        es.paulis (freshDataQ P.n total q'')) :
+    ∀ (qs : List (Fin (P.n + total))), a ∉ qs → qs.Nodup →
+      ∀ (cursor : Nat) (site : PCC.ErrLocWithContext (P.n + total)) (p : Pauli) (hp : p ≠ Pauli.I),
+        site ∈ prefixErrLocsWithContextAux cursor ((qs.map (fun q => cnot q a)).flatten) tail →
+        ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) ≠ 0 →
+        ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) ≠ 1 →
+        ∃ k, targetFaultDataResidual P ⟨site, p, hp⟩ =
+          fun q' => if freshDataQ P.n total q' ∈ qs.drop k then Pauli.Z else Pauli.I := by
+  intro qs
+  induction qs with
+  | nil =>
+      intro _ _ cursor site p hp hsite _ _
+      simp [prefixErrLocsWithContextAux] at hsite
+  | cons q qs' ih =>
+      intro hanc hnd cursor site p hp hsite hw0 hw1
+      have hqmem : q ∈ (q :: qs') := List.mem_cons_self
+      have hqa : q ≠ a := fun h => hanc (h ▸ hqmem)
+      have hanc' : a ∉ qs' := fun h => hanc (List.mem_cons_of_mem _ h)
+      have hnd' : qs'.Nodup := (List.nodup_cons.mp hnd).2
+      rw [show ((q :: qs').map (fun q => cnot q a)).flatten =
+            cnot q a ++ (qs'.map (fun q => cnot q a)).flatten from by
+            simp [List.map_cons, List.flatten_cons],
+          prefixErrLocs_append] at hsite
+      simp only [List.mem_append] at hsite
+      have hsuffix :
+          Gate.cnot q a hqa :: eraseFaults ((qs'.map (fun q => cnot q a)).flatten ++ tail) =
+            eraseFaults (((q :: qs').map (fun q => cnot q a)).flatten) ++ eraseFaults tail := by
+        rw [eraseFaults_append, eraseFaults_cnotChain_cons a q hqa, List.cons_append]
+      rcases hsite with hhead | hrec
+      · rw [prefixErrLocs_cnot a q hqa] at hhead
+        simp only [List.mem_cons, List.not_mem_nil, or_false] at hhead
+        rcases hhead with rfl | rfl
+        · -- head control site `q`: data ⇒ weight ≤ 1, helper ⇒ weight 0; both excluded
+          exfalso
+          have hres : targetFaultDataResidual P
+              ⟨⟨q, Gate.cnot q a hqa :: eraseFaults ((qs'.map (fun q => cnot q a)).flatten ++ tail),
+                cursor⟩, p, hp⟩ =
+              fun q' => if freshDataQ P.n total q' = q then p else Pauli.I := by
+            funext q'
+            show (propagateCircuit
+                (Gate.cnot q a hqa :: eraseFaults ((qs'.map (fun q => cnot q a)).flatten ++ tail))
+                ((PCC.cleanAtDetector cursor).inject q p)).paulis (freshDataQ P.n total q') = _
+            rw [hsuffix]
+            exact residual_data_chainTail a (q :: qs') hanc hancHelper (eraseFaults tail) htail
+              cursor q (List.mem_cons.mpr (Or.inl rfl)) p q'
+          by_cases hqd : q.val < P.n
+          · have hle : ErrorVec.weight
+                (fun q' => if freshDataQ P.n total q' = q then p else Pauli.I) ≤ 1 := by
+              apply weight_le_one_of_single _ ⟨q.val, hqd⟩
+              intro q'' hne
+              have hfne : freshDataQ P.n total q'' ≠ q := by
+                intro h; apply hne; apply Fin.ext
+                simpa [freshDataQ_val] using congrArg Fin.val h
+              rw [if_neg hfne]
+            rw [hres] at hw0 hw1
+            omega
+          · apply hw0
+            rw [hres]
+            apply weight_zero_of_allI
+            intro q'
+            refine if_neg (fun h => hqd ?_)
+            have hval : q.val = q'.val := by rw [← h]; simp [freshDataQ_val]
+            rw [hval]; exact q'.isLt
+        · -- anc site: `zPart p` on the whole current suffix
+          have hres : targetFaultDataResidual P
+              ⟨⟨a, Gate.cnot q a hqa :: eraseFaults ((qs'.map (fun q => cnot q a)).flatten ++ tail),
+                cursor⟩, p, hp⟩ =
+              fun q' => if freshDataQ P.n total q' ∈ (q :: qs') then zPart p else Pauli.I := by
+            funext q'
+            show (propagateCircuit
+                (Gate.cnot q a hqa :: eraseFaults ((qs'.map (fun q => cnot q a)).flatten ++ tail))
+                ((PCC.cleanAtDetector cursor).inject a p)).paulis (freshDataQ P.n total q') = _
+            rw [hsuffix]
+            exact residual_anc_chainTail a (q :: qs') hanc hnd hancHelper (eraseFaults tail) htail
+              cursor p q'
+          by_cases hzp : zPart p = Pauli.I
+          · exfalso; apply hw0; apply weight_zero_of_allI; intro q'; rw [hres]; simp [hzp]
+          · have hzZ : zPart p = Pauli.Z := by cases p <;> simp_all [zPart]
+            refine ⟨0, ?_⟩
+            rw [hres]; funext q'; simp [hzZ, List.drop_zero]
+      · obtain ⟨k, hk⟩ := ih hanc' hnd' _ site p hp hrec hw0 hw1
+        exact ⟨k + 1, hk⟩
+
 /--
 info: 'QStab.QClifford.Compile.hgpFlag_leafClean' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
