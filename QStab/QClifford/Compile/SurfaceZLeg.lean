@@ -277,4 +277,67 @@ theorem crux_bulkX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (r c : Nat)
   rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
   nomatch hpar
 
+/-! ## The abstract pivot-peel
+
+Generic over an invariant `Inv` and a single dispatch hypothesis folding the pivot table and the
+crux oracle: at a live cell either a pivot generator clears it (leaving the row-major prefix and
+`Inv` intact) or the cell is dead.  Ascending `k` with `fuel = P.n - k` (the `reach_fold`
+recipe); no Z-specific content, so the X-leg reuses it with the dual pivots. -/
+
+/-- Multiplying by a `Z`-type generator is an involution. -/
+theorem mul_ztype_involutive {n : Nat} (g z : ErrorVec n)
+    (hg : ∀ i, g i = Pauli.Z ∨ g i = Pauli.I) :
+    ErrorVec.mul g (ErrorVec.mul g z) = z := by
+  funext i; simp only [ErrorVec.mul]; rcases hg i with h | h <;> rw [h] <;> cases z i <;> decide
+
+/-- A `Z`-pivot clears its cell (`Z · Z = I`). -/
+theorem mul_clears {n : Nat} (g z : ErrorVec n) (k : Fin n) (hgk : g k = Pauli.Z)
+    (hzk : z k = Pauli.Z) : ErrorVec.mul g z k = Pauli.I := by
+  simp only [ErrorVec.mul, hgk, hzk]; decide
+
+/-- A generator that is `I` before its pivot leaves earlier cells fixed. -/
+theorem mul_prefix {n : Nat} (g z : ErrorVec n) (q : Fin n) (hgq : g q = Pauli.I) :
+    ErrorVec.mul g z q = z q := by
+  simp only [ErrorVec.mul, hgq]; cases z q <;> decide
+
+/-- **The abstract pivot-peel.**  Under `hdispatch` (a live cell either has a clearing pivot
+generator or is dead), any `Inv`-vector cleared below `k` is a stabilizer product. -/
+theorem abstract_peel {P : QECParams} (Inv : ErrorVec P.n → Prop)
+    (hInvZ : ∀ z, Inv z → ∀ i, z i = Pauli.Z ∨ z i = Pauli.I)
+    (hdispatch : ∀ (k : Fin P.n) (z : ErrorVec P.n), Inv z →
+      (∀ q : Fin P.n, q.val < k.val → z q = Pauli.I) → z k ≠ Pauli.I →
+      ∃ g, QStab.InStab P g ∧ (∀ i, g i = Pauli.Z ∨ g i = Pauli.I) ∧
+        (∀ q : Fin P.n, q.val < k.val → g q = Pauli.I) ∧ g k = Pauli.Z
+        ∧ Inv (ErrorVec.mul g z)) :
+    ∀ (fuel k : Nat), P.n - k = fuel → k ≤ P.n → ∀ z : ErrorVec P.n, Inv z →
+      (∀ q : Fin P.n, q.val < k → z q = Pauli.I) → QStab.InStab P z := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro k _hfuel hk z _hInv hcleared
+      have hkeq : k = P.n := by omega
+      have hzid : z = ErrorVec.identity P.n :=
+        funext fun q => hcleared q (by rw [hkeq]; exact q.isLt)
+      rw [hzid]; exact QStab.InStab.identity
+  | succ fuel ih =>
+      intro k hfuel hk z hInv hcleared
+      have hklt : k < P.n := by omega
+      by_cases hzk : z ⟨k, hklt⟩ = Pauli.I
+      · refine ih (k + 1) (by omega) (by omega) z hInv (fun q hq => ?_)
+        rcases Nat.lt_succ_iff_lt_or_eq.mp hq with h | h
+        · exact hcleared q h
+        · rw [show q = ⟨k, hklt⟩ from Fin.ext h]; exact hzk
+      · obtain ⟨g, hg_stab, hg_zt, hg_prefix, hg_k, hg_inv⟩ :=
+          hdispatch ⟨k, hklt⟩ z hInv hcleared hzk
+        have hz'cleared : ∀ q : Fin P.n, q.val < k + 1 → ErrorVec.mul g z q = Pauli.I := by
+          intro q hq
+          rcases Nat.lt_succ_iff_lt_or_eq.mp hq with h | h
+          · rw [mul_prefix g z q (hg_prefix q h)]; exact hcleared q h
+          · rw [show q = ⟨k, hklt⟩ from Fin.ext h,
+              mul_clears g z ⟨k, hklt⟩ hg_k ((hInvZ z hInv ⟨k, hklt⟩).resolve_right hzk)]
+        have hz' : QStab.InStab P (ErrorVec.mul g z) :=
+          ih (k + 1) (by omega) (by omega) (ErrorVec.mul g z) hg_inv hz'cleared
+        rw [← mul_ztype_involutive g z hg_zt]
+        exact QStab.InStab.mul hg_stab hz'
+
 end QStab.QClifford.Compile
