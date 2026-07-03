@@ -60,4 +60,40 @@ Hamming rows: bit 0 hits `q+1 ∈ {1,3,5,7}` (qubits 0,2,4,6); bit 1 hits
 #eval (List.range 7).map fun q => Steane.code.evalAt? 7 5 q
 -- expect [I, I, I, Z, Z, Z, Z]
 
+/-! ## Certified evaluation (Route B): axiom-clean, no `native_decide`. -/
+
+private lemma env3_zero (a b c : Nat) : (Env.cons a (Env.code b c)) 0 = a := rfl
+private lemma env3_one (a b c : Nat) : (Env.cons a (Env.code b c)) 1 = c := rfl
+
+/-- Nat-mirror of `hammingBit`: bit `r` of `qq + 1`. -/
+def hammingBitN (r qq : Nat) : Bool := decide ((qq + 1) / (2 ^ r) % 2 = 1)
+
+/-- Nat-mirror of `rowBit`. -/
+def steaneRowBitN (base kk qq : Nat) : Bool :=
+  if kk = base then hammingBitN 0 qq
+  else if kk = base + 1 then hammingBitN 1 qq
+  else hammingBitN 2 qq
+
+/-- Arithmetic mirror of `steaneEntryAST` (the `.and` short-circuit expanded to nested ifs). -/
+def steaneEntryArith (kk qq : Nat) : Pauli :=
+  if kk < 6 then
+    if qq < 7 then
+      if kk < 3 then
+        (if steaneRowBitN 0 kk qq then Pauli.X else Pauli.I)
+      else
+        (if steaneRowBitN 3 kk qq then Pauli.Z else Pauli.I)
+    else Pauli.I
+  else Pauli.I
+
+/-- **Certified evaluation**: the Steane object program evaluates to its arithmetic mirror
+at every `(d, k, q)` — through `Term.eval`'s equation lemmas, no `native_decide`. -/
+theorem code_evalAt?_eq_arith (dd kk qq : Nat) :
+    code.evalAt? dd kk qq = some (steaneEntryArith kk qq) := by
+  show CodeFn.evalEntry? code (CodeFn.fuelForDistance dd) dd kk qq = _
+  simp only [CodeFn.evalEntry?, CodeFn.evalStabilizer?, code, steaneEntryAST, rowBit,
+    hammingBit, qv, kv, steaneEntryArith, steaneRowBitN, hammingBitN, Term.eval,
+    Env.cons, Env.code, Env.empty, env3_zero, env3_one, bind, Option.bind,
+    decide_eq_true_eq]
+  split_ifs <;> simp_all
+
 end QHL.CodeLang.Steane
