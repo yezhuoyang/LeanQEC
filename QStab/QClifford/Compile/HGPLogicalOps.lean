@@ -1,4 +1,5 @@
 import QStab.QClifford.Compile.HGPXDistance
+import QStab.QClifford.Compile.CSSSplit
 import QStab.Paper.LogicalCosets
 
 /-!
@@ -1191,76 +1192,6 @@ private theorem hgp_xside (d : Nat) (hd : 2 ≤ d) (E : ErrorVec (hgpN d))
   exact h2
 
 /-! ## The CSS split and the maximal-isotropic headline -/
-
-private def zPartVec {n : Nat} (E : ErrorVec n) : ErrorVec n := fun q =>
-  match E q with
-  | Pauli.Z => Pauli.Z
-  | Pauli.Y => Pauli.Z
-  | _ => Pauli.I
-
-private def xPartVec {n : Nat} (E : ErrorVec n) : ErrorVec n := fun q =>
-  match E q with
-  | Pauli.X => Pauli.X
-  | Pauli.Y => Pauli.X
-  | _ => Pauli.I
-
-private theorem xPart_mul_zPart {n : Nat} (E : ErrorVec n) :
-    ErrorVec.mul (xPartVec E) (zPartVec E) = E := by
-  funext q
-  show Pauli.mul (xPartVec E q) (zPartVec E q) = E q
-  cases h : E q <;> simp only [xPartVec, zPartVec, h] <;> rfl
-
-private theorem zPartVec_ztype {n : Nat} (E : ErrorVec n) :
-    ∀ q, zPartVec E q = Pauli.Z ∨ zPartVec E q = Pauli.I := by
-  intro q
-  unfold zPartVec
-  cases E q
-  · exact Or.inr rfl
-  · exact Or.inr rfl
-  · exact Or.inl rfl
-  · exact Or.inl rfl
-
-private theorem xPartVec_xtype {n : Nat} (E : ErrorVec n) :
-    ∀ q, xPartVec E q = Pauli.X ∨ xPartVec E q = Pauli.I := by
-  intro q
-  unfold xPartVec
-  cases E q
-  · exact Or.inr rfl
-  · exact Or.inl rfl
-  · exact Or.inl rfl
-  · exact Or.inr rfl
-
-/-- X-type rows read only the Z-content of an error. -/
-private theorem parity_xtype_zPart {n : Nat} (S E : ErrorVec n)
-    (hS : ∀ q, S q = Pauli.X ∨ S q = Pauli.I) :
-    ErrorVec.parity S E = ErrorVec.parity S (zPartVec E) := by
-  unfold ErrorVec.parity
-  have hcard : (Finset.univ.filter fun i =>
-        ErrorVec.Pauli.anticommutes (S i) (E i)).card
-      = (Finset.univ.filter fun i =>
-        ErrorVec.Pauli.anticommutes (S i) (zPartVec E i)).card := by
-    apply Finset.card_equiv (Equiv.refl _)
-    intro q
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Equiv.refl_apply]
-    rcases hS q with h | h <;> cases hE : E q <;>
-      simp [h, hE, zPartVec, ErrorVec.Pauli.anticommutes]
-  rw [hcard]
-
-/-- Z-type rows read only the X-content of an error. -/
-private theorem parity_ztype_xPart {n : Nat} (S E : ErrorVec n)
-    (hS : ∀ q, S q = Pauli.Z ∨ S q = Pauli.I) :
-    ErrorVec.parity S E = ErrorVec.parity S (xPartVec E) := by
-  unfold ErrorVec.parity
-  have hcard : (Finset.univ.filter fun i =>
-        ErrorVec.Pauli.anticommutes (S i) (E i)).card
-      = (Finset.univ.filter fun i =>
-        ErrorVec.Pauli.anticommutes (S i) (xPartVec E i)).card := by
-    apply Finset.card_equiv (Equiv.refl _)
-    intro q
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Equiv.refl_apply]
-    rcases hS q with h | h <;> cases hE : E q <;>
-      simp [h, hE, xPartVec, ErrorVec.Pauli.anticommutes]
-  rw [hcard]
 
 private theorem zbar_ztype (d : Nat) :
     ∀ q, mkHGPRepLogicalZ d q = Pauli.Z ∨ mkHGPRepLogicalZ d q = Pauli.I := by

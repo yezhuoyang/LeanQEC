@@ -93,4 +93,27 @@ theorem Fin_cast_forall_iff {m m' : Nat} (h : m = m') (Q : Fin m' → Prop) :
     rwa [show Fin.cast h (Fin.cast h.symm j) = j from Fin.ext rfl] at this
   · intro H i; exact H (Fin.cast h i)
 
+-- Regression guards (axiom pins).
+/-- info: 'QStab.QClifford.Compile.foldl_ev_apply' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms foldl_ev_apply
+
+/--
+info: 'QStab.QClifford.Compile.qecMaskProd_apply' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms qecMaskProd_apply
+
+/-- info: 'QStab.QClifford.Compile.foldl_transport' depends on axioms: [Quot.sound] -/
+#guard_msgs in
+#print axioms foldl_transport
+
+/-- info: 'QStab.QClifford.Compile.foldl_pauliMul_allI' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms foldl_pauliMul_allI
+
+/-- info: 'QStab.QClifford.Compile.Fin_cast_forall_iff' does not depend on any axioms -/
+#guard_msgs in
+#print axioms Fin_cast_forall_iff
+
 end QStab.QClifford.Compile

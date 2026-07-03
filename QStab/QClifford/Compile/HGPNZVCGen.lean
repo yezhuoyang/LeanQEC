@@ -39,8 +39,23 @@ theorem hgpXZ_vcgen_synD (d : Nat) (hd : 2 ≤ d)
       hnq hnumStab)).denoteSlot .syn :=
   generatedFullProgram_vcgen_synD (hgpXZProgram d) d (by omega) hnq hnumStab
 
+-- Regression guards (axiom pins).
+/--
+info: 'QStab.QClifford.Compile.hgpXZ_vcgen_programEqD' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
 #print axioms hgpXZ_vcgen_programEqD
+
+/--
+info: 'QStab.QClifford.Compile.hgpXZ_vcgen_wfD' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
 #print axioms hgpXZ_vcgen_wfD
+
+/--
+info: 'QStab.QClifford.Compile.hgpXZ_vcgen_synD' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
 #print axioms hgpXZ_vcgen_synD
 
 end QStab.QClifford.Compile

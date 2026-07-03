@@ -256,6 +256,20 @@ theorem normalizer_decomposition {P : QECParams} (L : LogicalOps P)
     · -- parity Z̄ (X̄·Z̄·E) = true ⊕ false ⊕ true = false
       rw [parity_mul_right, parity_mul_right, h_Z_X, h_Z_Z, ← ha_def, ha]; rfl
 
+/-- **Coverage (the contrapositive of maximal isotropy).**  A normalizer
+    element outside the stabilizer subgroup anticommutes with `X̄` or with
+    `Z̄` — the form the compiled `ftDistance` assemblies consume. -/
+theorem LogicalOps.coverage {P : QECParams} (L : LogicalOps P) (E : ErrorVec P.n)
+    (hE : ∀ s, ErrorVec.parity (P.stabilizers s) E = false)
+    (hnot : ¬ QStab.InStab P E) :
+    ErrorVec.parity L.Xbar E = true ∨ ErrorVec.parity L.Zbar E = true := by
+  by_cases hx : ErrorVec.parity L.Xbar E = true
+  · exact Or.inl hx
+  · by_cases hz : ErrorVec.parity L.Zbar E = true
+    · exact Or.inr hz
+    · exact absurd (L.maximal_isotropic E hE
+        (Bool.eq_false_iff.mpr hx) (Bool.eq_false_iff.mpr hz)) hnot
+
 /-! # General k case: [[n, k]] codes
 
 Same structural argument as the k=1 case, but with 2k logical operators

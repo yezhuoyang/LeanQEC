@@ -550,6 +550,31 @@ theorem lifted_nodup {n total : Nat} (sigma : RuleSchedule n)
   rw [hs, hcomp]
   exact h.map (fun _ _ hab => freshDataQ_inj hab)
 
+/-- `foldr xor false` of an all-`false` list is `false`. -/
+theorem foldr_xor_false_of_all {L : List Bool} (h : ∀ b ∈ L, b = false) :
+    L.foldr xor false = false := by
+  induction L with
+  | nil => rfl
+  | cons b bs ih =>
+    rw [List.foldr_cons, h b (List.mem_cons.mpr (Or.inl rfl)), Bool.false_xor]
+    exact ih (fun x hx => h x (List.mem_cons.mpr (Or.inr hx)))
+
+/-- **Quiet detectors satisfy the acceptance predicate** (generic): if every
+detector slot reads `false`, every syndrome bit is an XOR of falses and every
+post-selection flag is quiet.  Consumed by the reach-slot closes (HGP now,
+the surface back-port next). -/
+theorem allFlagsZero_of_detectors_false {nq : Nat} (spec : CodeSpec nq)
+    (es : ErrorState nq) (h : ∀ s, es.detectors s = false) :
+    allFlagsZero spec es := by
+  refine ⟨?_, ?_⟩
+  · intro i
+    simp only [syndromeBit, xorBools]
+    exact foldr_xor_false_of_all (fun b hb => by
+      obtain ⟨f, _, rfl⟩ := List.mem_map.mp hb
+      exact h _)
+  · intro i _
+    exact h _
+
 /-! ## Bridge to the compiler front-end -/
 
 /-- **The compiled NZ gadget block is an `nzBlock`.**  `compileGadgetBlock .NZ` unfolds to
