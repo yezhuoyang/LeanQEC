@@ -215,7 +215,111 @@ theorem shorCouplings_from_catvec {nq : Nat} :
         rw [ih es1 (List.nodup_cons.mp hndc0).2 (List.nodup_cons.mp hndq0).2 hqc'
           hclean1 pc hpc', hcat1]
 
-/-! ## Regression guards -/
+/-! ## Cascade-site zPart-vector lemmas
+
+`couplingHook` factors through `zPart`, so the coupling walk only consumes the
+Z-part of the cat vector — the `X`-junk a cascade fault spreads forward never
+needs to be characterized. -/
+
+theorem couplingHook_eq_of_zPart {k : XZPauli} {w w' : Pauli}
+    (h : zPart w = zPart w') : couplingHook k w = couplingHook k w' := by
+  cases k <;> simp [couplingHook, h]
+
+/-- `zPart` of an `xPart` is always trivial. -/
+theorem zPart_xPart (p : Pauli) : zPart (xPart p) = Pauli.I := by
+  cases p <;> rfl
+
+/-- `xPart` of a `zPart` is always trivial. -/
+theorem xPart_zPart (p : Pauli) : xPart (zPart p) = Pauli.I := by
+  cases p <;> rfl
+
+/-- Multiplying by an `xPart` on the left never changes the `zPart`. -/
+theorem zPart_pauliMul_xPart_left (a b : Pauli) :
+    zPart (pauliMul (xPart a) b) = zPart b := by
+  cases a <;> cases b <;> rfl
+
+/-- Multiplying by a trivial `zPart` on the left is the identity. -/
+theorem pauliMul_zPart_I {b c : Pauli} (h : zPart b = Pauli.I) :
+    pauliMul (zPart b) c = c := by
+  rw [h]; cases c <;> rfl
+
+/-- One compiled cnot with a Z-free **target** changes no qubit's `zPart`:
+the control commutes through (`pauliMul I`), the target only picks up an
+`xPart`. -/
+theorem cnot_zPart_step {nq : Nat} (c t : Fin nq) (es : ErrorState nq)
+    (ht : zPart (es.paulis t) = Pauli.I) (x : Fin nq) :
+    zPart ((propagateCircuit (eraseFaults (cnot c t)) es).paulis x)
+      = zPart (es.paulis x) := by
+  by_cases hct : c = t
+  · simp [cnot, hct, propagateCircuit]
+  · have he : eraseFaults (cnot c t) = [Gate.cnot c t hct] := by
+      simp [cnot, hct, eraseFaults]
+    rw [he]
+    simp only [propagateCircuit]
+    by_cases hxt : x = t
+    · rw [hxt, propagateGate_cnot_target, zPart_pauliMul_xPart_left]
+    · by_cases hxc : x = c
+      · rw [hxc, propagateGate_cnot_control, pauliMul_zPart_I ht]
+      · rw [propagateGate_cnot_paulis_ne c t hct es x hxc hxt]
+
+/-- **Cascade pass-through (zPart projection)**: a cascade suffix whose
+**targets** are all Z-free on entry changes no qubit's `zPart` (Z on a control
+commutes forward; targets only accumulate `xPart`s, so they stay Z-free). -/
+theorem cascade_zPart_invariant {nq : Nat} :
+    ∀ (ps : List (Fin nq × Fin nq)) (es : ErrorState nq),
+      (∀ p ∈ ps, zPart (es.paulis p.2) = Pauli.I) →
+      ∀ x : Fin nq,
+        zPart ((propagateCircuit (eraseFaults
+            ((ps.map (fun cc => cnot cc.1 cc.2)).flatten)) es).paulis x)
+          = zPart (es.paulis x) := by
+  intro ps
+  induction ps with
+  | nil => intro es _ x; rfl
+  | cons p0 rest ih =>
+      intro es htgt x
+      have hcirc : eraseFaults (((p0 :: rest).map (fun cc => cnot cc.1 cc.2)).flatten)
+          = eraseFaults (cnot p0.1 p0.2) ++
+            eraseFaults ((rest.map (fun cc => cnot cc.1 cc.2)).flatten) := by
+        simp only [List.map_cons, List.flatten_cons, eraseFaults_append]
+      rw [hcirc, QHL.Target.propagateCircuit_append]
+      set es1 := propagateCircuit (eraseFaults (cnot p0.1 p0.2)) es with hes1
+      have hstep : ∀ y : Fin nq, zPart (es1.paulis y) = zPart (es.paulis y) := fun y =>
+        cnot_zPart_step p0.1 p0.2 es (htgt p0 (List.mem_cons_self ..)) y
+      have htgt1 : ∀ p ∈ rest, zPart (es1.paulis p.2) = Pauli.I := fun p hp =>
+        (hstep p.2).trans (htgt p (List.mem_cons.mpr (Or.inr hp)))
+      exact (ih es1 htgt1 x).trans (hstep x)
+
+/-- **Verifier legs preserve every zPart off the verifier**: `cnot v c` with
+any control state multiplies only `xPart (paulis v)` onto `c`, and `zPart ∘
+xPart = I`; `prepP`/`hadamard`/`measZ` on `v` don't touch other qubits. -/
+theorem verifierLegs_zPart_off {nq : Nat} (v c0 clast : Fin nq)
+    (es : ErrorState nq) (x : Fin nq) (hx : x ≠ v) :
+    zPart ((propagateCircuit (eraseFaults (prepP v ++ cnot v c0 ++ cnot v clast ++
+        hadamard v ++ flagMeasZ v)) es).paulis x)
+      = zPart (es.paulis x) := by
+  have hprepP : eraseFaults (prepP v) = [Gate.prepPlus v] := by simp [prepP, eraseFaults]
+  have hhad : eraseFaults (hadamard v) = [Gate.hadamard v] := by simp [hadamard, eraseFaults]
+  have hflag : eraseFaults (flagMeasZ v) = [Gate.measZ v] := by simp [flagMeasZ, eraseFaults]
+  simp only [eraseFaults_append, QHL.Target.propagateCircuit_append]
+  rw [hprepP, hhad, hflag]
+  simp only [propagateCircuit]
+  rw [propagateGate_measZ_paulis, propagateGate_hadamard_paulis_ne _ _ _ hx]
+  -- the two verifier cnots: target picks up only an xPart, control-off qubits fixed
+  have hcnot_z : ∀ (t : Fin nq) (es' : ErrorState nq),
+      zPart ((propagateCircuit (eraseFaults (cnot v t)) es').paulis x)
+        = zPart (es'.paulis x) := by
+    intro t es'
+    by_cases hvt : v = t
+    · simp [cnot, hvt, propagateCircuit]
+    · have he : eraseFaults (cnot v t) = [Gate.cnot v t hvt] := by
+        simp [cnot, hvt, eraseFaults]
+      rw [he]
+      simp only [propagateCircuit]
+      by_cases hxt : x = t
+      · rw [hxt, propagateGate_cnot_target, zPart_pauliMul_xPart_left]
+      · rw [propagateGate_cnot_paulis_ne v t hvt es' x hx hxt]
+  rw [hcnot_z clast _, hcnot_z c0 _,
+    propagateGate_prepPlus_paulis_ne v es x hx]
 
 /--
 info: 'QStab.QClifford.Compile.shorCouplings_paulis_off' depends on axioms: [propext, Quot.sound]
