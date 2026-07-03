@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""One-command verification suite for the surface-d3 NZ QClifford result.
+"""One-command verification suite for the NZ QClifford results
+(surface-d3 and the parametric HGP chain through hgp_Safe).
 
 This script runs the real Lean/Python verifiers and a permanent negative
 regression battery.  It exits 0 only when all positive checks pass and every
@@ -29,7 +30,12 @@ PCC_VCGEN_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "VCGen.lean"
 PCC_SURFACE_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "SurfaceD3.lean"
 PCC_KNILL_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "SurfaceD3Knill.lean"
 PCC_SHOR_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "SurfaceD3Shor.lean"
+PCC_SHOR_BASE_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "SurfaceD3ShorBase.lean"
+PCC_SHOR_GLOBAL_FILE = ROOT / "QStab" / "QClifford" / "PCC" / "SurfaceD3ShorGlobal.lean"
 FAULT_HOARE_FILE = ROOT / "QStab" / "QClifford" / "FaultHoare.lean"
+HGP_SAFE_FILE = ROOT / "QStab" / "QClifford" / "Compile" / "HGPNZSafe.lean"
+HGP_CHAIN_DIR = ROOT / "QStab" / "QClifford" / "Compile"
+TCB_BASELINE_FILE = ROOT / "tools" / "verifier_tcb_baseline.sha256"
 CERT_FILE = ROOT / "docs" / "surface_d3_nz_qclifford_geometric_hoare_certificate.json"
 EXPECTED_AXIOMS = {"propext", "Classical.choice", "Quot.sound"}
 BUILD_TARGETS = [
@@ -45,6 +51,7 @@ BUILD_TARGETS = [
     "QStab.QClifford.PCC.SurfaceD3",
     "QStab.QClifford.PCC.SurfaceD3Knill",
     "QStab.QClifford.PCC.SurfaceD3Shor",
+    "QStab.QClifford.Compile.HGPNZSafe",
 ]
 FINAL_THEOREMS = [
     "surfaceD3_tolerates_two_faults",
@@ -474,14 +481,17 @@ def check_pcc_knill() -> str:
 
 
 def check_pcc_shor_skeleton() -> str:
-    text = PCC_SHOR_FILE.read_text(encoding="utf-8")
-    hits: list[str] = []
-    for pattern in BANNED_LEAN_PATTERNS:
-        m = re.search(pattern, text)
-        if m:
-            hits.append(f"{pattern!r} at offset {m.start()}")
-    if hits:
-        raise VerifyError("banned Lean token(s) in PCC SurfaceD3Shor: " + "; ".join(hits))
+    shor_files = [PCC_SHOR_FILE, PCC_SHOR_BASE_FILE, PCC_SHOR_GLOBAL_FILE]
+    text = ""
+    for f in shor_files:
+        part = f.read_text(encoding="utf-8")
+        for pattern in BANNED_LEAN_PATTERNS:
+            m = re.search(pattern, part)
+            if m:
+                raise VerifyError(
+                    f"banned Lean token {pattern!r} in {f.name} at offset {m.start()}"
+                )
+        text += part
     for needle in [
         "def shorSurfaceCircuit",
         "def surfaceSpecShor",
@@ -562,6 +572,77 @@ def check_qclifford_authoritative_shape() -> str:
     if "toleratesFaultsΛ_of_hoare C_NZ_D3 logicalFailure 2 surfaceD3_hoare" not in text:
         raise VerifyError("surfaceD3_tolerates_two_faults is not obtained through toleratesFaultsΛ_of_hoare")
     return "surfaceD3Deriv is a QClifford FDeriv and the authoritative file does not mention HDeriv/Exec/mapGate"
+
+
+def check_hgp_chain() -> str:
+    hgp_files = sorted(HGP_CHAIN_DIR.glob("HGPNZ*.lean"))
+    if len(hgp_files) < 5:
+        raise VerifyError(f"expected the HGPNZ chain files, found only {len(hgp_files)}")
+    for f in hgp_files:
+        text = f.read_text(encoding="utf-8")
+        for pattern in BANNED_LEAN_PATTERNS:
+            m = re.search(pattern, text)
+            if m:
+                raise VerifyError(
+                    f"banned Lean token {pattern!r} in {f.name} at offset {m.start()}"
+                )
+    text = HGP_SAFE_FILE.read_text(encoding="utf-8")
+    for needle in [
+        "def hgp_Safe (d : Nat) (hd : 2 ≤ d) :",
+        "DischargedVCs (generatedFullProgramVCInputD (hgpXZProgram d) d",
+        "reachScript := hgpReachScript d hd",
+        "theorem hgp_compiled_Safe (d : Nat) (hd : 2 ≤ d) :",
+        "Safe (compileProgram (hgpXZProgram d))",
+        "vcgen_sound (.mk (hgp_Safe d hd))",
+    ]:
+        if needle not in text:
+            raise VerifyError(f"missing HGP capstone declaration/text: {needle}")
+    probe = ROOT / "tools" / "_verify_hgp_probe.lean"
+    probe.write_text(
+        "import QStab.QClifford.Compile.HGPNZSafe" + chr(10)
+        + "#print axioms QStab.QClifford.Compile.hgp_Safe" + chr(10)
+        + "#print axioms QStab.QClifford.Compile.hgp_compiled_Safe" + chr(10),
+        encoding="utf-8",
+    )
+    try:
+        res = run_cmd(["lake", "env", "lean", str(probe)], timeout=300)
+        if res.returncode != 0:
+            raise VerifyError(first_interesting_line(res.output))
+        for thm in ["hgp_Safe", "hgp_compiled_Safe"]:
+            axioms = parse_axioms(res.output, thm)
+            if axioms != EXPECTED_AXIOMS:
+                raise VerifyError(
+                    f"{thm} axioms {sorted(axioms)} != {sorted(EXPECTED_AXIOMS)}"
+                )
+    finally:
+        probe.unlink(missing_ok=True)
+    return (
+        "HGP chain: banned-token battery clean over HGPNZ*, hgp_Safe/hgp_compiled_Safe "
+        "declaration shapes present, both capstone headliners close with standard axioms"
+    )
+
+
+def check_tcb_baseline() -> str:
+    import hashlib
+
+    lines = [
+        ln.strip()
+        for ln in TCB_BASELINE_FILE.read_text(encoding="utf-8").splitlines()
+        if ln.strip()
+    ]
+    if len(lines) < 5:
+        raise VerifyError(f"TCB baseline lists {len(lines)} files, expected at least 5")
+    for ln in lines:
+        want, sep, rel = ln.partition(" *")
+        if not sep:
+            raise VerifyError(f"malformed TCB baseline line: {ln!r}")
+        target = ROOT / rel.strip()
+        if not target.exists():
+            raise VerifyError(f"TCB-pinned file missing: {rel.strip()}")
+        got = hashlib.sha256(target.read_bytes()).hexdigest()
+        if got != want.strip():
+            raise VerifyError(f"TCB hash mismatch for {rel.strip()}")
+    return f"TCB baseline verified ({len(lines)} pinned verifier files match)"
 
 
 def parse_axioms(output: str, theorem: str) -> set[str]:
@@ -954,6 +1035,8 @@ def main() -> int:
             ("positive/pcc-knill", check_pcc_knill),
             ("positive/pcc-shor-skeleton", check_pcc_shor_skeleton),
             ("positive/lake-build", check_lake_build),
+            ("positive/hgp-chain", check_hgp_chain),
+            ("positive/tcb-baseline", check_tcb_baseline),
             ("positive/axiom-hygiene", check_axiom_hygiene),
             ("positive/geometric-hoare", check_geometric_positive),
             ("positive/lean-cert-correspondence", check_correspondence_positive),

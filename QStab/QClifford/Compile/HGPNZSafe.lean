@@ -1,14 +1,14 @@
 import QStab.QClifford.Compile.HGPNZReach
 import QStab.QClifford.Compile.HGPNZVCGen
-import QStab.QClifford.Compile.SurfaceNZReachFold
 
 /-!
 # HGP G3: the reach fold, the discharged `reach` slot, and `hgp_Safe`
 
 The capstone: the row-0 attack script (`hgpReachScript`, kernel-validated in
-`HGPNZReach`) is proven correct by the fuel-indexed suffix induction of the
-surface template (`SurfaceNZReachFold.reach_fold`), with a **simpler**
-invariant: the row-prefix `hgpRowB d (min k d)` during the X-phase, constant
+`HGPNZReach`) is proven correct by a fuel-indexed suffix induction that
+re-implements the surface fold pattern (`SurfaceNZReachFold.reach_fold`) —
+per-code invariants and side conditions are rebuilt here, not instantiated —
+with a **simpler** invariant: the row-prefix `hgpRowB d (min k d)` during the X-phase, constant
 full `X̄` through the Z-phase — no stage function beyond `min · d`.
 
 Per-gadget: X-gadgets (all of them, injectors included) are blind to pure-X
@@ -20,10 +20,6 @@ The close packages the run into the `reach` VCSlot through the **public**
 `_es` transport forms, and `hgp_Safe` assembles all five discharged slots
 into the `DischargedVCs` record consumed by the verifier's `vcgen_sound` —
 the first full five-slot `Safe` in the project.
-
-Layering debt (inherited): `measuresAtAux_seqMeas_map_scheme` is imported
-from `SurfaceNZReachFold`; the neutral hoist is logged with the surface
-back-port.
 -/
 
 namespace QStab.QClifford.Compile

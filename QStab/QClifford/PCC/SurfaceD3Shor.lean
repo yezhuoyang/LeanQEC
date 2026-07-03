@@ -662,8 +662,8 @@ Clifford propagation is a homomorphism for it, and `run_factor_mem` is the
 resulting run linearization: the `paulis` and `detectors` of *any* `fcevalW`
 run factor as `mulFull` of the deterministic fault-free run and the product of
 the per-fault global residuals, with every fault site recorded in
-`errLocsWithContext`.  All proofs are `decide`/`rfl`-checked (no
-`native_decide`) and axiom-clean. -/
+`errLocsWithContext`.  All proofs are `decide`/`rfl`-checked (no native
+kernel evaluation) and axiom-clean. -/
 
 private theorem xPart_pmul_local (a b : Pauli) :
     xPart (pauliMul a b) = pauliMul (xPart a) (xPart b) := by cases a <;> cases b <;> rfl

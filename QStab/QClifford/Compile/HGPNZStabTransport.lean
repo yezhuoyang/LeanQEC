@@ -1,4 +1,5 @@
 import QStab.QClifford.Compile.StabTransportCore
+import QStab.QClifford.Compile.SurfaceNZSpecAlign
 import QStab.QClifford.Compile.HGPHValid
 
 /-!

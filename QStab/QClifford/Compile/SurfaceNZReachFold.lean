@@ -1,4 +1,5 @@
 import QStab.QClifford.Compile.SurfaceNZReachHeven
+import QStab.QClifford.Compile.StabTransportCore
 import QStab.QClifford.Compile.SurfaceNZSpecAlign
 import QStab.QClifford.Compile.SurfaceNZVCGen
 import QStab.QClifford.Compile.SurfaceNZFtDistance
@@ -33,26 +34,6 @@ open QStab QStab.QClifford QStab.QClifford.PCC
 open QStab.QClifford.PCC.SurfaceNZ
 open QStab.Examples.SurfaceParametric
 open QHL.Source.Examples.SurfaceParametricUpperBound
-
-/-- Mirror of `measuresAtAux_seqMeas_map_schedule` for the `.scheme` projection: every
-measured block of a `seqMeas`-shaped program is `Scheme.NZ`. -/
-theorem measuresAtAux_seqMeas_map_scheme {n th tf : Nat} {α : Type}
-    (g : α → RuleSchedule n) :
-    ∀ (L : List α) (hs ds : Nat)
-      (fit : hs + programHelperCount
-        (L.foldr (fun a acc => XZProgram.seq (.meas Scheme.NZ (g a)) acc) XZProgram.skip) ≤ th)
-      (dfit : ds + programDetectorCount
-        (L.foldr (fun a acc => XZProgram.seq (.meas Scheme.NZ (g a)) acc) XZProgram.skip) ≤ tf),
-      ((programMeasuresAtAux (totalHelpers := th) (totalFlags := tf) hs ds
-        (L.foldr (fun a acc => XZProgram.seq (.meas Scheme.NZ (g a)) acc) XZProgram.skip)
-        fit dfit).map (·.scheme)) = L.map (fun _ => Scheme.NZ) := by
-  intro L
-  induction L with
-  | nil => intro hs ds fit dfit; rfl
-  | cons a rest ih =>
-      intro hs ds fit dfit
-      simp only [List.foldr_cons, programMeasuresAtAux, List.map_cons, List.singleton_append]
-      exact congrArg (Scheme.NZ :: ·) (ih _ _ _ _)
 
 /-- Every block of the compiled surface program is an NZ gadget (list form). -/
 theorem surfaceXZProgram_map_scheme (d : Nat) (hd : 0 < d) :
