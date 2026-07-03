@@ -44,6 +44,27 @@ theorem codeDistanceAtLeast_of_cosetBounds {P : QECParams} (L : LogicalOps P) (d
   · exact hZ E h
   · exact hXZ E h
 
+/-- **`F` commutes with the whole stabilizer group** once it commutes with every generator —
+the assertion-level normalizer closure, by structural induction on `InStab` (no enumeration
+over `ErrorVec`).  Instantiated with `F := Z̄` (resp. `X̄`), this certifies that a `Z̄`-
+(resp. `X̄`-)anticommuting witness is *not* itself a stabilizer. -/
+theorem parity_commutes_of_InStab {P : QECParams} (F : ErrorVec P.n)
+    (hgen : ∀ i : Fin P.numStab, ErrorVec.parity F (P.stabilizers i) = false)
+    {E : ErrorVec P.n} (h : QStab.InStab P E) :
+    ErrorVec.parity F E = false := by
+  induction h with
+  | identity =>
+      unfold ErrorVec.parity ErrorVec.identity
+      have hz : (Finset.univ.filter
+          fun i : Fin P.n => ErrorVec.Pauli.anticommutes (F i) Pauli.I).card = 0 := by
+        apply Finset.card_eq_zero.mpr
+        apply Finset.filter_eq_empty_iff.mpr
+        intro i _
+        cases F i <;> decide
+      rw [hz]; rfl
+  | gen i => exact hgen i
+  | mul _ _ ih₁ ih₂ => rw [parity_mul_right, ih₁, ih₂]; rfl
+
 /-- A weight-`d` logical **witness**: an operator commuting with every stabilizer, not a
 stabilizer itself, of weight exactly `d`.  Its existence certifies distance `≤ d`. -/
 structure LogicalWitness (P : QECParams) (d : Nat) where
