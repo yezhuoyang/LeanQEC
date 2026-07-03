@@ -1,5 +1,6 @@
 import QStab.QClifford.Compile.SiteSplitGen
 import QStab.QClifford.Compile.HGPShorProgram
+import QStab.QClifford.Compile.XZProgramOfProgramsLeaves
 
 /-!
 # The Shor `LeafClean` witness: clean-helper data preservation
@@ -444,32 +445,19 @@ theorem shorBlock_PDA {n total : Nat} (sigma : RuleSchedule n) (start : Nat)
 
 /-! ## The `LeafClean` witness for the Shor-extraction HGP program -/
 
-/-- Scheme-generic foldr leaf pin (the `.NZ`-specific `foldr_measLeaf_range`
-generalized over the measuring scheme and the index type). -/
-theorem foldr_measLeaf_scheme {nQ : Nat} {α : Type} (sch : Scheme)
-    (f : α → RuleSchedule nQ) (l : List α) (scheme : Scheme) (sigma : RuleSchedule nQ) :
-    MeasLeaf (l.foldr (fun k acc => .seq (.meas sch (f k)) acc) .skip) scheme sigma →
-      ∃ k ∈ l, scheme = sch ∧ sigma = f k := by
-  induction l with
-  | nil => intro h; cases h
-  | cons k rest ih =>
-      intro h
-      cases h with
-      | left hleft => cases hleft; exact ⟨k, List.mem_cons_self, rfl, rfl⟩
-      | right hright =>
-          obtain ⟨k', hk', hs, hσ⟩ := ih hright
-          exact ⟨k', List.mem_cons_of_mem _ hk', hs, hσ⟩
-
-/-- Every measurement leaf of `hgpShorProgram` is `(.Shor, hgpSchedule d hd i)`. -/
+/-- Every measurement leaf of `hgpShorProgram` is `(.Shor, hgpSchedule d hd i)` —
+the generic generator-level pin `xzProgramOfProgramsWith_measLeaf` specialized
+through the certified `genSchedule_eq_hgpSchedule`. -/
 theorem hgpShorProgram_measLeaf (d : Nat) (hd : 2 ≤ d) (scheme : Scheme)
     (sigma : RuleSchedule (d * d + (d - 1) * (d - 1))) :
     MeasLeaf (hgpShorProgram d) scheme sigma →
       ∃ i : Fin (2 * ((d - 1) * d)), scheme = Scheme.Shor ∧ sigma = hgpSchedule d hd i := by
   intro h
-  rw [hgpShorProgram_eq_foldr d hd] at h
-  obtain ⟨k, _, hs, hσ⟩ :=
-    foldr_measLeaf_scheme Scheme.Shor (hgpSchedule d hd) (List.finRange _) scheme sigma h
-  exact ⟨k, hs, hσ⟩
+  unfold hgpShorProgram at h
+  obtain ⟨k, hk, hs, hσ⟩ :=
+    xzProgramOfProgramsWith_measLeaf .Shor QHL.CodeLang.HGP.code hgpOrderProg hgpLenProg
+      (2 * ((d - 1) * d)) (d * d + (d - 1) * (d - 1)) d scheme sigma h
+  exact ⟨⟨k, hk⟩, hs, hσ.trans (genSchedule_eq_hgpSchedule d hd ⟨k, hk⟩)⟩
 
 /-- **The Shor `LeafClean` witness**: every leaf of `hgpShorProgram` acts below
 its own helper ceiling and preserves data from clean own helpers — the bundle

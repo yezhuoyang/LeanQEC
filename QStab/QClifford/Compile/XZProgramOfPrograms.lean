@@ -58,4 +58,19 @@ def xzProgramOfPrograms (code : CodeFn) (orderProg : Term 3 .nat) (lenProg : Ter
   (List.range numStab).foldr
     (fun k acc => .seq (.meas .NZ (genSchedule code orderProg lenProg nQ d k)) acc) .skip
 
+/-- **Scheme-parametric front-end**: `xzProgramOfPrograms` with the measuring scheme a
+parameter (the legacy generator is its `.NZ` instance, anchored definitionally below).
+A code family's `.Shor`/`.Knill`/`.Flag` program is the same generated program over the
+same code anchor — only this argument changes. -/
+def xzProgramOfProgramsWith (sch : Scheme) (code : CodeFn) (orderProg : Term 3 .nat)
+    (lenProg : Term 2 .nat) (numStab nQ d : Nat) : XZProgram nQ :=
+  (List.range numStab).foldr
+    (fun k acc => .seq (.meas sch (genSchedule code orderProg lenProg nQ d k)) acc) .skip
+
+/-- The legacy generator is the `.NZ` instance of the scheme-parametric one. -/
+theorem xzProgramOfPrograms_eq_with (code : CodeFn) (orderProg : Term 3 .nat)
+    (lenProg : Term 2 .nat) (numStab nQ d : Nat) :
+    xzProgramOfPrograms code orderProg lenProg numStab nQ d
+      = xzProgramOfProgramsWith .NZ code orderProg lenProg numStab nQ d := rfl
+
 end QStab.QClifford.Compile

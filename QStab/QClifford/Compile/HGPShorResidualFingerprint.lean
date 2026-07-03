@@ -3,7 +3,7 @@ import QStab.QClifford.Compile.HGPNZSafe
 import QStab.Examples.HGPParametric
 
 /-!
-# Shor compiled-residual fingerprint: the bridge-reuse pin (kernel-checked)
+# Shor compiled-residual fingerprint: the bridge-reuse pin (executable, guarded)
 
 **Confirmation, not construction.**  This file pins the decisive fact that lets
 the Shor-extraction HGP program reuse the *unchanged* compiled-distance bridge —
@@ -36,7 +36,8 @@ the later gadgets is already included.)
 * Hence `HGPShorHValid` will have the *identical* unconditional shape as
   `HGPHValid`, and `hgpShor_compiled_barZ_distance` consumes the bridge verbatim.
 
-This is a `d = 3` kernel fingerprint (like the other HGP/Shor `d = 3` pins); the
+This is a `d = 3` executable fingerprint, guarded by `#guard_msgs` (checked by
+the elaborator's evaluator on every build — not a kernel-reduced proof); the
 parametric `∀ d ≥ 2` discharge is the clean-cat `PreservesDataAbove` preserver +
 `shor_gadget_site_classified` classification + the `hgp_hvalid`-mirroring
 assembly.  It supersedes the plan's post-selection-surviving back-action set.
@@ -92,5 +93,14 @@ private def weight2Doms : List Bool :=
 /-- info: (56, 0) -/
 #guard_msgs in
 #eval (weight2Doms.length, weight2Doms.countP (fun b => !b))
+
+-- NEGATIVE CONTROLS: `dom` discriminates — it rejects non-hooks, accepts
+-- exactly generator-dominated vectors.  Guards PIN 2 against a vacuous checker.
+/-- info: (false, false, true, true) -/
+#guard_msgs in
+#eval (dom (fun _ => Pauli.Z),
+       dom (fun q => if q.val = 0 || q.val = 1 then Pauli.X else Pauli.I),
+       dom (fun _ => Pauli.I),
+       dom (fun q => stabEntry 3 0 q.val))
 
 end QStab.QClifford.Compile

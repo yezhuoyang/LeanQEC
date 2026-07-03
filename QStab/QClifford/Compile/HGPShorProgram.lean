@@ -15,12 +15,19 @@ namespace QStab.QClifford.Compile
 
 open QHL QHL.CodeHGPSchedule
 
-/-- The Shor-extraction compiled-source program for HGP(Rep(d),Rep(d)). -/
+/-- The Shor-extraction compiled-source program for HGP(Rep(d),Rep(d)):
+the scheme-parametric generator at `.Shor`, over the same code anchor and
+reference programs as `hgpXZProgram`. -/
 def hgpShorProgram (d : Nat) : XZProgram (d * d + (d - 1) * (d - 1)) :=
-  (List.range (2 * ((d - 1) * d))).foldr
-    (fun k acc => .seq (.meas .Shor
-      (genSchedule QHL.CodeLang.HGP.code hgpOrderProg hgpLenProg
-        (d * d + (d - 1) * (d - 1)) d k)) acc) .skip
+  xzProgramOfProgramsWith .Shor QHL.CodeLang.HGP.code hgpOrderProg hgpLenProg
+    (2 * ((d - 1) * d)) (d * d + (d - 1) * (d - 1)) d
+
+/-- The NZ program is the same generator at `.NZ` (anchor; `hgpXZProgram`'s
+definition is untouched — it sits inside the attested `hgp_Safe` chain). -/
+theorem hgpXZProgram_eq_with (d : Nat) :
+    hgpXZProgram d
+      = xzProgramOfProgramsWith .NZ QHL.CodeLang.HGP.code hgpOrderProg hgpLenProg
+          (2 * ((d - 1) * d)) (d * d + (d - 1) * (d - 1)) d := rfl
 
 private theorem range_eq_finRange_map' (n : Nat) :
     List.range n = (List.finRange n).map Fin.val := by
@@ -33,7 +40,7 @@ schedules, one `.meas .Shor` per generator in index order. -/
 theorem hgpShorProgram_eq_foldr (d : Nat) (hd : 2 ≤ d) :
     hgpShorProgram d = (List.finRange (2 * ((d - 1) * d))).foldr
       (fun i acc => .seq (.meas .Shor (hgpSchedule d hd i)) acc) .skip := by
-  unfold hgpShorProgram
+  unfold hgpShorProgram xzProgramOfProgramsWith
   rw [range_eq_finRange_map', List.foldr_map]
   congr 1
   funext i acc

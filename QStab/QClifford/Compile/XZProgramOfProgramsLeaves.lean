@@ -56,6 +56,36 @@ theorem xzProgramOfPrograms_measLeaf (code : CodeFn) (orderProg : Term 3 .nat)
   obtain ⟨k, hk, hs, hσ⟩ := foldr_measLeaf_range _ _ _ _ h
   exact ⟨k, List.mem_range.mp hk, hs, hσ⟩
 
+/-- Scheme- and index-type-generic foldr leaf pin (`foldr_measLeaf_range`
+generalized over the measuring scheme and the index type). -/
+theorem foldr_measLeaf_scheme {nQ : Nat} {α : Type} (sch : Scheme)
+    (f : α → RuleSchedule nQ) (l : List α) (scheme : Scheme) (sigma : RuleSchedule nQ) :
+    MeasLeaf (l.foldr (fun k acc => .seq (.meas sch (f k)) acc) .skip) scheme sigma →
+      ∃ k ∈ l, scheme = sch ∧ sigma = f k := by
+  induction l with
+  | nil => intro h; cases h
+  | cons k rest ih =>
+      intro h
+      cases h with
+      | left hleft => cases hleft; exact ⟨k, List.mem_cons_self, rfl, rfl⟩
+      | right hright =>
+          obtain ⟨k', hk', hs, hσ⟩ := ih hright
+          exact ⟨k', List.mem_cons_of_mem _ hk', hs, hσ⟩
+
+/-- **The generic leaf pin**: every measurement leaf of the scheme-parametric
+generated program is `(sch, genSchedule … k)` for some `k < numStab`.  New
+scheme pipelines (Shor/Knill/Flag) consume this — one lemma per generator,
+not per program. -/
+theorem xzProgramOfProgramsWith_measLeaf (sch : Scheme) (code : CodeFn)
+    (orderProg : Term 3 .nat) (lenProg : Term 2 .nat) (numStab nQ d : Nat)
+    (scheme : Scheme) (sigma : RuleSchedule nQ) :
+    MeasLeaf (xzProgramOfProgramsWith sch code orderProg lenProg numStab nQ d) scheme sigma →
+      ∃ k, k < numStab ∧ scheme = sch ∧
+        sigma = genSchedule code orderProg lenProg nQ d k := by
+  intro h
+  obtain ⟨k, hk, hs, hσ⟩ := foldr_measLeaf_scheme sch _ _ _ _ h
+  exact ⟨k, List.mem_range.mp hk, hs, hσ⟩
+
 #print axioms xzProgramOfPrograms_allNZ
 #print axioms xzProgramOfPrograms_measLeaf
 
