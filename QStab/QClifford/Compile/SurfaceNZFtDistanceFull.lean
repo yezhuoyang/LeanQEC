@@ -112,8 +112,8 @@ The compiled X-floor is to be transported from the landed bar-Z floor along the
 ρ-rotation duality (ρ = 90° lattice rotation + Hadamard).  The gate — cleared by
 `notes/validate_rotated_hookset_pin.py` at d = 3, 5, 7 — is that ρ is a
 stabilizer-set automorphism and every hook-set mismatch between the NZ order and
-the ρ-rotated order is weight-1-mod-stabilizer (absorbable).  The kernel-checked
-`#eval` below is the Lean-side witness of the native NZ-order residual table: the
+the ρ-rotated order is weight-1-mod-stabilizer (absorbable).  The
+interpreter-checked `#eval` below is the Lean-side witness of the native NZ-order residual table: the
 per-stabilizer suffix-hook weight profile, `[3,2,1]` for the four weight-4 bulk
 checks and `[1]` for the four weight-2 boundary checks — matching the scout and
 `ρ`-invariant in profile (the mismatches are purely which weight-2 pair, all

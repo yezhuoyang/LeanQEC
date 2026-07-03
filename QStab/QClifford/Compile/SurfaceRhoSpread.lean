@@ -61,7 +61,6 @@ theorem rhoPhi_col_to_row (d : Nat) (hd : 0 < d) (e : ErrorVec (d * d)) (c₀ : 
     have hfalse : Pauli.hasXComponent (rhoPhi d hd e q) = false := by
       show Pauli.hasXComponent
         (hadamardAction (e ⟨rhoInvNat d q.val, rhoInvNat_lt d q.val hd q.isLt⟩)) = false
-    -- placeholder replaced below
       rw [hI]; rfl
     rw [hfalse] at hq
     exact Bool.noConfusion hq

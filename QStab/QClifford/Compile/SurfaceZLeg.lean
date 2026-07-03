@@ -1235,8 +1235,8 @@ theorem surface_normalizer_decomposition (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d)
 
 /-! ## `d = 3` fingerprints against the Python oracle (`notes/validate_surface_maxiso.py`)
 
-Kernel-checked cross-checks of the CSS-assembly logic plus axiom pins for the
-keystone headliners. -/
+Interpreter-checked `#eval` cross-checks of the CSS-assembly logic plus
+(kernel-checked) axiom pins for the keystone headliners. -/
 
 -- `X̄` (column 0) and `Z̄` (row 0) overlap at exactly the corner qubit `0`
 -- (the `surface_Xbar_anticomm_Zbar` support).
