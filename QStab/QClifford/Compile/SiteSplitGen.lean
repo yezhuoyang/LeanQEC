@@ -287,21 +287,24 @@ theorem cleanAbove_preserved_of_actsBelow {n total : Nat} (c : Circuit (n + tota
   exact hes h hh
 
 /-- **Program-level threshold threading (#2).**  Given every measurement leaf's
-compiled block both acts below its own ceiling and preserves data above its own
-floor, the whole compiled program preserves data above `n + start`. -/
+compiled block both acts below its own ceiling and preserves data from any state
+in which its own helper block (and everything above) is clean — floor `n + st`,
+the weakest form the threading needs, and the strongest a cat-state gadget can
+provide: a Shor block does *not* preserve data under junk on its own non-first
+cats — the whole compiled program preserves data above `n + start`. -/
 theorem compileProgramAux_preservesDataAbove {n total : Nat} (program : XZProgram n)
     (hleaf : ∀ (sc : Scheme) (sg : RuleSchedule n), MeasLeaf program sc sg →
       ∀ (st : Nat) (hf : st + helperCount sc sg ≤ total),
         circuitActsBelow (eraseFaults (compileGadgetBlock sc sg st hf))
             (n + st + helperCount sc sg) ∧
         PreservesDataAbove (eraseFaults (compileGadgetBlock sc sg st hf))
-            (n + st + helperCount sc sg)) :
+            (n + st)) :
     ∀ (start : Nat) (hfit : start + programHelperCount program ≤ total),
       PreservesDataAbove (eraseFaults (compileProgramAux start program hfit)) (n + start) := by
   induction program with
   | skip =>
       intro start hfit es hc d hd
-      simp [compileProgramAux, eraseFaults, propagateCircuit]
+      simp [compileProgramAux, propagateCircuit]
   | meas scheme sigma =>
       intro start hfit
       have hfit' : start + helperCount scheme sigma ≤ total := by
@@ -348,14 +351,19 @@ theorem PDA_append_advance {n total : Nat} (a b : Circuit (n + total)) (Llo Lhi 
   rw [hbPDA _ hmid d hd, haPDA es hc d hd]
 
 /-- Per-leaf clean bundle: every measurement leaf's block acts below its own
-ceiling and preserves data above its own floor. -/
+ceiling and preserves data from any state whose own helper block (and
+everything above) is clean.  The preservation floor is `n + st` — *not*
+`n + st + helperCount` — because a cat-state gadget genuinely needs its own
+helpers clean on entry (junk `Z` on a non-first Shor cat backflows onto data
+through the coupling CNOTs); the program threading only ever applies a leaf at
+states where its helpers are still untouched, so this weaker field suffices. -/
 def LeafClean {n total : Nat} (program : XZProgram n) : Prop :=
   ∀ (sc : Scheme) (sg : RuleSchedule n), MeasLeaf program sc sg →
     ∀ (st : Nat) (hf : st + helperCount sc sg ≤ total),
       circuitActsBelow (eraseFaults (compileGadgetBlock sc sg st hf))
           (n + st + helperCount sc sg) ∧
       PreservesDataAbove (eraseFaults (compileGadgetBlock sc sg st hf))
-          (n + st + helperCount sc sg)
+          (n + st)
 
 /-- **The generalized site split (#3).**  Replacing `allNZ` with the per-leaf
 `LeafClean` bundle and the `∀es` tail hypothesis with `PreservesDataAbove`. -/
