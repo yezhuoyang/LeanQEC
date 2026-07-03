@@ -536,4 +536,63 @@ theorem shorCOUP_site_wle1 {P : QECParams} {total : Nat}
       · -- Case B: the fault is in a later coupling slot — recurse
         exact ih hqA' hcA' hcB' hcNd' _ site p hp hright
 
+/-- **Branch B′: a raw-measurement fault site has weight-`0` residual.**  The
+measurement gates act only on cats (`≥ P.n`), never on data, and the tail
+preserves data. -/
+theorem shorMEAS_site_wle1 {P : QECParams} {total : Nat}
+    (measCats : List (Fin (P.n + total))) (tail : FCircuit (P.n + total)) (L : Nat)
+    (htailPDA : PreservesDataAbove (eraseFaults tail) L)
+    (hmeasA : ∀ c ∈ measCats, P.n ≤ c.val) (hmeasB : ∀ c ∈ measCats, c.val < L)
+    (cursor : Nat) (site : PCC.ErrLocWithContext (P.n + total)) (p : Pauli) (hp : p ≠ Pauli.I)
+    (hsite : site ∈ prefixErrLocsWithContextAux cursor
+      ((measCats.map rawMeasZ).flatten) tail) :
+    ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) ≤ 1 := by
+  have hgates : ∀ g ∈ eraseFaults ((measCats.map rawMeasZ).flatten),
+      ∀ q : Fin (P.n + total), gateActsOn g q → q ∈ measCats := by
+    intro g hg q hq
+    rw [eraseFaults_flatten, List.map_map, List.mem_flatten] at hg
+    obtain ⟨c, hc, hgc⟩ := hg
+    rw [List.mem_map] at hc; obtain ⟨cc, hcc, rfl⟩ := hc
+    simp only [Function.comp_apply, rawMeasZ, eraseFaults, List.mem_singleton] at hgc
+    subst hgc; cases hq; exact hcc
+  have herr : ∀ q0 : Fin (P.n + total),
+      FInstr.errLoc q0 ∈ (measCats.map rawMeasZ).flatten → q0 ∈ measCats := by
+    intro q0 h
+    rw [List.mem_flatten] at h; obtain ⟨c, hc, hmem⟩ := h
+    rw [List.mem_map] at hc; obtain ⟨cc, hcc, rfl⟩ := hc
+    rw [errLoc_mem_pair hmem]; exact hcc
+  obtain ⟨hSq, Ys, hsuf, hYs⟩ :=
+    prefixSite_local ((measCats.map rawMeasZ).flatten) (· ∈ measCats) hgates herr
+      cursor tail site hsite
+  have hall : ∀ q' : Fin P.n, targetFaultDataResidual P ⟨site, p, hp⟩ q' = Pauli.I := by
+    intro q'
+    have hqnS : freshDataQ P.n total q' ∉ measCats := by
+      intro hm
+      have hge : P.n ≤ (freshDataQ P.n total q').val := hmeasA _ hm
+      simp only [freshDataQ_val] at hge
+      have := q'.isLt; omega
+    show (propagateCircuit site.suffix
+        ((PCC.cleanAtDetector site.detectorStart).inject site.q p)).paulis
+        (freshDataQ P.n total q') = Pauli.I
+    set es0 := (PCC.cleanAtDetector site.detectorStart).inject site.q p with hes0
+    rw [hsuf, QHL.Target.propagateCircuit_append]
+    set esA := propagateCircuit Ys es0 with hesA
+    have hSqL : site.q.val < L := hmeasB site.q hSq
+    have hYsBelow : circuitActsBelow Ys L := fun g hg q hq => hmeasB q (hYs g hg q hq)
+    have hcondf : ¬ (freshDataQ P.n total q' = site.q) :=
+      fun he => hqnS (by rw [he]; exact hSq)
+    have hesA_data : esA.paulis (freshDataQ P.n total q') = Pauli.I := by
+      rw [hesA, propagateCircuit_paulis_off Ys _ (fun g hg hq => hqnS (hYs g hg _ hq)) es0,
+        hes0, injectClean_paulis, if_neg hcondf]
+    have hcleanA : cleanAbove esA L := by
+      rw [hesA]
+      refine cleanAbove_preserved_of_actsBelow Ys L hYsBelow es0 ?_
+      intro h hh
+      have hcond : ¬ (h = site.q) := fun he => by rw [he] at hh; omega
+      rw [hes0, injectClean_paulis, if_neg hcond]
+    rw [htailPDA esA hcleanA (freshDataQ P.n total q') q'.isLt, hesA_data]
+  have h0 : ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) = 0 :=
+    weight_zero_of_allI _ hall
+  omega
+
 end QStab.QClifford.Compile
