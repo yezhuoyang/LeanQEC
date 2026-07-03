@@ -1,4 +1,5 @@
 import QStab.Paper.CodeDistance
+import QStab.QHL.CodeFiveQubit
 import Mathlib.Data.Fintype.Pi
 
 set_option maxRecDepth 8192
@@ -13,9 +14,9 @@ finite normalizer check (no weight-≤2 undetected operator is nontrivial); the 
 weight-3 logical `X̄` representative.  Together: distance `= 3` exactly, stated in the same
 predicate the parametric codes use — evidence that the distance argument is code-agnostic.
 
-(Kept self-contained: the five-qubit generators are re-stated here as explicit vectors, since the
-older `QStab/Examples/FiveQubitCode.lean` carries pre-existing *circuit-level* bit-rot — a
-`backActionSet` signature drift in `five_qubit_d_circ_le_2` — unrelated to code distance.)
+The generators are re-stated as explicit `v5` vectors (the older `FiveQubitCode.lean` carries
+unrelated circuit-level bit-rot), and `fq_objectProgram_anchor` certifies they are exactly the
+evaluation of the OCaml-language `code` — so the result is about the object program.
 -/
 
 namespace QStab.Examples.FiveQubitDistance
@@ -90,5 +91,22 @@ def fqWitness : LogicalWitness fqParams 3 where
 lower bound from the coset/weight argument, upper bound from a weight-3 logical witness. -/
 theorem fq_codeDistanceExactly_3 : CodeDistanceExactly fqParams 3 :=
   codeDistanceExactly_intro fq_codeDistanceAtLeast_3 fqWitness
+
+/-! ## Object-program anchor (Route B: certified evaluation, axiom-clean) -/
+
+/-- The arithmetic mirror of the object program reconciles with the distance proof's
+generators `fqStab` (pure `Nat` casework — no interpreter). -/
+theorem fqEntryArith_eq_fqStab (k : Fin 4) (q : Fin 5) :
+    QHL.CodeLang.FiveQubit.fqEntryArith k.val q.val = fqStab k q := by
+  fin_cases k <;> fin_cases q <;> rfl
+
+/-- **Object-program anchor.**  The OCaml-style object program
+`QHL.CodeLang.FiveQubit.code`, evaluated at `d = 3`, produces *exactly* the generators
+`fqStab` whose code distance we proved — composing the certified evaluation
+`code_evalAt?_eq_arith` (axiom-clean, no `native_decide`) with the arithmetic bridge.
+So `fq_codeDistanceExactly_3` is provably a statement about the object-language program. -/
+theorem fq_objectProgram_anchor (k : Fin 4) (q : Fin 5) :
+    QHL.CodeLang.FiveQubit.code.evalAt? 3 k.val q.val = some (fqStab k q) := by
+  rw [QHL.CodeLang.FiveQubit.code_evalAt?_eq_arith, fqEntryArith_eq_fqStab]
 
 end QStab.Examples.FiveQubitDistance

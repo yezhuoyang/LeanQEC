@@ -309,4 +309,31 @@ def generatedRows : List String :=
 #print axioms exactDistanceThreeCheck
 #print axioms exactDistanceThreeDerivationChecked
 
+/-! ## Certified evaluation (Route B): the object program evaluates to an arithmetic
+mirror, via the equation-lemma `simp` recipe — kernel-checked, axiom-clean (no
+`native_decide`).  Anchors the five-qubit distance proof to `code`. -/
+
+/-- Nat-mirror of `pauliAt5` (positional select on the qubit index). -/
+def pa5 (qq : Nat) (p0 p1 p2 p3 p4 : Pauli) : Pauli :=
+  if qq = 0 then p0 else if qq = 1 then p1 else if qq = 2 then p2
+  else if qq = 3 then p3 else if qq = 4 then p4 else Pauli.I
+
+/-- Arithmetic mirror of the `code` entry AST (`d`-independent: the five-qubit base). -/
+def fqEntryArith (kk qq : Nat) : Pauli :=
+  if kk = 0 then pa5 qq Pauli.X Pauli.Z Pauli.Z Pauli.X Pauli.I
+  else if kk = 1 then pa5 qq Pauli.I Pauli.X Pauli.Z Pauli.Z Pauli.X
+  else if kk = 2 then pa5 qq Pauli.X Pauli.I Pauli.X Pauli.Z Pauli.Z
+  else if kk = 3 then pa5 qq Pauli.Z Pauli.X Pauli.I Pauli.X Pauli.Z
+  else Pauli.I
+
+/-- **Certified evaluation**: the `[[5,1,3]]` object program evaluates to its arithmetic
+mirror at every `(d, k, q)` — through `Term.eval`'s equation lemmas, no `native_decide`. -/
+theorem code_evalAt?_eq_arith (dd kk qq : Nat) :
+    code.evalAt? dd kk qq = some (fqEntryArith kk qq) := by
+  show CodeFn.evalEntry? code (CodeFn.fuelForDistance dd) dd kk qq = _
+  simp only [CodeFn.evalEntry?, CodeFn.evalStabilizer?, code, row0, row1, row2, row3,
+    pauliAt5, q, k, C.Entry.q, C.Entry.k, fqEntryArith, pa5, Term.eval,
+    Env.cons, Env.code, Env.empty, bind, Option.bind, decide_eq_true_eq]
+  split_ifs <;> rfl
+
 end QHL.CodeLang.FiveQubit
