@@ -410,4 +410,87 @@ theorem zcheck_preserves (d : Nat) (hd0 : 0 < d) (hodd : d % 2 = 1)
       QStab.Paper.LogicalCosets.parity_symm (mkSurfaceAttackerX d) (mkSurfaceStabilizers d hd0 j),
       mkSurfaceAttackerX_commutes_with_stabilizers d hd0 hodd j, hxbar]; rfl
 
+/-! ## Pivot generators: Z-type + value-at-pivot + pivot-min (all support cells `≥` the pivot) -/
+
+/-- The `bulkZ r c` generator: `Z`-type, `Z` at its top-left pivot `(r,c)`, and `I` on every
+row-major-earlier cell (its support is the `2×2` block with `(r,c)` as row-major minimum). -/
+theorem bulkZ_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (r c : Nat) (hr : r < d - 1) (hc : c < d - 1)
+    (hpar : (r + c) % 2 = 0) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q = Pauli.Z
+        ∨ mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩
+          (gridFin d hd0 (r, c)) = Pauli.Z
+      ∧ (∀ q : Fin (d * d), q.val < d * r + c →
+          mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q
+            = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q
+        = if (q.val / d = r ∨ q.val / d = r + 1) ∧ (q.val % d = c ∨ q.val % d = c + 1)
+          then Pauli.Z else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_bulkZIdx d r c _ _ hd hr hc hpar
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega),
+        Nat.mul_add_div hd0, Nat.div_eq_of_lt (by omega), Nat.add_zero]),
+      Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega), Nat.mul_add_mod,
+        Nat.mod_eq_of_lt (by omega)])⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hrr, hcc⟩
+    have hdm := Nat.div_add_mod q.val d
+    have h1 : d * r ≤ d * (q.val / d) := Nat.mul_le_mul_left d (by rcases hrr with h | h <;> omega)
+    have h2 : c ≤ q.val % d := by rcases hcc with h | h <;> omega
+    omega
+
+/-- The `rightZ b` generator: `Z`-type, `Z` at its pivot `(2b, d-1)`, `I` on earlier cells. -/
+theorem rightZ_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (bb : Nat) (hbb : bb < (d - 1) / 2) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbb⟩ q = Pauli.Z
+        ∨ mkSurfaceStabilizers d hd0 ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbb⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbb⟩
+          (gridFin d hd0 (2 * bb, d - 1)) = Pauli.Z
+      ∧ (∀ q : Fin (d * d), q.val < d * (2 * bb) + (d - 1) →
+          mkSurfaceStabilizers d hd0 ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbb⟩ q
+            = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbb⟩ q
+        = if q.val % d = d - 1 ∧ (q.val / d = 2 * bb ∨ q.val / d = 2 * bb + 1)
+          then Pauli.Z else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_rightZIdx d bb _ _ hd hbb
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨by rw [gridFin_val_of_lt d hd0 (by omega) (by omega), Nat.mul_add_mod,
+        Nat.mod_eq_of_lt (by omega)], Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega),
+        Nat.mul_add_div hd0, Nat.div_eq_of_lt (by omega), Nat.add_zero])⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hcol, hrow⟩
+    have hdm := Nat.div_add_mod q.val d
+    have h1 : d * (2 * bb) ≤ d * (q.val / d) :=
+      Nat.mul_le_mul_left d (by rcases hrow with h | h <;> omega)
+    omega
+
+/-- The `leftZ b` generator: `Z`-type, `Z` at its pivot `(2b+1, 0)`, `I` on earlier cells. -/
+theorem leftZ_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (bb : Nat) (hbb : bb < (d - 1) / 2) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbb⟩ q = Pauli.Z
+        ∨ mkSurfaceStabilizers d hd0 ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbb⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbb⟩
+          (gridFin d hd0 (2 * bb + 1, 0)) = Pauli.Z
+      ∧ (∀ q : Fin (d * d), q.val < d * (2 * bb + 1) →
+          mkSurfaceStabilizers d hd0 ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbb⟩ q
+            = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbb⟩ q
+        = if q.val % d = 0 ∧ (q.val / d = 2 * bb + 1 ∨ q.val / d = 2 * bb + 2)
+          then Pauli.Z else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_leftZIdx d bb _ _ hd hbb
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨by rw [gridFin_val_of_lt d hd0 (by omega) hd0, Nat.mul_add_mod,
+        Nat.zero_mod], Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) hd0, Nat.mul_add_div hd0,
+        Nat.zero_div, Nat.add_zero])⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hcol, hrow⟩
+    have hdm := Nat.div_add_mod q.val d
+    have h1 : d * (2 * bb + 1) ≤ d * (q.val / d) :=
+      Nat.mul_le_mul_left d (by rcases hrow with h | h <;> omega)
+    omega
+
 end QStab.QClifford.Compile
