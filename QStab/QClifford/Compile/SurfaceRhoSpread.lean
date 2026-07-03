@@ -1,4 +1,5 @@
 import QStab.QClifford.Compile.SurfaceRhoUnionSpec
+import QStab.QClifford.Compile.HConjRelabel
 
 /-!
 # The ρ-image `hook_spread_bound` classification (F2, the StabAbsorb step)
@@ -27,7 +28,7 @@ machine) and `rhoSurfaceSpec` (retargeted to budget `d`).
 
 namespace QStab.QClifford.Compile
 
-open QStab QStab.Examples.SurfaceParametric QStab.Examples.SurfaceGeneral
+open QStab QStab.Examples QStab.Examples.SurfaceParametric QStab.Examples.SurfaceGeneral
 open QHL.Source.Examples.SurfaceExactDistance QHL.Source.Examples.SurfaceUnionSpec
 
 /-! ## Pauli micro-lemmas -/
