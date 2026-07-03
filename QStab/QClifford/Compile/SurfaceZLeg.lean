@@ -493,4 +493,113 @@ theorem leftZ_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (bb : Nat) (hbb : bb < (d
       Nat.mul_le_mul_left d (by rcases hrow with h | h <;> omega)
     omega
 
+/-! ## The Z-leg: instantiate the abstract peel with the Z-pivot table + four crux lemmas -/
+
+/-- Row-major ordering on grid cells (centralizes the nonlinear `d·r` arithmetic). -/
+theorem cell_lt (d : Nat) (hd0 : 0 < d) (r c cr cc : Nat) (hcc : cc < d)
+    (h : cr < r ∨ (cr = r ∧ cc < c)) : d * cr + cc < d * r + c := by
+  rcases h with h | ⟨h1, h2⟩
+  · have hmul : d * (cr + 1) ≤ d * r := Nat.mul_le_mul_left d (by omega)
+    rw [Nat.mul_succ] at hmul; omega
+  · subst h1; omega
+
+/-- **The Z-side cleaning leg** (`hgp_zside` signature).  A `Z`-type vector commuting with every
+stabilizer and with `X̄` is a stabilizer product — the abstract peel over the Z-check pivot
+table, the four crux lemmas discharging the no-pivot cell classes. -/
+theorem surface_zside (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (z : ErrorVec (d * d)) (hzt : ∀ q, z q = Pauli.Z ∨ z q = Pauli.I)
+    (hcomm : ∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) z = false)
+    (hxbar : ErrorVec.parity (mkSurfaceAttackerX d) z = false) :
+    QStab.InStab (mkSurfaceQECParams d hd0 hodd) z := by
+  have hd : 1 < d := by omega
+  refine abstract_peel (P := mkSurfaceQECParams d hd0 hodd)
+    (fun w => (∀ q, w q = Pauli.Z ∨ w q = Pauli.I) ∧
+      (∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) w = false) ∧
+      ErrorVec.parity (mkSurfaceAttackerX d) w = false)
+    (fun w hw => hw.1) ?_ (d * d) 0 (Nat.sub_zero _) (Nat.zero_le _) z ⟨hzt, hcomm, hxbar⟩
+    (fun q hq => absurd hq (Nat.not_lt_zero _))
+  rintro k w ⟨hwzt, hwcomm, hwxbar⟩ hcleared hlive
+  have hrowlt : k.val / d < d := Nat.div_lt_of_lt_mul k.isLt
+  have hcollt : k.val % d < d := Nat.mod_lt _ hd0
+  -- fresh coordinate variables to avoid `set`/motive and `r/2`-loop traps
+  obtain ⟨r, hrdef⟩ : ∃ r, k.val / d = r := ⟨_, rfl⟩
+  obtain ⟨c, hcdef⟩ : ∃ c, k.val % d = c := ⟨_, rfl⟩
+  have hkval : k.val = d * r + c := by rw [← hrdef, ← hcdef]; exact (Nat.div_add_mod k.val d).symm
+  rw [hrdef] at hrowlt; rw [hcdef] at hcollt
+  -- helper: `k` is the qubit of its own coordinates
+  have hkeq : ∀ (row col : Nat), row < d → col < d → k.val = d * row + col →
+      k = gridFin d hd0 (row, col) :=
+    fun row col hrw hcw h => Fin.ext (by rw [gridFin_val_of_lt d hd0 hrw hcw]; exact h)
+  -- helper: an earlier cell is cleared
+  have hprev : ∀ (cr cc : Nat), cr < d → cc < d → (cr < r ∨ (cr = r ∧ cc < c)) →
+      w (gridFin d hd0 (cr, cc)) = Pauli.I := fun cr cc hcr hcc hlt =>
+    hcleared _ (by rw [gridFin_val_of_lt d hd0 hcr hcc, hkval]; exact cell_lt d hd0 r c cr cc hcc hlt)
+  by_cases hpar_rc : (r + c) % 2 = 0
+  · -- EVEN parity
+    by_cases hbulk : r < d - 1 ∧ c < d - 1
+    · -- bulkZ pivot at (r, c)
+      obtain ⟨hgzt, hgval, hgpre⟩ := bulkZ_gen d hd0 hd r c hbulk.1 hbulk.2 hpar_rc
+      exact ⟨_, QStab.InStab.gen ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hbulk.1 hbulk.2⟩,
+        hgzt, fun q hq => hgpre q (by rw [hkval] at hq; exact hq),
+        by rw [hkeq r c hrowlt hcollt hkval]; exact hgval,
+        zcheck_preserves d hd0 hodd _ hgzt w hwzt hwcomm hwxbar⟩
+    · by_cases hcd : c = d - 1
+      · -- col = d-1, r even; rightZ pivot (r ≤ d-3) or corner (r = d-1)
+        by_cases hrle : r ≤ d - 3
+        · obtain ⟨bb, hbb⟩ : ∃ bb, r = 2 * bb := ⟨r / 2, by omega⟩
+          have hbbb : bb < (d - 1) / 2 := by omega
+          obtain ⟨hgzt, hgval, hgpre⟩ := rightZ_gen d hd0 hd bb hbbb
+          refine ⟨_, QStab.InStab.gen ⟨rightZIdx d bb, rightZIdx_lt_numStab d bb hd hbbb⟩,
+            hgzt, fun q hq => hgpre q (by rw [hkval, hbb, hcd] at hq; exact hq),
+            by rw [hkeq (2 * bb) (d - 1) (by omega) (by omega) (by rw [hkval, hbb, hcd])]; exact hgval,
+            zcheck_preserves d hd0 hodd _ hgzt w hwzt hwcomm hwxbar⟩
+        · -- corner (d-1, d-1): crux_bottomX at bb = (d-3)/2
+          exfalso; apply hlive
+          obtain ⟨bb, hbb⟩ : ∃ bb, d - 1 = 2 * bb + 2 := ⟨(d - 3) / 2, by omega⟩
+          have hrd1 : r = d - 1 := by omega
+          have hcbb : c = 2 * bb + 2 := by omega
+          rw [hkeq (d - 1) (2 * bb + 2) (by omega) (by omega) (by rw [hkval, hrd1, hcbb])]
+          exact crux_bottomX d hd0 hd hodd bb (by omega) w hwzt (hwcomm _)
+            (hprev (d - 1) (2 * bb + 1) (by omega) (by omega) (Or.inr ⟨by omega, by omega⟩))
+      · -- row = d-1, col ≤ d-2, col even
+        by_cases hc0 : c = 0
+        · -- Xbar corner (d-1, 0)
+          exfalso; apply hlive
+          rw [hkeq r c hrowlt hcollt hkval, show r = d - 1 by omega, hc0]
+          exact crux_Xbar d hd0 hd w hwzt hwxbar
+            (fun rr hrr => hprev rr 0 (by omega) hd0 (Or.inl (by omega)))
+        · -- bottomX mid (d-1, c) c even ≥ 2
+          exfalso; apply hlive
+          obtain ⟨bb, hbb⟩ : ∃ bb, c = 2 * bb + 2 := ⟨(c - 2) / 2, by omega⟩
+          have hrd1 : r = d - 1 := by omega
+          rw [hkeq (d - 1) (2 * bb + 2) (by omega) (by omega) (by rw [hkval, hrd1, hbb])]
+          exact crux_bottomX d hd0 hd hodd bb (by omega) w hwzt (hwcomm _)
+            (hprev (d - 1) (2 * bb + 1) (by omega) (by omega) (Or.inr ⟨by omega, by omega⟩))
+  · -- ODD parity
+    by_cases hr0 : r = 0
+    · -- topX (0, c) c odd
+      exfalso; apply hlive
+      obtain ⟨b, hbb⟩ : ∃ b, c = 2 * b + 1 := ⟨c / 2, by omega⟩
+      rw [hkeq r c hrowlt hcollt hkval, hr0, hbb]
+      exact crux_topX d hd0 hd b (by omega) w hwzt (hwcomm _)
+        (hprev 0 (2 * b) (by omega) (by omega) (Or.inr ⟨hr0.symm, by omega⟩))
+    · by_cases hc0 : c = 0
+      · -- leftZ pivot (r, 0), r odd
+        obtain ⟨bb, hbb⟩ : ∃ bb, r = 2 * bb + 1 := ⟨(r - 1) / 2, by omega⟩
+        have hbbb : bb < (d - 1) / 2 := by omega
+        obtain ⟨hgzt, hgval, hgpre⟩ := leftZ_gen d hd0 hd bb hbbb
+        refine ⟨_, QStab.InStab.gen ⟨leftZIdx d bb, leftZIdx_lt_numStab d bb hd hbbb⟩,
+          hgzt, fun q hq => hgpre q (by rw [hkval, hbb, hc0, Nat.add_zero] at hq; exact hq),
+          by rw [hkeq (2 * bb + 1) 0 (by omega) hd0 (by rw [hkval, hbb, hc0])]; exact hgval,
+          zcheck_preserves d hd0 hodd _ hgzt w hwzt hwcomm hwxbar⟩
+      · -- bulkX (r, c) r,c ≥ 1
+        exfalso; apply hlive
+        obtain ⟨rr, hrr⟩ : ∃ rr, r = rr + 1 := ⟨r - 1, by omega⟩
+        obtain ⟨cc, hcc⟩ : ∃ cc, c = cc + 1 := ⟨c - 1, by omega⟩
+        rw [hkeq r c hrowlt hcollt hkval, hrr, hcc]
+        exact crux_bulkX d hd0 hd rr cc (by omega) (by omega) (by omega) w hwzt (hwcomm _)
+          (hprev rr cc (by omega) (by omega) (Or.inl (by omega)))
+          (hprev rr (cc + 1) (by omega) (by omega) (Or.inl (by omega)))
+          (hprev (rr + 1) cc (by omega) (by omega) (Or.inr ⟨by omega, by omega⟩))
+
 end QStab.QClifford.Compile
