@@ -35,13 +35,13 @@ def shorPostselectProbeProg : XZProgram 2 :=
 def nzPostselectProbeProg : XZProgram 2 :=
   .seq (.meas .NZ shorPostselectProbeSched) (.meas .NZ shorPostselectProbeSched)
 
-/-- Shor: post-select flags true exactly at the two verifier slots (`0`, `3`). -/
+-- Shor: post-select flags true exactly at the two verifier slots (`0`, `3`).
 /-- info: [(0, true), (1, false), (2, false), (3, true), (4, false), (5, false)] -/
 #guard_msgs in
 #eval (List.finRange (programDetectorCount shorPostselectProbeProg)).map
   (fun f => (f.val, fullProgramPostselectFlag shorPostselectProbeProg f))
 
-/-- NZ control: no post-selection. -/
+-- NZ control: no post-selection.
 /-- info: [(0, false), (1, false)] -/
 #guard_msgs in
 #eval (List.finRange (programDetectorCount nzPostselectProbeProg)).map
