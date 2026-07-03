@@ -1,5 +1,6 @@
 import QStab.QClifford.Compile.HGPDuality
 import QStab.QClifford.Compile.HGPHValid
+import QStab.QClifford.Compile.DualityAutomorphism
 
 /-!
 # The compiled HGP bar-X distance, by duality transport (chunk 3)
@@ -241,15 +242,48 @@ theorem hgpLogicalClassX_contains_phi (d : Nat) (hd : 2 ≤ d)
     rw [← parity_logicalX_phi d hd E]
     exact h1 _ (List.mem_singleton.mpr rfl)
 
-/-! ## The headline -/
+/-! ## The bundle and the headline -/
 
-/-- **Compiled bar-X circuit-level distance for the HGP family.**  Every
-    clean-start run of `compileProgram (hgpXZProgram d)` whose data residual
-    lies in the bar-X logical class (commutes with all stabilizers,
-    anticommutes with `X̄ = Φ Z̄`) fired at least `d` faults — for every
-    `d ≥ 2`.  Proved by duality transport: the run is simulated on the
-    H-conjugated image circuit, where its residual is bar-Z-class and the
-    bar-Z bridge applies; `λ` agrees between the two runs. -/
+/-- **The HGP `DualityAutomorphism` bundle**: the transpose self-duality (`Φ`
+involutive) as a code automorphism.  `parity_Φ = parity_phi`, `Φ(X̄)=Z̄` is
+`hgpPhi_involutive` on `X̄ = Φ Z̄`, stab-row surjectivity comes from
+`mkHGPRepStabilizers_phi` + involutivity, and the image bar-Z floor is
+`hgpD_compiled_barZ_distance` (wrapped into parity form). -/
+def hgpDualityAutomorphism (d : Nat) (hd : 2 ≤ d) : DualityAutomorphism where
+  params  := hgpUParams d hd
+  helpers := hgpHelpers d
+  d       := d
+  fc      := hgpCircuit d
+  Xbar    := mkHGPRepLogicalX d hd
+  Zbar    := mkHGPRepLogicalZ d
+  perm     := hgpAmbientPerm d hd
+  Phi      := hgpPhi d hd
+  dualData := fun q => ⟨hgpDualNat d q.val, hgpDualNat_lt d q.val hd q.isLt⟩
+  Phi_def        := fun _ _ => rfl
+  perm_freshData := fun q => Fin.ext (hgpDualNat_involutive d hd q.val)
+  parity_Phi := parity_phi d hd
+  stab_surj  := fun i => by
+    have hb : hgpDualCheck d i.val < 2 * ((d - 1) * d) := by
+      rcases Nat.lt_or_ge i.val ((d - 1) * d) with hx | hz
+      · exact (hgpDualCheck_z d i.val hd hx).2
+      · exact Nat.lt_of_lt_of_le (hgpDualCheck_x d i.val hd hz i.isLt) (by omega)
+    refine ⟨⟨hgpDualCheck d i.val, hb⟩, ?_⟩
+    show hgpPhi d hd (mkHGPRepStabilizers d ⟨hgpDualCheck d i.val, hb⟩)
+        = mkHGPRepStabilizers d i
+    rw [show mkHGPRepStabilizers d ⟨hgpDualCheck d i.val, hb⟩
+          = hgpPhi d hd (mkHGPRepStabilizers d i)
+        from (mkHGPRepStabilizers_phi d hd i).symm,
+      hgpPhi_involutive d hd (mkHGPRepStabilizers d i)]
+  Phi_Xbar   := hgpPhi_involutive d hd (mkHGPRepLogicalZ d)
+  image_barZ_floor := fun tau hrunD hcent hz =>
+    hgpD_compiled_barZ_distance d hd tau hrunD
+      ⟨fun S hS => by obtain ⟨i, -, rfl⟩ := List.mem_map.mp hS; exact hcent i,
+       fun T hT => by rw [List.mem_singleton.mp hT]; exact hz⟩
+
+/-- **Compiled bar-X circuit-level distance for the HGP family** — now a one-line
+instance of the generic `compiled_barX_of_dualityAutomorphism` for the transpose
+bundle (formerly a bespoke transport proof).  The bar-X class input is unfolded to
+its parity-coset form and fed to the generic lemma. -/
 theorem hgp_compiled_barX_distance (d : Nat) (hd : 2 ≤ d) :
     ∀ sigma : QCState ((hgpUParams d hd).n + hgpHelpers d),
       qceval (hgpCircuit d)
@@ -258,22 +292,10 @@ theorem hgp_compiled_barX_distance (d : Nat) (hd : 2 ≤ d) :
         (dataErrorOfQCState (hgpUParams d hd) (hgpHelpers d) sigma) →
       d ≤ sigma.lambda := by
   intro sigma hrun hcls
-  obtain ⟨tau, hrunD, hlam, hpauli⟩ :=
-    qceval_hConj (hgpAmbientPerm d hd) hrun (HRel_clean (hgpAmbientPerm d hd))
-  have hdata : dataErrorOfQCState (hgpUParams d hd) (hgpHelpers d) tau
-      = hgpPhi d hd (dataErrorOfQCState (hgpUParams d hd) (hgpHelpers d) sigma) := by
-    funext q
-    show tau.es.paulis (freshDataQ (hgpUParams d hd).n (hgpHelpers d) q)
-      = hadamardAction (sigma.es.paulis (freshDataQ (hgpUParams d hd).n
-          (hgpHelpers d) ⟨hgpDualNat d q.val, hgpDualNat_lt d q.val hd q.isLt⟩))
-    rw [show freshDataQ (hgpUParams d hd).n (hgpHelpers d) q
-        = hgpAmbientPerm d hd (freshDataQ (hgpUParams d hd).n (hgpHelpers d)
-            ⟨hgpDualNat d q.val, hgpDualNat_lt d q.val hd q.isLt⟩)
-      from Fin.ext (hgpDualNat_involutive d hd q.val).symm]
-    exact hpauli _
-  have hclsD := hgpLogicalClassX_contains_phi d hd _ hcls
-  rw [← hdata] at hclsD
-  exact hlam ▸ hgpD_compiled_barZ_distance d hd tau hrunD hclsD
+  obtain ⟨h0, h1⟩ := hcls
+  exact compiled_barX_of_dualityAutomorphism (hgpDualityAutomorphism d hd) sigma hrun
+    (fun i => h0 _ (List.mem_map.mpr ⟨i, List.mem_finRange i, rfl⟩))
+    (h1 _ (List.mem_singleton.mpr rfl))
 
 -- Regression guards (axiom pins) for the chunk-3 headliners.
 /--
