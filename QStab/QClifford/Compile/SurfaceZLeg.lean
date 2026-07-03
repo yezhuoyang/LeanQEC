@@ -1043,4 +1043,194 @@ theorem surface_xside (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
         exact crux_rightZ d hd0 hd bb (by omega) w hwxt (hwcomm _)
           (hprev (2 * bb) (d - 1) (by omega) (by omega) (Or.inl (by omega)))
 
+/-! ## CSS assembly: the maximal-isotropic keystone
+
+The two cleaning legs (`surface_xside`, `surface_zside`) are combined through
+the pointwise CSS split `E = (X-part) · (Z-part)`: an X-type row reads only the
+Z-content of an error and vice versa (`parity_{x,z}type_{z,x}Part`), so the
+axiom splits into the two single-type statements the legs discharge.  All
+statements are over the real objects `mkSurfaceStabilizers`,
+`mkSurfaceQECParams`, `X̄ = mkSurfaceAttackerX`, `Z̄ = mkSurfaceLogicalZ`. -/
+
+private theorem anticommutes_I_right (p : Pauli) :
+    ErrorVec.Pauli.anticommutes p Pauli.I = false := by cases p <;> rfl
+
+private theorem anticommutes_I_left (p : Pauli) :
+    ErrorVec.Pauli.anticommutes Pauli.I p = false := rfl
+
+/-- Same-type commutation: a `Z`-type row reads `false` parity against any
+`Z`-type vector (all four `{Z,I}×{Z,I}` positions commute). -/
+theorem parity_same_ztype {n : Nat} (S w : ErrorVec n)
+    (hS : ∀ q, S q = Pauli.Z ∨ S q = Pauli.I)
+    (hw : ∀ q, w q = Pauli.Z ∨ w q = Pauli.I) :
+    ErrorVec.parity S w = false := by
+  unfold ErrorVec.parity
+  have h : (Finset.univ.filter fun i =>
+      ErrorVec.Pauli.anticommutes (S i) (w i)).card = 0 := by
+    apply Finset.card_eq_zero.mpr
+    apply Finset.filter_eq_empty_iff.mpr
+    intro q _ hP
+    rcases hS q with h1 | h1 <;> rcases hw q with h2 | h2 <;>
+      simp [h1, h2, ErrorVec.Pauli.anticommutes] at hP
+  rw [h]; rfl
+
+/-- Same-type commutation: an `X`-type row reads `false` parity against any
+`X`-type vector. -/
+theorem parity_same_xtype {n : Nat} (S w : ErrorVec n)
+    (hS : ∀ q, S q = Pauli.X ∨ S q = Pauli.I)
+    (hw : ∀ q, w q = Pauli.X ∨ w q = Pauli.I) :
+    ErrorVec.parity S w = false := by
+  unfold ErrorVec.parity
+  have h : (Finset.univ.filter fun i =>
+      ErrorVec.Pauli.anticommutes (S i) (w i)).card = 0 := by
+    apply Finset.card_eq_zero.mpr
+    apply Finset.filter_eq_empty_iff.mpr
+    intro q _ hP
+    rcases hS q with h1 | h1 <;> rcases hw q with h2 | h2 <;>
+      simp [h1, h2, ErrorVec.Pauli.anticommutes] at hP
+  rw [h]; rfl
+
+/-- Each surface stabilizer generator is pure-type: `X`-type or `Z`-type
+(the code is CSS). -/
+theorem stab_type_split (d : Nat) (hd0 : 0 < d) (k : Fin (numStabFormula d)) :
+    (∀ q, mkSurfaceStabilizers d hd0 k q = Pauli.X ∨ mkSurfaceStabilizers d hd0 k q = Pauli.I)
+    ∨ (∀ q, mkSurfaceStabilizers d hd0 k q = Pauli.Z ∨ mkSurfaceStabilizers d hd0 k q = Pauli.I) := by
+  have hty : stabType d k.val = Pauli.X ∨ stabType d k.val = Pauli.Z := by
+    simp only [stabType]; split_ifs <;> simp
+  rcases hty with hX | hZ
+  · left; intro q
+    show decodeStabPauliAt d k.val (q.val / d) (q.val % d) = Pauli.X ∨
+      decodeStabPauliAt d k.val (q.val / d) (q.val % d) = Pauli.I
+    rcases decode_I_or_stabType_pub d k.val (q.val / d) (q.val % d) with h | h
+    · exact Or.inr h
+    · exact Or.inl (h.trans hX)
+  · right; intro q
+    show decodeStabPauliAt d k.val (q.val / d) (q.val % d) = Pauli.Z ∨
+      decodeStabPauliAt d k.val (q.val / d) (q.val % d) = Pauli.I
+    rcases decode_I_or_stabType_pub d k.val (q.val / d) (q.val % d) with h | h
+    · exact Or.inr h
+    · exact Or.inl (h.trans hZ)
+
+/-- `Z̄` (row-0 `Z` string) is `Z`-type. -/
+theorem mkSurfaceLogicalZ_ztype (d : Nat) :
+    ∀ q, mkSurfaceLogicalZ d q = Pauli.Z ∨ mkSurfaceLogicalZ d q = Pauli.I := by
+  intro q; unfold mkSurfaceLogicalZ
+  by_cases h : q.val / d = 0
+  · rw [if_pos h]; exact Or.inl rfl
+  · rw [if_neg h]; exact Or.inr rfl
+
+/-- `X̄` (column-0 `X` string) is `X`-type. -/
+theorem mkSurfaceAttackerX_xtype (d : Nat) :
+    ∀ q, mkSurfaceAttackerX d q = Pauli.X ∨ mkSurfaceAttackerX d q = Pauli.I := by
+  intro q
+  have h : mkSurfaceAttackerX d q = if q.val % d = 0 then Pauli.X else Pauli.I := rfl
+  rw [h]; by_cases hc : q.val % d = 0
+  · rw [if_pos hc]; exact Or.inl rfl
+  · rw [if_neg hc]; exact Or.inr rfl
+
+/-- **The maximal-isotropic keystone** for the rotated surface code.  An error
+commuting with every stabilizer generator and with both `X̄` and `Z̄` is a
+product of stabilizer generators.  Assembled from the two CSS legs
+(`surface_xside`, `surface_zside`) via the split `E = (X-part) · (Z-part)`. -/
+theorem surface_maximal_isotropic (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (E : ErrorVec (d * d))
+    (hstab : ∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) E = false)
+    (hXbar : ErrorVec.parity (mkSurfaceAttackerX d) E = false)
+    (hZbar : ErrorVec.parity (mkSurfaceLogicalZ d) E = false) :
+    QStab.InStab (mkSurfaceQECParams d hd0 hodd) E := by
+  have hsplit : E = ErrorVec.mul (xPartVec E) (zPartVec E) := (xPart_mul_zPart E).symm
+  rw [hsplit]
+  refine QStab.InStab.mul ?_ ?_
+  · -- X-part via surface_xside: reads Z-checks (through E) and X-checks (same-type)
+    apply surface_xside d hd0 hd3 hodd (xPartVec E) (xPartVec_xtype E)
+    · intro k
+      rcases stab_type_split d hd0 k with hkX | hkZ
+      · exact parity_same_xtype (mkSurfaceStabilizers d hd0 k) (xPartVec E) hkX (xPartVec_xtype E)
+      · rw [← parity_ztype_xPart (mkSurfaceStabilizers d hd0 k) E hkZ]; exact hstab k
+    · rw [← parity_ztype_xPart (mkSurfaceLogicalZ d) E (mkSurfaceLogicalZ_ztype d)]; exact hZbar
+  · -- Z-part via surface_zside: reads X-checks (through E) and Z-checks (same-type)
+    apply surface_zside d hd0 hd3 hodd (zPartVec E) (zPartVec_ztype E)
+    · intro k
+      rcases stab_type_split d hd0 k with hkX | hkZ
+      · rw [← parity_xtype_zPart (mkSurfaceStabilizers d hd0 k) E hkX]; exact hstab k
+      · exact parity_same_ztype (mkSurfaceStabilizers d hd0 k) (zPartVec E) hkZ (zPartVec_ztype E)
+    · rw [← parity_xtype_zPart (mkSurfaceAttackerX d) E (mkSurfaceAttackerX_xtype d)]; exact hXbar
+
+/-- `X̄` and `Z̄` anticommute: their supports (column 0 / row 0) overlap only at
+the corner qubit `0`, with `X` against `Z`. -/
+theorem surface_Xbar_anticomm_Zbar (d : Nat) (hd0 : 0 < d) :
+    ErrorVec.parity (mkSurfaceAttackerX d) (mkSurfaceLogicalZ d) = true := by
+  have h0lt : 0 < d * d := Nat.mul_pos hd0 hd0
+  unfold ErrorVec.parity
+  have hsingle : (Finset.univ.filter fun i =>
+      ErrorVec.Pauli.anticommutes (mkSurfaceAttackerX d i) (mkSurfaceLogicalZ d i)).card = 1 := by
+    apply Finset.card_eq_one.mpr
+    refine ⟨⟨0, h0lt⟩, ?_⟩
+    ext q
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+    constructor
+    · intro hq
+      apply Fin.ext
+      show q.val = 0
+      by_cases hx : q.val % d = 0
+      · by_cases hz : q.val / d = 0
+        · have hdm := Nat.div_add_mod q.val d
+          rw [hz, hx, Nat.mul_zero, Nat.add_zero] at hdm
+          exact hdm.symm
+        · exfalso
+          have hzv : mkSurfaceLogicalZ d q = Pauli.I := by
+            unfold mkSurfaceLogicalZ; rw [if_neg hz]
+          rw [hzv, anticommutes_I_right] at hq
+          exact Bool.noConfusion hq
+      · exfalso
+        have hxv : mkSurfaceAttackerX d q = Pauli.I := by
+          have h : mkSurfaceAttackerX d q = if q.val % d = 0 then Pauli.X else Pauli.I := rfl
+          rw [h, if_neg hx]
+        rw [hxv, anticommutes_I_left] at hq
+        exact Bool.noConfusion hq
+    · intro hq; subst hq
+      have hxv : mkSurfaceAttackerX d ⟨0, h0lt⟩ = Pauli.X := by
+        have h : mkSurfaceAttackerX d ⟨0, h0lt⟩ = if (0 : Nat) % d = 0 then Pauli.X else Pauli.I := rfl
+        rw [h, if_pos (Nat.zero_mod d)]
+      have hzv : mkSurfaceLogicalZ d ⟨0, h0lt⟩ = Pauli.Z := by
+        unfold mkSurfaceLogicalZ; rw [if_pos (Nat.zero_div d)]
+      rw [hxv, hzv]; rfl
+  rw [hsingle]; rfl
+
+/-- **The logical-operator system of the rotated surface code**, over the real
+objects `X̄ = mkSurfaceAttackerX`, `Z̄ = mkSurfaceLogicalZ`, with the
+maximal-isotropic axiom discharged by constructive pivot-peel cleaning. -/
+def surfaceLogicalOps (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
+    QStab.Paper.LogicalCosets.LogicalOps (mkSurfaceQECParams d hd0 hodd) where
+  Xbar := mkSurfaceAttackerX d
+  Zbar := mkSurfaceLogicalZ d
+  Xbar_comm := mkSurfaceAttackerX_commutes_with_stabilizers d hd0 hodd
+  Zbar_comm := logicalZ_normalizer_parametric d hd0
+  Xbar_anticomm_Zbar := surface_Xbar_anticomm_Zbar d hd0
+  maximal_isotropic := surface_maximal_isotropic d hd0 hd3 hodd
+
+/-- **Coverage** for the rotated surface code: a centralizer element outside the
+stabilizer subgroup anticommutes with `X̄` or with `Z̄` (else the keystone would
+place it inside). -/
+theorem surface_coverage (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (E : ErrorVec (mkSurfaceQECParams d hd0 hodd).n)
+    (hcent : ∀ j : Fin (mkSurfaceQECParams d hd0 hodd).numStab,
+      ErrorVec.parity ((mkSurfaceQECParams d hd0 hodd).stabilizers j) E = false)
+    (hnot : ¬ QStab.InStab (mkSurfaceQECParams d hd0 hodd) E) :
+    ErrorVec.parity (mkSurfaceAttackerX d) E = true
+      ∨ ErrorVec.parity (mkSurfaceLogicalZ d) E = true :=
+  QStab.Paper.LogicalCosets.LogicalOps.coverage (surfaceLogicalOps d hd0 hd3 hodd) E hcent hnot
+
+/-- **Four-coset normalizer decomposition** for the rotated surface code: every
+centralizer element lies in one of `S`, `X̄·S`, `Z̄·S`, `(X̄ Z̄)·S`. -/
+theorem surface_normalizer_decomposition (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (E : ErrorVec (mkSurfaceQECParams d hd0 hodd).n)
+    (hE : ∀ s, ErrorVec.parity ((mkSurfaceQECParams d hd0 hodd).stabilizers s) E = false) :
+    QStab.InStab (mkSurfaceQECParams d hd0 hodd) E
+    ∨ QStab.InStab (mkSurfaceQECParams d hd0 hodd) (ErrorVec.mul (mkSurfaceAttackerX d) E)
+    ∨ QStab.InStab (mkSurfaceQECParams d hd0 hodd) (ErrorVec.mul (mkSurfaceLogicalZ d) E)
+    ∨ QStab.InStab (mkSurfaceQECParams d hd0 hodd)
+        (ErrorVec.mul (mkSurfaceAttackerX d) (ErrorVec.mul (mkSurfaceLogicalZ d) E)) :=
+  QStab.Paper.LogicalCosets.normalizer_decomposition (surfaceLogicalOps d hd0 hd3 hodd) E hE
+
 end QStab.QClifford.Compile
