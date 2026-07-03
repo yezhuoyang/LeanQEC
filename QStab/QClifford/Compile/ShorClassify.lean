@@ -156,6 +156,42 @@ theorem helperPrefix_site {P : QECParams} {total : Nat} (C : FCircuit (P.n + tot
             · exact habove'
           · exact ih hbelow' habove' herr' cursor tail site hsite
 
+/-- **Predicate-generic prefix-site decomposition.**  Every fault site of a
+circuit whose errLoc markers and acted-on qubits all satisfy `S` has `S site.q`
+and a suffix `Ys ++ eraseFaults tail` with `Ys` again acting within `S`. -/
+theorem prefixSite_local {P : QECParams} {total : Nat} (C : FCircuit (P.n + total))
+    (S : Fin (P.n + total) → Prop)
+    (hgates : ∀ g ∈ eraseFaults C, ∀ q : Fin (P.n + total), gateActsOn g q → S q)
+    (herr : ∀ q0 : Fin (P.n + total), FInstr.errLoc q0 ∈ C → S q0) :
+    ∀ (cursor : Nat) (tail : FCircuit (P.n + total))
+      (site : PCC.ErrLocWithContext (P.n + total)),
+      site ∈ prefixErrLocsWithContextAux cursor C tail →
+        S site.q ∧ ∃ Ys : Circuit (P.n + total), site.suffix = Ys ++ eraseFaults tail ∧
+          (∀ g ∈ Ys, ∀ q : Fin (P.n + total), gateActsOn g q → S q) := by
+  induction C with
+  | nil => intro cursor tail site hsite; simp [prefixErrLocsWithContextAux] at hsite
+  | cons instr rest ih =>
+      cases instr with
+      | gate g =>
+          intro cursor tail site hsite
+          have hgates' : ∀ g' ∈ eraseFaults rest, ∀ q, gateActsOn g' q → S q :=
+            fun g' hg' q hq => hgates g' (by simp [eraseFaults, hg']) q hq
+          have herr' : ∀ q0, FInstr.errLoc q0 ∈ rest → S q0 :=
+            fun q0 h => herr q0 (List.mem_cons.mpr (Or.inr h))
+          simp only [prefixErrLocsWithContextAux] at hsite
+          exact ih hgates' herr' _ tail site hsite
+      | errLoc q0 =>
+          intro cursor tail site hsite
+          have heF : eraseFaults (FInstr.errLoc q0 :: rest) = eraseFaults rest := by
+            simp [eraseFaults]
+          have hgates' : ∀ g' ∈ eraseFaults rest, ∀ q, gateActsOn g' q → S q := heF ▸ hgates
+          have herr' : ∀ q0', FInstr.errLoc q0' ∈ rest → S q0' :=
+            fun q0' h => herr q0' (List.mem_cons.mpr (Or.inr h))
+          simp only [prefixErrLocsWithContextAux, List.mem_cons] at hsite
+          rcases hsite with rfl | hsite
+          · exact ⟨herr q0 (List.mem_cons_self ..), eraseFaults rest, rfl, hgates'⟩
+          · exact ih hgates' herr' cursor tail site hsite
+
 /-! ## Stage 2: the pre-coupling segment and the hook branch -/
 
 /-- The Shor gadget block's pre-coupling part (prep + cat cascade + verifier
@@ -181,6 +217,19 @@ theorem errLoc_mem_cnot {nq : Nat} {c t q0 : Fin nq} (h : FInstr.errLoc q0 ∈ c
     simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq,
       FInstr.errLoc.injEq] at h
     exact h
+
+/-- errLoc markers of one coupling slot lie in `{slot.qubit, cat}`. -/
+theorem shorCouplingSlot_errLoc {nq : Nat} (slot : ScheduledPauli nq) (cat q0 : Fin nq)
+    (h : FInstr.errLoc q0 ∈ shorCouplingSlot slot cat) : q0 = slot.qubit ∨ q0 = cat := by
+  obtain ⟨sk, sq⟩ := slot
+  cases sk with
+  | X =>
+      simp only [shorCouplingSlot, List.append_assoc, List.mem_append] at h
+      rcases h with hh | hh | hh
+      · exact Or.inl (errLoc_mem_pair hh)
+      · exact errLoc_mem_cnot hh
+      · exact Or.inl (errLoc_mem_pair hh)
+  | Z => exact errLoc_mem_cnot h
 
 /-- errLoc markers of the pre-coupling segment lie in `cats ∪ {v}`. -/
 theorem shorPreSeg_errLoc {nq : Nat} (c0 : Fin nq) (rest : List (Fin nq)) (v : Fin nq)
@@ -348,5 +397,143 @@ theorem shorPRE_site_hook {P : QECParams} {total : Nat}
     rw [List.mem_filter] at hpc
     exact ⟨pc.1, (List.of_mem_zip hpc.1).1, hq⟩
   · rw [if_neg hmem]; exact Or.inl rfl
+
+/-! ## Stage 3: the coupling / measurement branch (weight ≤ 1) -/
+
+/-- **Branch B: a coupling or measurement fault site has weight-`≤ 1` residual.**
+The fault touches a single pair (its data qubit and cat); the rest of that pair
+localizes to those two qubits, the later couplings run on clean cats (so they
+preserve the data block), and the measurements / tail preserve data.  Hence the
+residual is supported on the one pair's data qubit. -/
+theorem shorCOUP_site_wle1 {P : QECParams} {total : Nat}
+    (measCats : List (Fin (P.n + total))) (tail : FCircuit (P.n + total)) (L : Nat)
+    (hnL : P.n ≤ L) (htailPDA : PreservesDataAbove (eraseFaults tail) L)
+    (hmeasB : ∀ c ∈ measCats, c.val < L) :
+    ∀ (pairs : List (ScheduledPauli (P.n + total) × Fin (P.n + total)))
+      (hqA : ∀ pc ∈ pairs, pc.1.qubit.val < P.n)
+      (hcA : ∀ pc ∈ pairs, P.n ≤ pc.2.val) (hcB : ∀ pc ∈ pairs, pc.2.val < L)
+      (hcNd : (pairs.map (·.2)).Nodup)
+      (cursor : Nat) (site : PCC.ErrLocWithContext (P.n + total)) (p : Pauli) (hp : p ≠ Pauli.I),
+      site ∈ prefixErrLocsWithContextAux cursor
+        ((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)
+        (((measCats.map rawMeasZ).flatten) ++ tail) →
+        ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) ≤ 1 := by
+  intro pairs
+  induction pairs with
+  | nil => intro _ _ _ _ cursor site p hp hsite; simp [prefixErrLocsWithContextAux] at hsite
+  | cons p0 rest ih =>
+      intro hqA hcA hcB hcNd cursor site p hp hsite
+      have hcirc : ((p0 :: rest).map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten
+          = shorCouplingSlot p0.1 p0.2 ++
+            (rest.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten := by
+        simp only [List.map_cons, List.flatten_cons]
+      rw [hcirc, prefixErrLocs_append, List.mem_append] at hsite
+      have hqA' : ∀ pc ∈ rest, pc.1.qubit.val < P.n := fun pc h => hqA pc (List.mem_cons_of_mem _ h)
+      have hcA' : ∀ pc ∈ rest, P.n ≤ pc.2.val := fun pc h => hcA pc (List.mem_cons_of_mem _ h)
+      have hcB' : ∀ pc ∈ rest, pc.2.val < L := fun pc h => hcB pc (List.mem_cons_of_mem _ h)
+      have hcNd0 : (p0.2 :: rest.map (·.2)).Nodup := hcNd
+      have hcNd' : (rest.map (·.2)).Nodup := (List.nodup_cons.mp hcNd0).2
+      have hfresh0 : p0.2 ∉ rest.map (·.2) := (List.nodup_cons.mp hcNd0).1
+      rcases hsite with hleft | hright
+      · -- Case A: the fault is in `p0`'s own coupling slot
+        set S : Fin (P.n + total) → Prop := fun q => q = p0.1.qubit ∨ q = p0.2 with hS
+        obtain ⟨hSq, Ys, hsuf, hYs⟩ :=
+          prefixSite_local (shorCouplingSlot p0.1 p0.2) S
+            (fun g hg q hq => shorCouplingSlot_gates_actOn p0.1 p0.2 g hg q hq)
+            (fun q0 h => shorCouplingSlot_errLoc p0.1 p0.2 q0 h) cursor _ site hleft
+        -- bounds
+        have hq0lt : p0.1.qubit.val < P.n := hqA p0 List.mem_cons_self
+        have hSlt : ∀ q, S q → q.val < L := by
+          intro q hq; rcases hq with rfl | rfl
+          · exact lt_of_lt_of_le hq0lt hnL
+          · exact hcB p0 List.mem_cons_self
+        have hSqL : site.q.val < L := hSlt site.q hSq
+        -- the affected data qubit
+        refine weight_le_one_of_single _ ⟨p0.1.qubit.val, hq0lt⟩ ?_
+        intro q' hq'
+        have hqne : freshDataQ P.n total q' ≠ p0.1.qubit := by
+          intro he
+          apply hq'; apply Fin.ext
+          simpa [freshDataQ_val] using congrArg Fin.val he
+        have hqnc : freshDataQ P.n total q' ≠ p0.2 := by
+          refine Fin.ne_of_val_ne ?_
+          have h1 := q'.isLt
+          have h2 := hcA p0 List.mem_cons_self
+          simp only [freshDataQ_val]
+          omega
+        have hqnS : ¬ S (freshDataQ P.n total q') := fun h => h.elim hqne hqnc
+        show (propagateCircuit site.suffix
+            ((PCC.cleanAtDetector site.detectorStart).inject site.q p)).paulis
+            (freshDataQ P.n total q') = Pauli.I
+        set es0 := (PCC.cleanAtDetector site.detectorStart).inject site.q p with hes0
+        rw [hsuf, eraseFaults_append, eraseFaults_append, QHL.Target.propagateCircuit_append]
+        set esA := propagateCircuit Ys es0 with hesA
+        have hp02L : p0.2.val < L := hcB p0 List.mem_cons_self
+        have hes0_off : ∀ d : Fin (P.n + total), ¬ S d → es0.paulis d = Pauli.I := by
+          intro d hd
+          have hcond : ¬ (d = site.q) := fun he => hd (by rw [he]; exact hSq)
+          rw [hes0, injectClean_paulis, if_neg hcond]
+        have hYsBelow : circuitActsBelow Ys L :=
+          fun g hg q hq => hSlt q (hYs g hg q hq)
+        have hesA_off : ∀ d : Fin (P.n + total), ¬ S d → esA.paulis d = Pauli.I := by
+          intro d hd
+          rw [hesA, propagateCircuit_paulis_off Ys d (fun g hg hq => hd (hYs g hg d hq)) es0]
+          exact hes0_off d hd
+        have hcleanA : cleanAbove esA L := by
+          rw [hesA]
+          refine cleanAbove_preserved_of_actsBelow Ys L hYsBelow es0 ?_
+          intro h hh
+          refine hes0_off h ?_
+          rintro (rfl | rfl) <;> omega
+        have hZfree : ∀ c' ∈ rest.map (·.2), zPart (esA.paulis c') = Pauli.I := by
+          intro c' hc'
+          have hnotS : ¬ S c' := by
+            rintro (rfl | rfl)
+            · rw [List.mem_map] at hc'; obtain ⟨pc', hpc', he⟩ := hc'
+              have := hcA' pc' hpc'; rw [he] at this; omega
+            · exact hfresh0 hc'
+          rw [hesA_off c' hnotS]; rfl
+        have hdisj : ∀ pc ∈ rest, ∀ c' ∈ rest.map (·.2), pc.1.qubit ≠ c' := by
+          intro pc hpc c' hc'
+          rw [List.mem_map] at hc'
+          obtain ⟨pc', hpc', rfl⟩ := hc'
+          exact Fin.ne_of_val_ne (by have := hqA' pc hpc; have := hcA' pc' hpc'; omega)
+        have hfreshNc : freshDataQ P.n total q' ∉ rest.map (·.2) := by
+          intro hmem; rw [List.mem_map] at hmem
+          obtain ⟨pc', hpc', he⟩ := hmem
+          have hge : P.n ≤ pc'.2.val := hcA' pc' hpc'
+          rw [he] at hge; simp only [freshDataQ_val] at hge
+          have := q'.isLt; omega
+        -- stage restCoup
+        rw [QHL.Target.propagateCircuit_append]
+        set esB := propagateCircuit
+          (eraseFaults ((rest.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)) esA with hesB
+        have hesB_data : esB.paulis (freshDataQ P.n total q') = Pauli.I := by
+          rw [hesB, shorCouplings_preserve_data rest hcNd' hdisj esA hZfree
+            (freshDataQ P.n total q') hfreshNc]
+          exact hesA_off _ hqnS
+        have hcleanB : cleanAbove esB L := by
+          rw [hesB]
+          refine cleanAbove_preserved_of_actsBelow _ L ?_ esA hcleanA
+          apply cab_erase_flatten_map
+          intro pc hpc
+          exact cab_erase_shorCouplingSlot pc.1 pc.2 (hcB' pc hpc)
+            (lt_of_lt_of_le (hqA' pc hpc) hnL)
+        -- stage measSeg
+        rw [QHL.Target.propagateCircuit_append]
+        set esC := propagateCircuit (eraseFaults ((measCats.map rawMeasZ).flatten)) esB with hesC
+        have hesC_data : esC.paulis (freshDataQ P.n total q') = Pauli.I := by
+          rw [hesC, rawMeasZ_flatten_paulis, hesB_data]
+        have hcleanC : cleanAbove esC L := by
+          rw [hesC]
+          refine cleanAbove_preserved_of_actsBelow _ L ?_ esB hcleanB
+          apply cab_erase_flatten_map
+          intro c hc
+          exact cab_erase_rawMeasZ c (hmeasB c hc)
+        -- stage tail
+        rw [htailPDA esC hcleanC (freshDataQ P.n total q') q'.isLt]
+        exact hesC_data
+      · -- Case B: the fault is in a later coupling slot — recurse
+        exact ih hqA' hcA' hcB' hcNd' _ site p hp hright
 
 end QStab.QClifford.Compile
