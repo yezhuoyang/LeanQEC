@@ -524,4 +524,144 @@ theorem stageAt_total (d : Nat) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
     exact injRows_zero_of_gt_last d ((d - 2) * (d - 1) + 1 + i) hd1 (by omega)
   rw [htail, Nat.add_zero]
 
+/-! ## (d) The per-gadget data update — one gadget advances the stage residual -/
+
+/-- **The reach induction's data step.**  Running gadget `k`'s injections on the stage residual
+`colPrefix d (stageAt d k)` yields `colPrefix d (stageAt d (k+1))`: at a column-0 injector the
+matching domino fires (`stageAt_of_bulkZ`/`_of_bulkX_last` line the entry stage up exactly);
+everywhere else the injection list is all-`false`, so the residual is unchanged. -/
+theorem injectE_advances_stage (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (total : Nat) (k : Fin (numStabFormula d)) :
+    injectE (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val)
+        (fun q => (dataInputState (k := total) (colPrefix d (stageAt d k.val))).paulis q)
+      = fun q => (dataInputState (k := total) (colPrefix d (stageAt d (k.val + 1)))).paulis q := by
+  have hstep := stageAt_succ d k.val
+  -- non-injector closer: all-`false` injections leave the residual fixed
+  have noninj : ∀ (hf : ∀ b ∈ injs_k d k.val, b = false) (hz : injRows d k.val = 0),
+      injectE (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val)
+          (fun q => (dataInputState (k := total) (colPrefix d (stageAt d k.val))).paulis q)
+        = fun q => (dataInputState (k := total) (colPrefix d (stageAt d (k.val + 1)))).paulis q := by
+    intro hf hz
+    rw [show stageAt d (k.val + 1) = stageAt d k.val by rw [hstep, hz, Nat.add_zero],
+      injectE_all_false _ _ _ hf]
+  cases hcl : classifyStab d k.val with
+  | bulkZ r c =>
+    cases c with
+    | zero =>
+      have hs : stageAt d k.val = r := stageAt_of_bulkZ d k.val r hd3 hodd hcl
+      obtain ⟨hrd, _⟩ := classifyStab_bulkZ_bounds d k.val r 0 hcl
+      have hsucc : stageAt d (k.val + 1) = r + 2 := by
+        rw [hstep, hs, injRows_bulkZ0 d k.val r hcl]
+      rw [hs, hsucc]
+      exact injectE_domino_bulkZ d hd total k r hcl (by omega)
+    | succ c' =>
+      refine noninj ?_ ?_
+      · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+      · simp only [injRows, injs_k, hcl]; rfl
+  | bulkX r c =>
+    cases c with
+    | zero =>
+      by_cases hr : r + 2 = d
+      · have hs : stageAt d k.val = r + 1 := stageAt_of_bulkX_last d k.val r hd3 hodd hcl hr
+        have hsucc : stageAt d (k.val + 1) = r + 2 := by
+          rw [hstep, hs, injRows_bulkX0_last d k.val r hcl hr]
+        rw [hs, hsucc]
+        exact injectE_domino_bulkX d hd total k r hcl hr
+      · refine noninj ?_ ?_
+        · intro b hb; simp only [injs_k, hcl, if_neg hr] at hb; simp_all
+        · simp only [injRows, injs_k, hcl, if_neg hr]; rfl
+    | succ c' =>
+      refine noninj ?_ ?_
+      · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+      · simp only [injRows, injs_k, hcl]; rfl
+  | topX b =>
+    refine noninj ?_ ?_
+    · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+    · simp only [injRows, injs_k, hcl]; rfl
+  | rightZ b =>
+    refine noninj ?_ ?_
+    · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+    · simp only [injRows, injs_k, hcl]; rfl
+  | leftZ b =>
+    refine noninj ?_ ?_
+    · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+    · simp only [injRows, injs_k, hcl]; rfl
+  | bottomX b =>
+    refine noninj ?_ ?_
+    · intro b hb; simp only [injs_k, hcl] at hb; simp_all
+    · simp only [injRows, injs_k, hcl]; rfl
+
+/-! ## (d) The per-gadget `heven` side condition -/
+
+/-- Past the last injector the stage is already full (`= d`): the boundary gadgets inject
+nothing. -/
+theorem stageAt_eq_d_of_ge (d : Nat) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) (k : Nat)
+    (hk : (d - 2) * (d - 1) + 1 ≤ k) : stageAt d k = d := by
+  have hd1 : 1 < d := by omega
+  have hclass : classifyStab d ((d - 2) * (d - 1)) = .bulkX (d - 2) 0 := by
+    rw [classifyStab_col0 d (d - 2) hd1 (by omega), if_neg (show ¬ (d - 2) % 2 = 0 by omega)]
+  have hbase : stageAt d ((d - 2) * (d - 1)) = d - 1 := by
+    have := stageAt_of_bulkX_last d ((d - 2) * (d - 1)) (d - 2) hd3 hodd hclass (by omega); omega
+  have hM : stageAt d ((d - 2) * (d - 1) + 1) = d := by
+    rw [stageAt_succ, hbase,
+      injRows_bulkX0_last d ((d - 2) * (d - 1)) (d - 2) hclass (by omega)]; omega
+  rw [show k = ((d - 2) * (d - 1) + 1) + (k - ((d - 2) * (d - 1) + 1)) by omega, stageAt_add, hM]
+  have htail : ((List.range (k - ((d - 2) * (d - 1) + 1))).map
+      (fun i => injRows d ((d - 2) * (d - 1) + 1 + i))).sum = 0 := by
+    apply List.sum_eq_zero
+    intro x hx; simp only [List.mem_map, List.mem_range] at hx
+    obtain ⟨i, _, rfl⟩ := hx
+    exact injRows_zero_of_gt_last d ((d - 2) * (d - 1) + 1 + i) hd1 (by omega)
+  rw [htail, Nat.add_zero]
+
+/-- A `leftZ` boundary check sits at or beyond the bulk block end `(d-1)²`. -/
+theorem classifyStab_leftZ_ge (d k b : Nat) (h : classifyStab d k = .leftZ b) :
+    (d - 1) * (d - 1) ≤ k := by
+  by_contra hlt
+  rw [not_le] at hlt
+  simp only [classifyStab, if_pos hlt] at h
+  split_ifs at h
+
+/-- **The per-gadget `heven`.**  Through `scheduleParityList_liftSchedule`, the post-injection
+schedule parity reduces to `scheduleParity (nzSchedule …) (colPrefix …)`, closed by
+`heven_X_kind` (X-checks) or `heven_of_stage` (Z-checks) with the matching `hstage`. -/
+theorem heven_gadget (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (total : Nat) (k : Fin (numStabFormula d)) :
+    scheduleParityList (liftSchedule (k := total) (nzSchedule d hd k)).slots
+        (injectE (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val)
+          (fun q => (dataInputState (k := total) (colPrefix d (stageAt d k.val))).paulis q)) false
+      = false := by
+  rw [injectE_advances_stage d hd hd3 hodd total k, scheduleParityList_liftSchedule]
+  cases hcl : classifyStab d k.val with
+  | bulkZ r c =>
+    cases c with
+    | zero =>
+      have hs : stageAt d k.val = r := stageAt_of_bulkZ d k.val r hd3 hodd hcl
+      obtain ⟨hrd, _⟩ := classifyStab_bulkZ_bounds d k.val r 0 hcl
+      have hsucc : stageAt d (k.val + 1) = r + 2 := by
+        rw [stageAt_succ, hs, injRows_bulkZ0 d k.val r hcl]
+      rw [hsucc]
+      exact heven_of_stage hd hd3 hodd k (fun q hq hc => hstage_bulkZ d hd k r hcl q hq hc)
+    | succ c' =>
+      exact heven_of_stage hd hd3 hodd k
+        (fun q hq hc => hstage_bulkZ_col d hd k r c' _ hcl q hq hc)
+  | bulkX r c =>
+    exact heven_X_kind hd k (by simp only [hcl, kindXZ])
+  | topX b =>
+    exact heven_X_kind hd k (by simp only [hcl, kindXZ])
+  | rightZ b =>
+    exact heven_of_stage hd hd3 hodd k
+      (fun q hq hc => hstage_rightZ d hd (by omega) k b _ hcl q hq hc)
+  | leftZ b =>
+    have hge : (d - 1) * (d - 1) ≤ k.val := classifyStab_leftZ_ge d k.val b hcl
+    have hsd : stageAt d (k.val + 1) = d := by
+      apply stageAt_eq_d_of_ge d hd3 hodd
+      have : (d - 2) * (d - 1) + (d - 1) = (d - 1) * (d - 1) := by
+        rw [← Nat.succ_mul]; congr 1; omega
+      omega
+    rw [hsd]
+    exact heven_of_stage hd hd3 hodd k (fun q hq hc => hstage_leftZ d hd hd3 hodd k b hcl q hq hc)
+  | bottomX b =>
+    exact heven_X_kind hd k (by simp only [hcl, kindXZ])
+
 end QStab.QClifford.Compile
