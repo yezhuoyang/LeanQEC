@@ -799,4 +799,248 @@ theorem crux_Zbar (d : Nat) (hd0 : 0 < d) (hd : 1 < d)
   rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
   nomatch hpar
 
+/-! ## X-pivot generators (dual of the Z-pivot generators) -/
+
+/-- The `bulkX r c` generator: `X`-type, `X` at its pivot `(r,c)`, `I` on earlier cells. -/
+theorem bulkX_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (r c : Nat) (hr : r < d - 1) (hc : c < d - 1)
+    (hpar : (r + c) % 2 = 1) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q = Pauli.X
+        ∨ mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩
+          (gridFin d hd0 (r, c)) = Pauli.X
+      ∧ (∀ q : Fin (d * d), q.val < d * r + c →
+          mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q
+            = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hr hc⟩ q
+        = if (q.val / d = r ∨ q.val / d = r + 1) ∧ (q.val % d = c ∨ q.val % d = c + 1)
+          then Pauli.X else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_bulkXIdx d r c _ _ hd hr hc hpar
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega),
+        Nat.mul_add_div hd0, Nat.div_eq_of_lt (by omega), Nat.add_zero]),
+      Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega), Nat.mul_add_mod,
+        Nat.mod_eq_of_lt (by omega)])⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hrr, hcc⟩
+    have hdm := Nat.div_add_mod q.val d
+    have h1 : d * r ≤ d * (q.val / d) := Nat.mul_le_mul_left d (by rcases hrr with h | h <;> omega)
+    have h2 : c ≤ q.val % d := by rcases hcc with h | h <;> omega
+    omega
+
+/-- The `topX b` generator: `X`-type, `X` at its pivot `(0, 2b)`, `I` on earlier cells. -/
+theorem topX_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (b : Nat) (hb : b < (d - 1) / 2) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨topXIdx d b, topXIdx_lt_numStab d b hd hb⟩ q = Pauli.X
+        ∨ mkSurfaceStabilizers d hd0 ⟨topXIdx d b, topXIdx_lt_numStab d b hd hb⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨topXIdx d b, topXIdx_lt_numStab d b hd hb⟩
+          (gridFin d hd0 (0, 2 * b)) = Pauli.X
+      ∧ (∀ q : Fin (d * d), q.val < 2 * b →
+          mkSurfaceStabilizers d hd0 ⟨topXIdx d b, topXIdx_lt_numStab d b hd hb⟩ q = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨topXIdx d b, topXIdx_lt_numStab d b hd hb⟩ q
+        = if q.val / d = 0 ∧ (q.val % d = 2 * b ∨ q.val % d = 2 * b + 1)
+          then Pauli.X else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_topXIdx d b _ _ hd hb
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨by rw [gridFin_val_of_lt d hd0 hd0 (by omega), Nat.mul_add_div hd0,
+        Nat.div_eq_of_lt (by omega), Nat.add_zero], Or.inl (by rw [gridFin_val_of_lt d hd0 hd0
+        (by omega), Nat.mul_add_mod, Nat.mod_eq_of_lt (by omega)])⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hrow, hcol⟩
+    have hdm := Nat.div_add_mod q.val d; rw [hrow] at hdm
+    rcases hcol with h | h <;> omega
+
+/-- The `bottomX b` generator: `X`-type, `X` at its pivot `(d-1, 2b+1)`, `I` on earlier cells. -/
+theorem bottomX_gen (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (hodd : d % 2 = 1)
+    (b : Nat) (hb : b < (d - 1) / 2) :
+    (∀ q, mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q = Pauli.X
+        ∨ mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q = Pauli.I)
+      ∧ mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩
+          (gridFin d hd0 (d - 1, 2 * b + 1)) = Pauli.X
+      ∧ (∀ q : Fin (d * d), q.val < d * (d - 1) + (2 * b + 1) →
+          mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q
+            = Pauli.I) := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q
+        = if q.val / d = d - 1 ∧ (q.val % d = 2 * b + 1 ∨ q.val % d = 2 * b + 2)
+          then Pauli.X else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_bottomXIdx d b _ _ hd hb
+  refine ⟨fun q => ?_, ?_, fun q hq => ?_⟩
+  · rw [hstab q]; split_ifs; exacts [Or.inl rfl, Or.inr rfl]
+  · rw [hstab _, if_pos ⟨by rw [gridFin_val_of_lt d hd0 (by omega) (by omega)]; exact lastRow_div d (2 * b + 1) hd0 (by omega),
+      Or.inl (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega)]; exact lastRow_mod d (2 * b + 1) (by omega))⟩]
+  · rw [hstab q, if_neg]
+    rintro ⟨hrow, hcol⟩
+    have hdm := Nat.div_add_mod q.val d
+    have h1 : d * (d - 1) ≤ d * (q.val / d) := Nat.mul_le_mul_left d (by omega)
+    have h2 : 2 * b + 1 ≤ q.val % d := by rcases hcol with h | h <;> omega
+    omega
+
+/-! ## The X-leg: instantiate the abstract peel with the X-pivot table + four X-crux lemmas -/
+
+/-- The pointwise product of two `X`-type vectors is `X`-type. -/
+theorem xtype_mul {n : Nat} (a b : ErrorVec n) (ha : ∀ i, a i = Pauli.X ∨ a i = Pauli.I)
+    (hb : ∀ i, b i = Pauli.X ∨ b i = Pauli.I) :
+    ∀ i, ErrorVec.mul a b i = Pauli.X ∨ ErrorVec.mul a b i = Pauli.I := by
+  intro i; simp only [ErrorVec.mul]
+  rcases ha i with h | h <;> rcases hb i with h2 | h2 <;> rw [h, h2] <;> decide
+
+/-- **X-side invariant preservation.**  Multiplying by an X-check generator keeps the vector
+`X`-type, in the normalizer, and commuting with `Z̄` (via `logicalZ_normalizer_parametric`). -/
+theorem xcheck_preserves (d : Nat) (hd0 : 0 < d) (hodd : d % 2 = 1)
+    (j : Fin (numStabFormula d))
+    (hjxt : ∀ i, mkSurfaceStabilizers d hd0 j i = Pauli.X
+      ∨ mkSurfaceStabilizers d hd0 j i = Pauli.I)
+    (x : ErrorVec (d * d)) (hxt : ∀ q, x q = Pauli.X ∨ x q = Pauli.I)
+    (hcomm : ∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) x = false)
+    (hzbar : ErrorVec.parity (mkSurfaceLogicalZ d) x = false) :
+    (∀ q, ErrorVec.mul (mkSurfaceStabilizers d hd0 j) x q = Pauli.X
+        ∨ ErrorVec.mul (mkSurfaceStabilizers d hd0 j) x q = Pauli.I)
+      ∧ (∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k)
+          (ErrorVec.mul (mkSurfaceStabilizers d hd0 j) x) = false)
+      ∧ ErrorVec.parity (mkSurfaceLogicalZ d)
+          (ErrorVec.mul (mkSurfaceStabilizers d hd0 j) x) = false := by
+  refine ⟨xtype_mul _ _ hjxt hxt, fun k => ?_, ?_⟩
+  · rw [QStab.Paper.LogicalCosets.parity_mul_right,
+      stab_commute_parametric d hd0 hodd k j, hcomm k]; rfl
+  · rw [QStab.Paper.LogicalCosets.parity_mul_right,
+      QStab.Paper.LogicalCosets.parity_symm (mkSurfaceLogicalZ d) (mkSurfaceStabilizers d hd0 j),
+      logicalZ_normalizer_parametric d hd0 j, hzbar]; rfl
+
+/-- X-analog of `mul_clears`. -/
+theorem mul_clears_X {n : Nat} (g z : ErrorVec n) (k : Fin n) (hgk : g k = Pauli.X)
+    (hzk : z k = Pauli.X) : ErrorVec.mul g z k = Pauli.I := by
+  simp only [ErrorVec.mul, hgk, hzk]; decide
+
+/-- X-analog of `mul_ztype_involutive`. -/
+theorem mul_xtype_involutive {n : Nat} (g z : ErrorVec n)
+    (hg : ∀ i, g i = Pauli.X ∨ g i = Pauli.I) :
+    ErrorVec.mul g (ErrorVec.mul g z) = z := by
+  funext i; simp only [ErrorVec.mul]; rcases hg i with h | h <;> rw [h] <;> cases z i <;> decide
+
+/-- **The abstract pivot-peel, X-parametrized** (dual of `abstract_peel`, `Pauli.X` live value). -/
+theorem abstract_peel_X {P : QECParams} (Inv : ErrorVec P.n → Prop)
+    (hInvX : ∀ z, Inv z → ∀ i, z i = Pauli.X ∨ z i = Pauli.I)
+    (hdispatch : ∀ (k : Fin P.n) (z : ErrorVec P.n), Inv z →
+      (∀ q : Fin P.n, q.val < k.val → z q = Pauli.I) → z k ≠ Pauli.I →
+      ∃ g, QStab.InStab P g ∧ (∀ i, g i = Pauli.X ∨ g i = Pauli.I) ∧
+        (∀ q : Fin P.n, q.val < k.val → g q = Pauli.I) ∧ g k = Pauli.X
+        ∧ Inv (ErrorVec.mul g z)) :
+    ∀ (fuel k : Nat), P.n - k = fuel → k ≤ P.n → ∀ z : ErrorVec P.n, Inv z →
+      (∀ q : Fin P.n, q.val < k → z q = Pauli.I) → QStab.InStab P z := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro k _hfuel hk z _hInv hcleared
+      have hkeq : k = P.n := by omega
+      have hzid : z = ErrorVec.identity P.n :=
+        funext fun q => hcleared q (by rw [hkeq]; exact q.isLt)
+      rw [hzid]; exact QStab.InStab.identity
+  | succ fuel ih =>
+      intro k hfuel hk z hInv hcleared
+      have hklt : k < P.n := by omega
+      by_cases hzk : z ⟨k, hklt⟩ = Pauli.I
+      · refine ih (k + 1) (by omega) (by omega) z hInv (fun q hq => ?_)
+        rcases Nat.lt_succ_iff_lt_or_eq.mp hq with h | h
+        · exact hcleared q h
+        · rw [show q = ⟨k, hklt⟩ from Fin.ext h]; exact hzk
+      · obtain ⟨g, hg_stab, hg_xt, hg_prefix, hg_k, hg_inv⟩ :=
+          hdispatch ⟨k, hklt⟩ z hInv hcleared hzk
+        have hz'cleared : ∀ q : Fin P.n, q.val < k + 1 → ErrorVec.mul g z q = Pauli.I := by
+          intro q hq
+          rcases Nat.lt_succ_iff_lt_or_eq.mp hq with h | h
+          · rw [mul_prefix g z q (hg_prefix q h)]; exact hcleared q h
+          · rw [show q = ⟨k, hklt⟩ from Fin.ext h,
+              mul_clears_X g z ⟨k, hklt⟩ hg_k ((hInvX z hInv ⟨k, hklt⟩).resolve_right hzk)]
+        have hz' : QStab.InStab P (ErrorVec.mul g z) :=
+          ih (k + 1) (by omega) (by omega) (ErrorVec.mul g z) hg_inv hz'cleared
+        rw [← mul_xtype_involutive g z hg_xt]
+        exact QStab.InStab.mul hg_stab hz'
+
+/-- **The X-side cleaning leg** (dual of `surface_zside`).  An `X`-type vector commuting with
+every stabilizer and with `Z̄` is a stabilizer product. -/
+theorem surface_xside (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (x : ErrorVec (d * d)) (hxt : ∀ q, x q = Pauli.X ∨ x q = Pauli.I)
+    (hcomm : ∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) x = false)
+    (hzbar : ErrorVec.parity (mkSurfaceLogicalZ d) x = false) :
+    QStab.InStab (mkSurfaceQECParams d hd0 hodd) x := by
+  have hd : 1 < d := by omega
+  refine abstract_peel_X (P := mkSurfaceQECParams d hd0 hodd)
+    (fun w => (∀ q, w q = Pauli.X ∨ w q = Pauli.I) ∧
+      (∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) w = false) ∧
+      ErrorVec.parity (mkSurfaceLogicalZ d) w = false)
+    (fun w hw => hw.1) ?_ (d * d) 0 (Nat.sub_zero _) (Nat.zero_le _) x ⟨hxt, hcomm, hzbar⟩
+    (fun q hq => absurd hq (Nat.not_lt_zero _))
+  rintro k w ⟨hwxt, hwcomm, hwzbar⟩ hcleared hlive
+  have hrowlt : k.val / d < d := Nat.div_lt_of_lt_mul k.isLt
+  have hcollt : k.val % d < d := Nat.mod_lt _ hd0
+  obtain ⟨r, hrdef⟩ : ∃ r, k.val / d = r := ⟨_, rfl⟩
+  obtain ⟨c, hcdef⟩ : ∃ c, k.val % d = c := ⟨_, rfl⟩
+  have hkval : k.val = d * r + c := by rw [← hrdef, ← hcdef]; exact (Nat.div_add_mod k.val d).symm
+  rw [hrdef] at hrowlt; rw [hcdef] at hcollt
+  have hkeq : ∀ (row col : Nat), row < d → col < d → k.val = d * row + col →
+      k = gridFin d hd0 (row, col) :=
+    fun row col hrw hcw h => Fin.ext (by rw [gridFin_val_of_lt d hd0 hrw hcw]; exact h)
+  have hprev : ∀ (cr cc : Nat), cr < d → cc < d → (cr < r ∨ (cr = r ∧ cc < c)) →
+      w (gridFin d hd0 (cr, cc)) = Pauli.I := fun cr cc hcr hcc hlt =>
+    hcleared _ (by rw [gridFin_val_of_lt d hd0 hcr hcc, hkval]; exact cell_lt d hd0 r c cr cc hcc hlt)
+  by_cases hpar_rc : (r + c) % 2 = 0
+  · -- EVEN parity
+    by_cases hr0 : r = 0
+    · by_cases hcd : c = d - 1
+      · -- Zbar corner (0, d-1)
+        exfalso; apply hlive
+        rw [hkeq r c hrowlt hcollt hkval, hr0, hcd]
+        exact crux_Zbar d hd0 hd w hwxt hwzbar
+          (fun cc hcc => hprev 0 cc hd0 (by omega) (Or.inr ⟨hr0.symm, by omega⟩))
+      · -- topX pivot (0, c), c even ≤ d-3
+        obtain ⟨b, hbb⟩ : ∃ b, c = 2 * b := ⟨c / 2, by omega⟩
+        have hbbb : b < (d - 1) / 2 := by omega
+        obtain ⟨hgzt, hgval, hgpre⟩ := topX_gen d hd0 hd b hbbb
+        refine ⟨_, QStab.InStab.gen ⟨topXIdx d b, topXIdx_lt_numStab d b hd hbbb⟩,
+          hgzt, fun q hq => hgpre q (by rw [hkval, hr0, Nat.mul_zero, Nat.zero_add, hbb] at hq; exact hq),
+          by rw [hkeq 0 (2 * b) hd0 (by omega) (by rw [hkval, hr0, hbb])]; exact hgval,
+          xcheck_preserves d hd0 hodd _ hgzt w hwxt hwcomm hwzbar⟩
+    · by_cases hc0 : c = 0
+      · -- leftZ crux (even r ≥ 2, 0)
+        exfalso; apply hlive
+        obtain ⟨bb, hbb⟩ : ∃ bb, r = 2 * bb + 2 := ⟨(r - 2) / 2, by omega⟩
+        rw [hkeq r c hrowlt hcollt hkval, hbb, hc0]
+        exact crux_leftZ d hd0 hd bb (by omega) w hwxt (hwcomm _)
+          (hprev (2 * bb + 1) 0 (by omega) hd0 (Or.inl (by omega)))
+      · -- bulkZ crux (r, c ≥ 1) → top-left (r-1, c-1)
+        exfalso; apply hlive
+        obtain ⟨rr, hrr⟩ : ∃ rr, r = rr + 1 := ⟨r - 1, by omega⟩
+        obtain ⟨cc, hcc⟩ : ∃ cc, c = cc + 1 := ⟨c - 1, by omega⟩
+        rw [hkeq r c hrowlt hcollt hkval, hrr, hcc]
+        exact crux_bulkZ d hd0 hd rr cc (by omega) (by omega) (by omega) w hwxt (hwcomm _)
+          (hprev rr cc (by omega) (by omega) (Or.inl (by omega)))
+          (hprev rr (cc + 1) (by omega) (by omega) (Or.inl (by omega)))
+          (hprev (rr + 1) cc (by omega) (by omega) (Or.inr ⟨by omega, by omega⟩))
+  · -- ODD parity
+    by_cases hbulk : r < d - 1 ∧ c < d - 1
+    · -- bulkX pivot (r, c)
+      obtain ⟨hgzt, hgval, hgpre⟩ := bulkX_gen d hd0 hd r c hbulk.1 hbulk.2 (by omega)
+      exact ⟨_, QStab.InStab.gen ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd hbulk.1 hbulk.2⟩,
+        hgzt, fun q hq => hgpre q (by rw [hkval] at hq; exact hq),
+        by rw [hkeq r c hrowlt hcollt hkval]; exact hgval,
+        xcheck_preserves d hd0 hodd _ hgzt w hwxt hwcomm hwzbar⟩
+    · by_cases hrd : r = d - 1
+      · -- bottomX pivot (d-1, c), c odd
+        obtain ⟨b, hbb⟩ : ∃ b, c = 2 * b + 1 := ⟨(c - 1) / 2, by omega⟩
+        have hbbb : b < (d - 1) / 2 := by omega
+        obtain ⟨hgzt, hgval, hgpre⟩ := bottomX_gen d hd0 hd hodd b hbbb
+        refine ⟨_, QStab.InStab.gen ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hbbb⟩,
+          hgzt, fun q hq => hgpre q (by rw [hkval, hrd, hbb] at hq; exact hq),
+          by rw [hkeq (d - 1) (2 * b + 1) (by omega) (by omega) (by rw [hkval, hrd, hbb])]; exact hgval,
+          xcheck_preserves d hd0 hodd _ hgzt w hwxt hwcomm hwzbar⟩
+      · -- rightZ crux (odd r, d-1)
+        exfalso; apply hlive
+        obtain ⟨bb, hbb⟩ : ∃ bb, r = 2 * bb + 1 := ⟨(r - 1) / 2, by omega⟩
+        rw [hkeq r c hrowlt hcollt hkval, hbb, show c = d - 1 by omega]
+        exact crux_rightZ d hd0 hd bb (by omega) w hwxt (hwcomm _)
+          (hprev (2 * bb) (d - 1) (by omega) (by omega) (Or.inl (by omega)))
+
 end QStab.QClifford.Compile
