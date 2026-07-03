@@ -275,4 +275,23 @@ theorem surfaceNZ_vcgen_reachD (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d 
 #guard_msgs in
 #print axioms surfaceNZ_vcgen_reachD
 
+/-- The ambient-dimension positivity side condition (`0 < n`), discharged. -/
+theorem surfaceXZ_nq_pos (d : Nat) (hd : 0 < d) :
+    0 < d * d + programHelperCount (surfaceXZProgram d hd) := by
+  have : 0 < d * d := Nat.mul_pos hd hd
+  omega
+
+/-- The stabilizer-count positivity side condition (`0 < numStab`), discharged. -/
+theorem surfaceXZ_numStab_pos (d : Nat) (hd : 0 < d) :
+    0 < programNumStab (surfaceXZProgram d hd) := by
+  rw [programNumStab_surfaceXZProgram]; unfold numStabFormula; omega
+
+/-- **Canonical surface reach slot** (HGP-form): `surfaceNZ_vcgen_reachD` with the two
+positivity side conditions discharged internally. -/
+theorem surfaceXZ_vcgen_reachD (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
+    (vcgen (generatedFullProgramVCInputD (surfaceXZProgram d hd) d hd
+        (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd))).denoteSlot
+      .reach (surfaceReachScript d hd) :=
+  surfaceNZ_vcgen_reachD d hd hd3 hodd _ _
+
 end QStab.QClifford.Compile
