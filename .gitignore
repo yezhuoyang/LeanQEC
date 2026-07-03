@@ -9,3 +9,5 @@
 __pycache__/
 *.pyc
 .audit-tmp/
+QStab/Paper/bb72_k4_native.lrat
+QStab/Paper/bb72_k5_native.lrat
