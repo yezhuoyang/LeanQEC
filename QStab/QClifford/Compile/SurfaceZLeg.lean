@@ -340,4 +340,74 @@ theorem abstract_peel {P : QECParams} (Inv : ErrorVec P.n → Prop)
         rw [← mul_ztype_involutive g z hg_zt]
         exact QStab.InStab.mul hg_stab hz'
 
+/-! ## Z-check decode lemmas (the pivot generators) -/
+
+/-- Decode of the even-parity bulk Z-check `bulkZ r c`. -/
+theorem decode_bulkZIdx (d r c row col : Nat) (hd : 1 < d) (hr : r < d - 1) (hc : c < d - 1)
+    (hpar : (r + c) % 2 = 0) :
+    decodeStabPauliAt d (bulkIdx d r c) row col
+      = if (row = r ∨ row = r + 1) ∧ (col = c ∨ col = c + 1) then Pauli.Z else Pauli.I := by
+  unfold decodeStabPauliAt
+  rw [if_pos (bulkIdx_lt_bulkCount d r c hr hc)]
+  obtain ⟨hdiv, hmod⟩ := bulkIdx_div_mod d r c hd hc
+  rw [hdiv, hmod]
+  simp only [show (if (r + c) % 2 = 0 then Pauli.Z else Pauli.X) = Pauli.Z from if_pos hpar]
+
+/-- Decode of the right boundary Z-check `rightZ b`. -/
+theorem decode_rightZIdx (d b row col : Nat) (_hd : 1 < d) (hb : b < (d - 1) / 2) :
+    decodeStabPauliAt d (rightZIdx d b) row col
+      = if col = d - 1 ∧ (row = 2 * b ∨ row = 2 * b + 1) then Pauli.Z else Pauli.I := by
+  unfold decodeStabPauliAt rightZIdx
+  rw [if_neg (Nat.not_lt_of_ge (by omega :
+    (d - 1) * (d - 1) ≤ (d - 1) * (d - 1) + (d - 1) / 2 + b))]
+  set b' := (d - 1) * (d - 1) + (d - 1) / 2 + b - (d - 1) * (d - 1) with hb'def
+  have hb'_eq : b' = (d - 1) / 2 + b := by rw [hb'def]; omega
+  rw [if_neg (by rw [hb'_eq]; omega), if_pos (by rw [hb'_eq]; omega)]
+  rw [show b' - (d - 1) / 2 = b by rw [hb'_eq]; omega]
+
+/-- Decode of the left boundary Z-check `leftZ b`. -/
+theorem decode_leftZIdx (d b row col : Nat) (_hd : 1 < d) (hb : b < (d - 1) / 2) :
+    decodeStabPauliAt d (leftZIdx d b) row col
+      = if col = 0 ∧ (row = 2 * b + 1 ∨ row = 2 * b + 2) then Pauli.Z else Pauli.I := by
+  unfold decodeStabPauliAt leftZIdx
+  rw [if_neg (Nat.not_lt_of_ge (by omega :
+    (d - 1) * (d - 1) ≤ (d - 1) * (d - 1) + 2 * ((d - 1) / 2) + b))]
+  set b' := (d - 1) * (d - 1) + 2 * ((d - 1) / 2) + b - (d - 1) * (d - 1) with hb'def
+  have hb'_eq : b' = 2 * ((d - 1) / 2) + b := by rw [hb'def]; omega
+  rw [if_neg (by rw [hb'_eq]; omega), if_neg (by rw [hb'_eq]; omega),
+    if_pos (by rw [hb'_eq]; omega)]
+  rw [show b' - 2 * ((d - 1) / 2) = b by rw [hb'_eq]; omega]
+
+/-! ## The Z-leg invariant and its preservation -/
+
+/-- The pointwise product of two `Z`-type vectors is `Z`-type. -/
+theorem ztype_mul {n : Nat} (a b : ErrorVec n) (ha : ∀ i, a i = Pauli.Z ∨ a i = Pauli.I)
+    (hb : ∀ i, b i = Pauli.Z ∨ b i = Pauli.I) :
+    ∀ i, ErrorVec.mul a b i = Pauli.Z ∨ ErrorVec.mul a b i = Pauli.I := by
+  intro i; simp only [ErrorVec.mul]
+  rcases ha i with h | h <;> rcases hb i with h2 | h2 <;> rw [h, h2] <;> decide
+
+/-- **Invariant preservation.**  Multiplying the running vector by a Z-check generator keeps it
+`Z`-type, in the stabilizer-normalizer (commutes with every generator, via
+`stab_commute_parametric`), and commuting with `X̄`. -/
+theorem zcheck_preserves (d : Nat) (hd0 : 0 < d) (hodd : d % 2 = 1)
+    (j : Fin (numStabFormula d))
+    (hjzt : ∀ i, mkSurfaceStabilizers d hd0 j i = Pauli.Z
+      ∨ mkSurfaceStabilizers d hd0 j i = Pauli.I)
+    (z : ErrorVec (d * d)) (hzt : ∀ q, z q = Pauli.Z ∨ z q = Pauli.I)
+    (hcomm : ∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k) z = false)
+    (hxbar : ErrorVec.parity (mkSurfaceAttackerX d) z = false) :
+    (∀ q, ErrorVec.mul (mkSurfaceStabilizers d hd0 j) z q = Pauli.Z
+        ∨ ErrorVec.mul (mkSurfaceStabilizers d hd0 j) z q = Pauli.I)
+      ∧ (∀ k, ErrorVec.parity (mkSurfaceStabilizers d hd0 k)
+          (ErrorVec.mul (mkSurfaceStabilizers d hd0 j) z) = false)
+      ∧ ErrorVec.parity (mkSurfaceAttackerX d)
+          (ErrorVec.mul (mkSurfaceStabilizers d hd0 j) z) = false := by
+  refine ⟨ztype_mul _ _ hjzt hzt, fun k => ?_, ?_⟩
+  · rw [QStab.Paper.LogicalCosets.parity_mul_right,
+      stab_commute_parametric d hd0 hodd k j, hcomm k]; rfl
+  · rw [QStab.Paper.LogicalCosets.parity_mul_right,
+      QStab.Paper.LogicalCosets.parity_symm (mkSurfaceAttackerX d) (mkSurfaceStabilizers d hd0 j),
+      mkSurfaceAttackerX_commutes_with_stabilizers d hd0 hodd j, hxbar]; rfl
+
 end QStab.QClifford.Compile
