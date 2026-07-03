@@ -595,4 +595,136 @@ theorem shorMEAS_site_wle1 {P : QECParams} {total : Nat}
     weight_zero_of_allI _ hall
   omega
 
+/-! ## Stage 4: the Shor gadget site classifier -/
+
+/-- **`shor_gadget_site_classified`** — the NZ-shaped per-gadget classifier for
+the Shor scheme.  Every fault site of the compiled Shor gadget block has a data
+residual of weight `≤ 1`, or one that is `dominatedByScheduleHook` (the
+schedule's CSS kind on a subset of scheduled data qubits).  Same binder shape as
+`nz_gadget_site_classified` — generic in `sigma`, with kind-uniformity and
+`Nodup` — but with the **conditional** tail guarantee (`PreservesDataAbove` at
+the block ceiling, established from the acts-below half). -/
+theorem shor_gadget_site_classified {P : QECParams} {total : Nat} (sigma : RuleSchedule P.n)
+    (kk : XZPauli) (hkind : ∀ s ∈ sigma.slots, s.kind = kk)
+    (hnd : (sigma.slots.map (·.qubit)).Nodup)
+    (gstart : Nat) (ghfit : gstart + helperCount Scheme.Shor sigma ≤ total)
+    (tail : FCircuit (P.n + total))
+    (htailPDA : PreservesDataAbove (eraseFaults tail)
+      (P.n + gstart + helperCount Scheme.Shor sigma))
+    (cursor : Nat) (site : PCC.ErrLocWithContext (P.n + total)) (p : Pauli) (hp : p ≠ Pauli.I)
+    (hsite : site ∈ prefixErrLocsWithContextAux cursor
+      (compileGadgetBlock Scheme.Shor sigma gstart ghfit) tail) :
+    ErrorVec.weight (targetFaultDataResidual P ⟨site, p, hp⟩) ≤ 1 ∨
+      dominatedByScheduleHook sigma (targetFaultDataResidual P ⟨site, p, hp⟩) := by
+  set L := P.n + gstart + helperCount Scheme.Shor sigma with hL
+  have hhelp : helperCount Scheme.Shor sigma = sigma.slots.length + 1 := rfl
+  set σ' := liftSchedule (k := total) sigma with hσ'
+  set cats := blockShorCat P.n total gstart sigma.slots.length ghfit with hcatsdef
+  set v := blockHelperQ P.n total gstart (sigma.slots.length + 1) ghfit
+    ⟨sigma.slots.length, Nat.lt_succ_self _⟩ with hvdef
+  rw [compileGadgetBlock_Shor_eq] at hsite
+  rw [← hσ', ← hcatsdef, ← hvdef] at hsite
+  -- block facts
+  have hnL : P.n ≤ L := by rw [hL]; omega
+  have hcatA : ∀ c ∈ cats, P.n ≤ c.val := fun c hc => by
+    have := (mem_blockShorCat_val (hcatsdef ▸ hc)).1; omega
+  have hcatB : ∀ c ∈ cats, c.val < L := fun c hc => by
+    have := (mem_blockShorCat_val (hcatsdef ▸ hc)).2; rw [hL, hhelp]; omega
+  have hcatNd : cats.Nodup := blockShorCat_nodup _ _ _ _ _
+  have hvA : P.n ≤ v.val := by rw [hvdef]; simp only [blockHelperQ]; omega
+  have hvB : v.val < L := by rw [hvdef, hL, hhelp]; simp only [blockHelperQ]; omega
+  have hqA : ∀ s ∈ σ'.slots, s.qubit.val < P.n := by
+    intro s hs
+    rw [hσ'] at hs; simp only [liftSchedule, List.mem_map] at hs
+    obtain ⟨s0, _, rfl⟩ := hs
+    simp only [liftSlot, freshDataQ_val]; exact s0.qubit.isLt
+  have hqNd : (σ'.slots.map (·.qubit)).Nodup := by
+    have heq : σ'.slots.map (·.qubit) = (sigma.slots.map (·.qubit)).map (freshDataQ P.n total) := by
+      rw [hσ']; simp [liftSchedule, List.map_map, liftSlot, Function.comp]
+    rw [heq]; exact hnd.map (fun _ _ => freshDataQ_inj)
+  have hkindL : ∀ s ∈ σ'.slots, s.kind = kk := by
+    intro s hs
+    rw [hσ'] at hs; simp only [liftSchedule, List.mem_map] at hs
+    obtain ⟨s0, hs0, rfl⟩ := hs
+    simpa [liftSlot] using hkind s0 hs0
+  -- COUP / POST as named circuits
+  set COUP := (σ'.slots.zip cats).map (fun sc => shorCouplingSlot sc.1 sc.2) |>.flatten with hCOUP
+  set POST := (cats.map rawMeasZ).flatten with hPOST
+  -- pair-level facts for branch B
+  have hpqA : ∀ pc ∈ σ'.slots.zip cats, pc.1.qubit.val < P.n :=
+    fun pc hpc => hqA pc.1 (List.of_mem_zip hpc).1
+  have hpcA : ∀ pc ∈ σ'.slots.zip cats, P.n ≤ pc.2.val :=
+    fun pc hpc => hcatA pc.2 (List.of_mem_zip hpc).2
+  have hpcB : ∀ pc ∈ σ'.slots.zip cats, pc.2.val < L :=
+    fun pc hpc => hcatB pc.2 (List.of_mem_zip hpc).2
+  have hpcNd : ((σ'.slots.zip cats).map (·.2)).Nodup :=
+    (zip_snd_sublist σ'.slots cats).nodup hcatNd
+  have hlen : cats.length = sigma.slots.length := by rw [hcatsdef]; simp [blockShorCat]
+  -- split into cats = [] (vacuous) or c0 :: rest
+  have hcatsNe : cats ≠ [] := by
+    intro h
+    rw [h] at hsite
+    simp only [compileShorOrdered, prefixErrLocsWithContextAux, List.not_mem_nil] at hsite
+  · obtain ⟨c0, rest, hcats⟩ := List.exists_cons_of_ne_nil hcatsNe
+    -- block = shorPreSeg ++ (COUP ++ POST)
+    have hblock : compileShorOrdered σ' cats v
+        = shorPreSeg c0 rest v ++ (COUP ++ POST) := by
+      rw [hcats, hCOUP, hPOST, hcats]
+      simp only [compileShorOrdered, shorPreSeg, List.append_assoc]
+    rw [hblock, prefixErrLocs_append, List.mem_append] at hsite
+    rcases hsite with hPRE | hrest
+    · -- branch A: pre-coupling → subset hook
+      right
+      -- lifted → unlifted bridge
+      have hne : sigma.slots ≠ [] := by
+        have h1 : 0 < sigma.slots.length := by rw [← hlen, hcats]; simp
+        exact fun h => by rw [h] at h1; simp at h1
+      have hkkeq : scheduleKind sigma = kk.toPauli := by
+        obtain ⟨s0, srest, hs0⟩ := List.exists_cons_of_ne_nil hne
+        have : s0 ∈ sigma.slots := by rw [hs0]; exact List.mem_cons_self
+        simp only [scheduleKind, hs0, List.head?_cons, hkind s0 this]
+      have hqmem : ∀ q' : Fin P.n,
+          freshDataQ P.n total q' ∈ σ'.slots.map (·.qubit) → q' ∈ sigma.slots.map (·.qubit) := by
+        intro q' hq'
+        have heq : σ'.slots.map (·.qubit)
+            = (sigma.slots.map (·.qubit)).map (freshDataQ P.n total) := by
+          rw [hσ']; simp [liftSchedule, List.map_map, liftSlot, Function.comp]
+        rw [heq, List.mem_map] at hq'
+        obtain ⟨x, hx, hxq⟩ := hq'
+        rwa [freshDataQ_inj hxq] at hx
+      intro q
+      rcases shorPRE_site_hook σ' kk hkindL c0 rest v L hnL (hcats ▸ hcatNd)
+        (fun c hc => hcatA c (hcats ▸ hc)) (fun c hc => hcatB c (hcats ▸ hc))
+        hvA hvB hqA hqNd tail htailPDA cursor site p hp
+        (by rw [← hcats]; exact hPRE) q with h | ⟨hkkval, hmem⟩
+      · exact Or.inl h
+      · exact Or.inr ⟨hkkval.trans hkkeq.symm, hqmem q hmem⟩
+    · -- branch B / B′: coupling or measurement → weight ≤ 1
+      left
+      rw [prefixErrLocs_append, List.mem_append] at hrest
+      rcases hrest with hCOUPs | hPOSTs
+      · exact shorCOUP_site_wle1 cats tail L hnL htailPDA hcatB (σ'.slots.zip cats)
+          hpqA hpcA hpcB hpcNd _ site p hp hCOUPs
+      · exact shorMEAS_site_wle1 cats tail L htailPDA hcatA hcatB _ site p hp hPOSTs
+
+/-! ## Regression guards (axiom pins) -/
+
+/--
+info: 'QStab.QClifford.Compile.shorPRE_site_hook' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms shorPRE_site_hook
+
+/--
+info: 'QStab.QClifford.Compile.shorCOUP_site_wle1' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms shorCOUP_site_wle1
+
+/--
+info: 'QStab.QClifford.Compile.shor_gadget_site_classified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms shor_gadget_site_classified
+
 end QStab.QClifford.Compile
