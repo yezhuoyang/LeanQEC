@@ -1,4 +1,5 @@
 import QStab.Paper.CodeDistance
+import QStab.QHL.CodeRepetition
 
 /-!
 # Code distance of the parametric repetition code, in the shared assertion vocabulary
@@ -149,5 +150,18 @@ in the shared framework, fully parametric. -/
 theorem rep_codeDistanceExactly_1 (d : Nat) (hd : 2 ≤ d) :
     CodeDistanceExactly (repParams d hd) 1 :=
   codeDistanceExactly_intro (rep_codeDistanceAtLeast_1 d hd) (repWitness d hd)
+
+/-! ## Object-program anchor (Route B: recursive certified evaluation, axiom-clean) -/
+
+/-- **Object-program anchor.**  The *recursive* OCaml-language repetition program
+`QHL.CodeLang.Repetition.code`, evaluated at distance `d`, produces *exactly* the generators
+`repStab d i` whose code distance we proved — via the recursive certified evaluation
+`code_evalAt?_eq_arith` (axiom-clean, no `native_decide`).  So `rep_codeDistanceExactly_1` is
+provably a statement about the object-language program, for every `d` at once — the parametric
+counterpart of the five-qubit / Steane anchors, on a genuinely recursive `.recCall` program. -/
+theorem rep_objectProgram_anchor (d : Nat) (hd : 2 ≤ d) (i : Fin (d - 1)) (q : Fin d) :
+    QHL.CodeLang.Repetition.code.evalAt? d i.val q.val = some (repStab d i q) := by
+  rw [QHL.CodeLang.Repetition.code_evalAt?_eq_arith d i.val q.val (by have := i.isLt; omega)]
+  simp only [QHL.CodeLang.Repetition.repEntryArith, repStab]
 
 end QStab.Examples.RepetitionDistance

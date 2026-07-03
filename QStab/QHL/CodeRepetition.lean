@@ -551,4 +551,50 @@ def generatedRows (dist : Nat) : List String :=
 #print axioms xDistanceInductionCheckedAtDist
 #print axioms endpointZLogicalDerivationChecked
 
+/-! ## Certified evaluation (Route B, recursive): axiom-clean, no `native_decide`.
+
+The recursive `.recCall` case is handled by induction on the row index `kk`: each step
+peels one `recCall` (consuming one unit of fuel) and lands on the `(kk-1)` row via the IH.
+Row `kk` is `Z` on `{kk, kk+1}` — the closed form the recursion unfolds to. -/
+
+/-- Closed-form mirror of the repetition entry AST: row `kk` is `Z` on `{kk, kk+1}`. -/
+def repEntryArith (kk qq : Nat) : Pauli := if qq = kk ∨ qq = kk + 1 then Pauli.Z else Pauli.I
+
+/-- **Recursive certified evaluation** of the entry AST: with enough fuel (`kk < fuel`),
+evaluating row `kk` at qubit `qq` yields `repEntryArith kk qq`, for every distance `dd`. -/
+theorem repEntryEval (kk : Nat) : ∀ (fuel dd qq : Nat), kk < fuel →
+    Term.eval code.body fuel repEntryAST (Env.cons qq (Env.code dd kk))
+      = some (repEntryArith kk qq) := by
+  induction kk with
+  | zero =>
+    intro fuel dd qq _
+    simp only [repEntryAST, code, repCodeAST, isZeroOrOne, q, k, d, C.Entry.q, C.Entry.k,
+      C.Entry.d, Term.eval, Env.cons, Env.code, bind, Option.bind]
+    by_cases hq0 : qq = 0 <;> by_cases hq1 : qq = 1 <;>
+      simp_all [repEntryArith]
+  | succ n ih =>
+    intro fuel dd qq hf
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by omega⟩
+    by_cases hq0 : qq = 0
+    · subst hq0
+      simp only [repEntryAST, code, repCodeAST, isZeroOrOne, q, k, d, C.Entry.q, C.Entry.k,
+        C.Entry.d, Term.eval, Env.cons, Env.code, bind, Option.bind, decide_eq_true_eq]
+      simp [repEntryArith]
+    · have hrec := ih f (dd - 1) (qq - 1) (by omega)
+      have hn1 : ¬ (n + 1 = 0) := Nat.succ_ne_zero n
+      simp only [repEntryAST, code, repCodeAST, isZeroOrOne, q, k, d, C.Entry.q, C.Entry.k,
+        C.Entry.d, Term.eval, Env.cons, Env.code, bind, Option.bind, decide_eq_true_eq,
+        Nat.add_sub_cancel] at hrec ⊢
+      rw [if_neg hn1, if_neg hq0, hrec]
+      simp only [repEntryArith, Option.some.injEq]
+      exact if_congr (by omega) rfl rfl
+
+/-- **The repetition object program evaluates to its closed-form mirror** at every
+`(d, k, q)` with `k < d + 1` — the object-program anchor. -/
+theorem code_evalAt?_eq_arith (dd kk qq : Nat) (h : kk < dd + 1) :
+    code.evalAt? dd kk qq = some (repEntryArith kk qq) := by
+  have key := repEntryEval kk (dd + 1) dd qq h
+  simpa only [CodeFn.evalAt?, CodeFn.evalEntry?, CodeFn.evalStabilizer?, CodeFn.fuelForDistance,
+    code, repCodeAST, Term.eval, Env.cons, Env.code, Env.empty, bind, Option.bind] using key
+
 end QHL.CodeLang.Repetition
