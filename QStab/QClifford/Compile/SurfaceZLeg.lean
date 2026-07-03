@@ -1233,4 +1233,40 @@ theorem surface_normalizer_decomposition (d : Nat) (hd0 : 0 < d) (hd3 : 3 ≤ d)
         (ErrorVec.mul (mkSurfaceAttackerX d) (ErrorVec.mul (mkSurfaceLogicalZ d) E)) :=
   QStab.Paper.LogicalCosets.normalizer_decomposition (surfaceLogicalOps d hd0 hd3 hodd) E hE
 
+/-! ## `d = 3` fingerprints against the Python oracle (`notes/validate_surface_maxiso.py`)
+
+Kernel-checked cross-checks of the CSS-assembly logic plus axiom pins for the
+keystone headliners. -/
+
+-- `X̄` (column 0) and `Z̄` (row 0) overlap at exactly the corner qubit `0`
+-- (the `surface_Xbar_anticomm_Zbar` support).
+/-- info: [0] -/
+#guard_msgs in
+#eval (List.finRange 9).filter (fun q =>
+    ErrorVec.Pauli.anticommutes (mkSurfaceAttackerX 3 q) (mkSurfaceLogicalZ 3 q)) |>.map (·.val)
+
+-- `d = 3` stabilizer type table (`true` = `Z`-type): the CSS split's per-check
+-- classification (`stab_type_split`), matching `entry` in the oracle.
+/-- info: [true, false, false, true, false, true, true, false] -/
+#guard_msgs in
+#eval (List.finRange (numStabFormula 3)).map fun k =>
+  (List.finRange 9).all fun q => match mkSurfaceStabilizers 3 (by decide) k q with
+    | Pauli.Z => true | Pauli.I => true | _ => false
+
+/-- info: 'QStab.QClifford.Compile.surface_maximal_isotropic' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms surface_maximal_isotropic
+
+/-- info: 'QStab.QClifford.Compile.surfaceLogicalOps' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms surfaceLogicalOps
+
+/-- info: 'QStab.QClifford.Compile.surface_coverage' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms surface_coverage
+
+/-- info: 'QStab.QClifford.Compile.surface_normalizer_decomposition' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms surface_normalizer_decomposition
+
 end QStab.QClifford.Compile
