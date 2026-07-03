@@ -172,6 +172,29 @@ theorem surfaceReachSegment_decode_bottomX (d : Nat) (hd : 0 < d) (total : Nat)
     slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
   rfl
 
+/-- **Unified decode.**  For *every* `classifyStab` kind, the surface segment is the generic
+`blockScript` over the lifted NZ slots with the domino injection pattern `injs_k`. -/
+theorem surfaceReachSegment_decode (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  cases hcl : classifyStab d k.val with
+  | bulkZ r c =>
+    cases c with
+    | zero => exact surfaceReachSegment_decode_bulkZ d hd total k r hcl
+    | succ c' => exact surfaceReachSegment_decode_bulkZ_col d hd total k r c' hcl
+  | bulkX r c =>
+    cases c with
+    | zero =>
+      by_cases hr : r + 2 = d
+      · exact surfaceReachSegment_decode_bulkX_last d hd total k r hcl hr
+      · exact surfaceReachSegment_decode_bulkX_off d hd total k r hcl hr
+    | succ c' => exact surfaceReachSegment_decode_bulkX_col d hd total k r c' hcl
+  | topX b => exact surfaceReachSegment_decode_topX d hd total k b hcl
+  | rightZ b => exact surfaceReachSegment_decode_rightZ d hd total k b hcl
+  | leftZ b => exact surfaceReachSegment_decode_leftZ d hd total k b hcl
+  | bottomX b => exact surfaceReachSegment_decode_bottomX d hd total k b hcl
+
 /-- Count equality: the surface segment's length is `gadgetErrLocCount d k`. -/
 theorem surfaceReachSegment_length (d k : Nat) :
     (surfaceReachSegment d k).length = gadgetErrLocCount d k := by

@@ -284,4 +284,244 @@ theorem stageAt_add (d a n : Nat) :
   rw [List.range_add, List.map_append, List.sum_append, List.map_map]
   congr 1
 
+/-- A column-0 `Z`-check `bulkZ(r,0)` sits at program index `r*(d-1)`. -/
+theorem classifyStab_bulkZ_col0 (d j r : Nat) (h : classifyStab d j = .bulkZ r 0) :
+    j = r * (d - 1) := by
+  simp only [classifyStab] at h
+  split_ifs at h with hbulk hpar
+  injection h with hr_eq hc_eq
+  have hkey : (d - 1) * (j / (d - 1)) + j % (d - 1) = j := Nat.div_add_mod j (d - 1)
+  rw [hr_eq, hc_eq, Nat.add_zero] at hkey
+  rw [← hkey, Nat.mul_comm (d - 1) r]
+
+/-- A column-0 `X`-check `bulkX(r,0)` sits at program index `r*(d-1)`. -/
+theorem classifyStab_bulkX_col0 (d j r : Nat) (h : classifyStab d j = .bulkX r 0) :
+    j = r * (d - 1) := by
+  simp only [classifyStab] at h
+  split_ifs at h with hbulk hpar
+  injection h with hr_eq hc_eq
+  have hkey : (d - 1) * (j / (d - 1)) + j % (d - 1) = j := Nat.div_add_mod j (d - 1)
+  rw [hr_eq, hc_eq, Nat.add_zero] at hkey
+  rw [← hkey, Nat.mul_comm (d - 1) r]
+
+/-- The injection count at a column-0 `Z`-check is `2`. -/
+theorem injRows_bulkZ0 (d j r : Nat) (h : classifyStab d j = .bulkZ r 0) : injRows d j = 2 := by
+  unfold injRows injs_k; rw [h]; rfl
+
+/-- The injection count at the final column-0 `X`-injector is `1`. -/
+theorem injRows_bulkX0_last (d j r : Nat) (h : classifyStab d j = .bulkX r 0) (hr : r + 2 = d) :
+    injRows d j = 1 := by
+  unfold injRows injs_k; rw [h]; simp only [if_pos hr]; rfl
+
+/-- **Interior of an interval contributes nothing.**  Any gadget off column 0 injects no
+column-0 row (its `injs_k` slots are all `false` or it is a boundary/`c≥1` check). -/
+theorem injRows_eq_zero_of_mod (d j : Nat) (hc : j % (d - 1) ≠ 0) : injRows d j = 0 := by
+  unfold injRows injs_k
+  cases h : classifyStab d j with
+  | bulkZ r c =>
+    cases c with
+    | zero =>
+      exact absurd (by rw [classifyStab_bulkZ_col0 d j r h]; exact Nat.mul_mod_left r (d - 1)) hc
+    | succ c' => rfl
+  | bulkX r c =>
+    cases c with
+    | zero =>
+      exact absurd (by rw [classifyStab_bulkX_col0 d j r h]; exact Nat.mul_mod_left r (d - 1)) hc
+    | succ c' => rfl
+  | topX b => rfl
+  | rightZ b => rfl
+  | leftZ b => rfl
+  | bottomX b => rfl
+
+/-- A `range n` sum whose only nonzero term is at index `0` equals that head term. -/
+theorem sum_range_eq_head {n : Nat} (f : Nat → Nat) (hn : 0 < n)
+    (h0 : ∀ i, 0 < i → i < n → f i = 0) :
+    ((List.range n).map f).sum = f 0 := by
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_succ_of_ne_zero hn.ne'
+  rw [List.range_succ_eq_map, List.map_cons, List.sum_cons, List.map_map]
+  have htail : ((List.range m).map (f ∘ Nat.succ)).sum = 0 := by
+    apply List.sum_eq_zero
+    intro x hx
+    simp only [List.mem_map, List.mem_range] at hx
+    obtain ⟨i, hi, rfl⟩ := hx
+    exact h0 (i + 1) (Nat.succ_pos i) (by omega)
+  rw [htail, Nat.add_zero]
+
+/-- **One interval advances the stage by its column-0 injector value.**  Over `[r*(d-1),
+(r+1)*(d-1))` the only column-0 gadget is the head `r*(d-1)`; the interior is off column 0. -/
+theorem stageAt_step (d r : Nat) (hd : 1 < d) :
+    stageAt d ((r + 1) * (d - 1)) = stageAt d (r * (d - 1)) + injRows d (r * (d - 1)) := by
+  have hpos : 0 < d - 1 := by omega
+  have heq : (r + 1) * (d - 1) = r * (d - 1) + (d - 1) := by ring
+  have h0 : ∀ i, 0 < i → i < d - 1 → injRows d (r * (d - 1) + i) = 0 := by
+    intro i hi hilt
+    apply injRows_eq_zero_of_mod
+    rw [Nat.mul_comm r (d - 1), Nat.mul_add_mod, Nat.mod_eq_of_lt hilt]
+    omega
+  rw [heq, stageAt_add, sum_range_eq_head _ hpos h0]
+  simp
+
+/-- **Forward classification of column-0 bulk indices.**  Index `s*(d-1)` (for `s < d-1`) is the
+`s`-th column-0 bulk check: a `Z`-check when `s` is even, an `X`-check when odd. -/
+theorem classifyStab_col0 (d s : Nat) (_hd : 1 < d) (hs : s < d - 1) :
+    classifyStab d (s * (d - 1)) = if s % 2 = 0 then .bulkZ s 0 else .bulkX s 0 := by
+  have hpos : 0 < d - 1 := by omega
+  have hdiv : (s * (d - 1)) / (d - 1) = s := Nat.mul_div_cancel s hpos
+  have hmod : (s * (d - 1)) % (d - 1) = 0 := Nat.mul_mod_left s (d - 1)
+  have hlt : s * (d - 1) < (d - 1) * (d - 1) := (Nat.mul_lt_mul_right hpos).mpr hs
+  simp only [classifyStab, hlt, if_true, hdiv, hmod, Nat.add_zero]
+
+/-- **Injection count at a column-0 bulk index.**  `2` at an even (`Z`-)row, `0` at an odd
+(`X`-)row that is not the final injector. -/
+theorem injRows_col0 (d s : Nat) (hd : 1 < d) (hs : s < d - 1) (hnl : s + 2 ≠ d) :
+    injRows d (s * (d - 1)) = if s % 2 = 0 then 2 else 0 := by
+  by_cases hpar : s % 2 = 0
+  · rw [if_pos hpar]
+    exact injRows_bulkZ0 d (s * (d - 1)) s (by rw [classifyStab_col0 d s hd hs, if_pos hpar])
+  · rw [if_neg hpar]
+    have hk : classifyStab d (s * (d - 1)) = .bulkX s 0 := by
+      rw [classifyStab_col0 d s hd hs, if_neg hpar]
+    unfold injRows injs_k; rw [hk]; simp only [if_neg hnl]; rfl
+
+/-- Bounds from a `bulkZ` classification: `r+1 < d` and the checkerboard parity `(r+c) % 2 = 0`. -/
+theorem classifyStab_bulkZ_bounds (d j r c : Nat) (h : classifyStab d j = .bulkZ r c) :
+    r + 1 < d ∧ (r + c) % 2 = 0 := by
+  simp only [classifyStab] at h
+  split_ifs at h with hbulk hpar
+  injection h with hr_eq hc_eq
+  subst hr_eq hc_eq
+  have hpos : 0 < d - 1 := by
+    rcases Nat.eq_zero_or_pos (d - 1) with hz | hp
+    · rw [hz, Nat.mul_zero] at hbulk; omega
+    · exact hp
+  have hlt : j / (d - 1) < d - 1 :=
+    (Nat.div_lt_iff_lt_mul hpos).mpr (by rw [Nat.mul_comm]; exact hbulk)
+  exact ⟨by omega, hpar⟩
+
+/-- **The even-row stage recurrence.**  After the first `2t` column-0 rows (the dominoes at rows
+`0, 2, …, 2t-2`, each `+2`, with the odd `X`-checks between them injecting nothing) the stage is
+exactly `2t` — valid up to the last `Z`-domino row `d-3`. -/
+theorem stageAt_bulkZ_aux (d : Nat) (hd : 1 < d) (hodd : d % 2 = 1) :
+    ∀ t, 2 * t ≤ d - 3 → stageAt d ((2 * t) * (d - 1)) = 2 * t := by
+  intro t
+  induction t with
+  | zero => intro _; simp
+  | succ t ih =>
+    intro hle
+    have hle' : 2 * t ≤ d - 3 := by omega
+    have e1 : stageAt d ((2 * t + 1) * (d - 1))
+        = stageAt d ((2 * t) * (d - 1)) + injRows d ((2 * t) * (d - 1)) := stageAt_step d (2 * t) hd
+    have e2 : stageAt d ((2 * t + 1 + 1) * (d - 1))
+        = stageAt d ((2 * t + 1) * (d - 1)) + injRows d ((2 * t + 1) * (d - 1)) :=
+      stageAt_step d (2 * t + 1) hd
+    have iv1 : injRows d ((2 * t) * (d - 1)) = 2 := by
+      rw [injRows_col0 d (2 * t) hd (by omega) (by omega), if_pos (show (2 * t) % 2 = 0 by omega)]
+    have iv2 : injRows d ((2 * t + 1) * (d - 1)) = 0 := by
+      rw [injRows_col0 d (2 * t + 1) hd (by omega) (by omega),
+        if_neg (show ¬ (2 * t + 1) % 2 = 0 by omega)]
+    have hk : (2 * (t + 1)) * (d - 1) = (2 * t + 1 + 1) * (d - 1) := by ring_nf
+    rw [hk, e2, e1, iv1, iv2, ih hle']
+    ring
+
+/-- **Per-kind stage value — column-0 `Z`-domino.**  Reaching a `bulkZ(r,0)` gadget, exactly `r`
+column-0 rows are already injected: the domino's entry precondition `colPrefix d r`. -/
+theorem stageAt_of_bulkZ (d k r : Nat) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (h : classifyStab d k = .bulkZ r 0) : stageAt d k = r := by
+  have hidx : k = r * (d - 1) := classifyStab_bulkZ_col0 d k r h
+  obtain ⟨hrd, hpar⟩ := classifyStab_bulkZ_bounds d k r 0 h
+  have hr2 : r = 2 * (r / 2) := by omega
+  have hrle : 2 * (r / 2) ≤ d - 3 := by omega
+  rw [hidx, hr2]
+  exact stageAt_bulkZ_aux d (by omega) hodd (r / 2) hrle
+
+/-- **Per-kind stage value — final column-0 `X`-injector.**  Reaching `bulkX(d-2,0)` (`r+2 = d`),
+the whole column below the last row is injected: the stage is `r+1 = d-1`. -/
+theorem stageAt_of_bulkX_last (d k r : Nat) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (h : classifyStab d k = .bulkX r 0) (hr : r + 2 = d) : stageAt d k = r + 1 := by
+  have hidx : k = r * (d - 1) := classifyStab_bulkX_col0 d k r h
+  have hd1 : 1 < d := by omega
+  have hr1 : r - 1 + 1 = r := by omega
+  have hstep : stageAt d ((r - 1 + 1) * (d - 1))
+      = stageAt d ((r - 1) * (d - 1)) + injRows d ((r - 1) * (d - 1)) := stageAt_step d (r - 1) hd1
+  have hbase : stageAt d ((r - 1) * (d - 1)) = r - 1 := by
+    rw [show r - 1 = 2 * ((r - 1) / 2) by omega]
+    exact stageAt_bulkZ_aux d hd1 hodd ((r - 1) / 2) (by omega)
+  have hinj : injRows d ((r - 1) * (d - 1)) = 2 := by
+    rw [injRows_col0 d (r - 1) hd1 (by omega) (by omega), if_pos (show (r - 1) % 2 = 0 by omega)]
+  have hcompute : stageAt d (r * (d - 1)) = r + 1 := by
+    rw [show r * (d - 1) = (r - 1 + 1) * (d - 1) by rw [hr1], hstep, hbase, hinj]; omega
+  rw [hidx]; exact hcompute
+
+/-! ## (d) The stage total and the final residual -/
+
+/-- **Gap #3 — the final residual is `X̄`.**  The full-column stage prefix `colPrefix d d` is
+exactly `mkSurfaceAttackerX` (every qubit's row `< d`, so the row cutoff is vacuous). -/
+theorem colPrefix_d_eq_attackerX (d : Nat) : colPrefix d d = mkSurfaceAttackerX d := by
+  funext q
+  unfold colPrefix mkSurfaceAttackerX
+  have hrow : q.val / d < d := Nat.div_lt_of_lt_mul q.isLt
+  by_cases hc : q.val % d = 0
+  · rw [if_pos ⟨hc, hrow⟩, if_pos hc]
+  · rw [if_neg (fun h => hc h.1), if_neg hc]
+
+/-- No column-0 injector sits past the last one `bulkX(d-2,0)` at index `(d-2)*(d-1)`. -/
+theorem injRows_zero_of_gt_last (d j : Nat) (hd : 1 < d) (hj : (d - 2) * (d - 1) < j) :
+    injRows d j = 0 := by
+  unfold injRows injs_k
+  cases h : classifyStab d j with
+  | bulkZ r c =>
+    cases c with
+    | zero =>
+      exfalso
+      obtain ⟨hrd, _⟩ := classifyStab_bulkZ_bounds d j r 0 h
+      have hle : j ≤ (d - 2) * (d - 1) := by
+        rw [classifyStab_bulkZ_col0 d j r h]; exact Nat.mul_le_mul_right _ (by omega)
+      omega
+    | succ c' => rfl
+  | bulkX r c =>
+    cases c with
+    | zero =>
+      by_cases hrd : r + 2 = d
+      · exfalso
+        have hjeq : j = (d - 2) * (d - 1) := by
+          rw [classifyStab_bulkX_col0 d j r h]; congr 1; omega
+        omega
+      · simp only [if_neg hrd]; rfl
+    | succ c' => rfl
+  | topX b => rfl
+  | rightZ b => rfl
+  | leftZ b => rfl
+  | bottomX b => rfl
+
+/-- **Gap #1 — the stage total is `d`.**  Every column-0 row is injected exactly once across the
+whole gadget list: the `(d-1)/2` even `Z`-dominoes contribute `d-1` rows, the final `X`-injector
+one more, and all boundary/`c≥1` gadgets contribute nothing. -/
+theorem stageAt_total (d : Nat) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
+    stageAt d (numStabFormula d) = d := by
+  have hd1 : 1 < d := by omega
+  have hclass : classifyStab d ((d - 2) * (d - 1)) = .bulkX (d - 2) 0 := by
+    rw [classifyStab_col0 d (d - 2) hd1 (by omega), if_neg (show ¬ (d - 2) % 2 = 0 by omega)]
+  have hbase : stageAt d ((d - 2) * (d - 1)) = d - 1 := by
+    have := stageAt_of_bulkX_last d ((d - 2) * (d - 1)) (d - 2) hd3 hodd hclass (by omega)
+    omega
+  have hM : stageAt d ((d - 2) * (d - 1) + 1) = d := by
+    rw [stageAt_succ, hbase, injRows_bulkX0_last d ((d - 2) * (d - 1)) (d - 2) hclass (by omega)]
+    omega
+  have hnum : numStabFormula d = (d - 1) * (d - 1) + 2 * (d - 1) := by
+    unfold numStabFormula; rw [Nat.max_eq_right (by omega)]
+  have hprod : (d - 2) * (d - 1) + (d - 1) = (d - 1) * (d - 1) := by
+    rw [← Nat.succ_mul]; congr 1; omega
+  have hle : (d - 2) * (d - 1) + 1 ≤ numStabFormula d := by rw [hnum]; omega
+  rw [show numStabFormula d = ((d - 2) * (d - 1) + 1)
+        + (numStabFormula d - ((d - 2) * (d - 1) + 1)) by omega,
+    stageAt_add, hM]
+  have htail : ((List.range (numStabFormula d - ((d - 2) * (d - 1) + 1))).map
+      (fun i => injRows d ((d - 2) * (d - 1) + 1 + i))).sum = 0 := by
+    apply List.sum_eq_zero
+    intro x hx
+    simp only [List.mem_map, List.mem_range] at hx
+    obtain ⟨i, _, rfl⟩ := hx
+    exact injRows_zero_of_gt_last d ((d - 2) * (d - 1) + 1 + i) hd1 (by omega)
+  rw [htail, Nat.add_zero]
+
 end QStab.QClifford.Compile
