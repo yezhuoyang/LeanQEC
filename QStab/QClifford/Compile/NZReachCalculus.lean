@@ -523,6 +523,33 @@ theorem errLocCount_nzBlock {nq : Nat} (anc : Fin nq) (slots : List (ScheduledPa
     List.length_nil]
   omega
 
+/-! ## Lifted-schedule ancilla facts (generic; reused by surface + HGP-G3 folds) -/
+
+/-- Lifted slot qubits are data-block indices (`< n`), hence distinct from any helper ancilla
+`anc` with `n ≤ anc.val`. -/
+theorem lifted_slot_ne_anc {n total : Nat} (sigma : RuleSchedule n)
+    (anc : Fin (n + total)) (hanc : n ≤ anc.val) :
+    ∀ slot ∈ (liftSchedule (k := total) sigma).slots, slot.qubit ≠ anc := by
+  intro slot hslot heq
+  have hs : (liftSchedule (k := total) sigma).slots = sigma.slots.map liftSlot := rfl
+  rw [hs] at hslot
+  obtain ⟨s0, _, rfl⟩ := List.mem_map.mp hslot
+  have hlt := s0.qubit.isLt
+  have hv := congrArg Fin.val heq
+  simp only [liftSlot, freshDataQ] at hv
+  omega
+
+/-- Lifting preserves the `Nodup` of the slot qubits (via injectivity of `freshDataQ`). -/
+theorem lifted_nodup {n total : Nat} (sigma : RuleSchedule n)
+    (h : (sigma.slots.map (·.qubit)).Nodup) :
+    ((liftSchedule (k := total) sigma).slots.map (·.qubit)).Nodup := by
+  have hs : (liftSchedule (k := total) sigma).slots = sigma.slots.map liftSlot := rfl
+  have hcomp : ((sigma.slots.map liftSlot).map (·.qubit))
+      = (sigma.slots.map (·.qubit)).map (freshDataQ n total) := by
+    simp only [List.map_map]; rfl
+  rw [hs, hcomp]
+  exact h.map (fun _ _ hab => freshDataQ_inj hab)
+
 /-! ## Bridge to the compiler front-end -/
 
 /-- **The compiled NZ gadget block is an `nzBlock`.**  `compileGadgetBlock .NZ` unfolds to
