@@ -457,6 +457,28 @@ theorem injectE_all_false {nq : Nat} :
                 then pauliMul Pauli.X (E q) else E q) = E from by funext q; simp]
       exact ih injs.tail E (fun b hb => hf b (List.tail_subset injs hb))
 
+/-- The injection count equals the number of `true` bits, when the injection list matches the
+slot list in length. -/
+theorem injCount_eq_count {nq : Nat} :
+    ∀ (slots : List (ScheduledPauli nq)) (injs : List Bool),
+      injs.length = slots.length → injCount slots injs = injs.count true := by
+  intro slots
+  induction slots with
+  | nil =>
+    intro injs h
+    cases injs with
+    | nil => rfl
+    | cons b bs => simp at h
+  | cons s rest ih =>
+    intro injs h
+    cases injs with
+    | nil => simp at h
+    | cons b bs =>
+      have hlen : bs.length = rest.length := by simp only [List.length_cons] at h; omega
+      simp only [injCount, List.headD_cons, List.tail_cons]
+      rw [ih bs hlen, List.count_cons]
+      cases b <;> simp [Nat.add_comm]
+
 /-! ## Generic parity facts (surface-free; reused by surface + HGP) -/
 
 /-- **`vectorParity` depends only on the support of `S`.**  If `E`, `E'` agree wherever `S`

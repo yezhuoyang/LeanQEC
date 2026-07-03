@@ -664,4 +664,79 @@ theorem heven_gadget (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
   | bottomX b =>
     exact heven_X_kind hd k (by simp only [hcl, kindXZ])
 
+/-! ## (d) The per-gadget reach step -/
+
+/-- The `Bool`-support form of the stage residual that `ReachState` carries. -/
+def colPrefixB (d m : Nat) : Fin (d * d) → Bool :=
+  fun q => decide (q.val % d = 0 ∧ q.val / d < m)
+
+/-- `xOfBool ∘ colPrefixB` is the pauli residual `colPrefix`. -/
+theorem xOfBool_colPrefixB (d m : Nat) (q : Fin (d * d)) :
+    xOfBool (colPrefixB d m q) = colPrefix d m q := by
+  unfold colPrefixB colPrefix
+  by_cases h : q.val % d = 0 ∧ q.val / d < m
+  · rw [decide_eq_true h, xOfBool_true, if_pos h]
+  · rw [decide_eq_false h, xOfBool_false, if_neg h]
+
+/-- The injection list length matches the lifted schedule's slot count. -/
+theorem injs_k_length_eq (d : Nat) (hd : 0 < d) (total : Nat) (k : Fin (numStabFormula d)) :
+    (injs_k d k.val).length = (liftSchedule (k := total) (nzSchedule d hd k)).slots.length := by
+  simp only [liftSchedule, nzSchedule, RuleSchedule.uniform, List.length_map]
+  cases hc : classifyStab d k.val with
+  | bulkZ r c => cases c <;> simp [injs_k, hc, kindOrderRC]
+  | bulkX r c =>
+    cases c with
+    | zero => simp only [injs_k, hc]; split_ifs <;> simp [kindOrderRC]
+    | succ c' => simp [injs_k, hc, kindOrderRC]
+  | topX b => simp [injs_k, hc, kindOrderRC]
+  | rightZ b => simp [injs_k, hc, kindOrderRC]
+  | leftZ b => simp [injs_k, hc, kindOrderRC]
+  | bottomX b => simp [injs_k, hc, kindOrderRC]
+
+/-- **The reach induction's step.**  From `ReachState (colPrefixB d (stageAt d k)) es`, running
+gadget `k`'s compiled block (on the fresh ancilla `anc`) yields `ReachState` at the advanced
+stage `stageAt d (k+1)`, firing exactly `injRows d k` faults.  Fuses `runFScript_nzBlock` (the
+block master lemma) with `injectE_advances_stage` (data) and `heven_gadget` (side condition). -/
+theorem reach_step (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) (total : Nat)
+    (k : Fin (numStabFormula d)) (anc : Fin (d * d + total)) (hanc : d * d ≤ anc.val)
+    (hne : ∀ slot ∈ (liftSchedule (k := total) (nzSchedule d hd k)).slots, slot.qubit ≠ anc)
+    (hnodup : ((liftSchedule (k := total) (nzSchedule d hd k)).slots.map (·.qubit)).Nodup)
+    (es : ErrorState (d * d + total))
+    (hR : ReachState (colPrefixB d (stageAt d k.val)) es) :
+    ReachState (colPrefixB d (stageAt d (k.val + 1)))
+        (runFScript (nzBlock anc (liftSchedule (k := total) (nzSchedule d hd k)).slots)
+          (blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val))
+          es).1
+      ∧ (runFScript (nzBlock anc (liftSchedule (k := total) (nzSchedule d hd k)).slots)
+          (blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val))
+          es).2 = injRows d k.val := by
+  set slots := (liftSchedule (k := total) (nzSchedule d hd k)).slots with hslots
+  set E := (dataInputState (k := total) (colPrefix d (stageAt d k.val))).paulis with hE
+  have hpaulis : es.paulis = E := by
+    apply paulis_eq_dataInputState
+    · intro q'; rw [hR.data q', xOfBool_colPrefixB]
+    · exact hR.helpers
+  have hdata : ∀ q, q ≠ anc → es.paulis q = E q := fun q _ => congrFun hpaulis q
+  have hheven : scheduleParityList slots (injectE slots (injs_k d k.val) E) false = false := by
+    rw [hslots, hE]; exact heven_gadget d hd hd3 hodd total k
+  obtain ⟨hd1, hanc1, hdet1, hcount⟩ :=
+    runFScript_nzBlock anc slots (injs_k d k.val) E es hne hnodup hdata hR.det hheven
+  have hadv : injectE slots (injs_k d k.val) E
+      = (dataInputState (k := total) (colPrefix d (stageAt d (k.val + 1)))).paulis := by
+    rw [hslots, hE]; exact injectE_advances_stage d hd hd3 hodd total k
+  refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+  · intro q'
+    have hfd : freshDataQ (d * d) total q' ≠ anc := by
+      intro heq; have hv := congrArg Fin.val heq
+      rw [freshDataQ_val] at hv; have := q'.isLt; omega
+    rw [hd1 _ hfd, hadv, dataInputState_freshDataQ, xOfBool_colPrefixB]
+  · intro q hq
+    by_cases hqa : q = anc
+    · rw [hqa]; exact hanc1
+    · rw [hd1 q hqa, hadv]
+      simp only [dataInputState]; rw [dif_neg (by omega)]
+  · exact hdet1
+  · rw [hcount, injCount_eq_count slots (injs_k d k.val) (injs_k_length_eq d hd total k)]
+    rfl
+
 end QStab.QClifford.Compile
