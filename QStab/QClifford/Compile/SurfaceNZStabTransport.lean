@@ -166,7 +166,7 @@ private theorem prodStab_helper (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d
 `scheduleRow` (whose faithfulness is exactly `scheduleRow_nzSchedule_dataRestrict`) and
 apply `scheduleRow_vectorParity`.  This is the missing step that lets the compiled
 `Centralizer` obligation speak the source geometry's `ErrorVec.parity` language. -/
-private theorem scheduleParity_eq_vectorParity (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d)
+theorem scheduleParity_eq_vectorParity (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d)
     (hodd : d % 2 = 1) (j : Fin (numStabFormula d)) (E : ErrorVec (d * d)) :
     scheduleParity (nzSchedule d hd j) E = vectorParity (mkSurfaceStabilizers d hd j) E := by
   have hrow : mkSurfaceStabilizers d hd j = scheduleRow (k := 0) (nzSchedule d hd j) := by

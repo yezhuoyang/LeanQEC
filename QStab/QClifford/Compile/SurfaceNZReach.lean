@@ -1,4 +1,5 @@
 import QStab.QClifford.Compile.SurfaceNZStabTransport
+import QStab.QClifford.Compile.NZReachCalculus
 
 /-!
 # F2 reach: the domino-path attack script (generator + sanity)
@@ -64,76 +65,126 @@ the per-gadget segments in measurement (index) order. -/
 def surfaceReachScript (d : Nat) (_hd : 0 < d) : List (Option Pauli) :=
   ((List.finRange (numStabFormula d)).map (fun k => surfaceReachSegment d k.val)).flatten
 
-/-! ## Reusable machinery: `runFScript` composition over gadget blocks
+/-! ## (a) Script decode — surface segment as a generic `blockScript` -/
 
-The compiled program is a concatenation of gadget blocks; the reach proof decomposes the run
-gadget-by-gadget.  `runFScript_append` is the composition law: running `fc1 ++ fc2` splits the
-script at `fc1`'s errLoc count.  (`runFScript`/`runFScript_sound` live in the protected
-Basic.lean — consumed here, never edited.) -/
+/-- The per-gadget injection pattern (one `Bool` per schedule slot), pinned per
+`classifyStab` kind: column-0 bulk `Z`-checks inject their two column-0 data slots; the
+last-row `X`-check injects its slot-2 before-H₁ site; everything else is fault-free. -/
+def injs_k (d k : Nat) : List Bool :=
+  match classifyStab d k with
+  | .bulkZ _ 0 => [true, true, false, false]
+  | .bulkZ _ _ => [false, false, false, false]
+  | .bulkX r 0 => if r + 2 = d then [false, false, true, false] else [false, false, false, false]
+  | .bulkX _ _ => [false, false, false, false]
+  | .topX _ => [false, false]
+  | .rightZ _ => [false, false]
+  | .leftZ _ => [false, false]
+  | .bottomX _ => [false, false]
 
-/-- Number of `errLoc` sites in a fault circuit = number of script entries it consumes. -/
-def errLocCount {nq : Nat} : FCircuit nq → Nat
-  | [] => 0
-  | .gate _ :: rest => errLocCount rest
-  | .errLoc _ :: rest => errLocCount rest + 1
+/-- **Decode, `bulkZ(_,0)` case.**  The offset-based surface segment equals the generic
+`blockScript` over the (4 `Z`-kind) lifted slots with the domino injection pattern. -/
+theorem surfaceReachSegment_decode_bulkZ (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (r : Nat) (h : classifyStab d k.val = .bulkZ r 0) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
 
-/-- **`runFScript` composition law** (unconditional).  Running `fc1 ++ fc2` runs `fc1` on the
-script prefix, then `fc2` on `script.drop (errLocCount fc1)`; counts add.  No length side
-condition: if the script is exhausted inside `fc1`, its trailing errLocs are no-ops
-(`Basic.lean:501`) and `List.drop n [] = []` keeps both sides aligned. -/
-theorem runFScript_append {nq : Nat} :
-    ∀ (fc1 fc2 : FCircuit nq) (script : List (Option Pauli)) (es : ErrorState nq),
-      runFScript (fc1 ++ fc2) script es =
-        ((runFScript fc2 (script.drop (errLocCount fc1)) (runFScript fc1 script es).1).1,
-         (runFScript fc1 script es).2 +
-           (runFScript fc2 (script.drop (errLocCount fc1)) (runFScript fc1 script es).1).2) := by
-  intro fc1
-  induction fc1 with
-  | nil =>
-      intro fc2 script es
-      simp [runFScript, errLocCount]
-  | cons ev rest ih =>
-      intro fc2 script es
-      cases ev with
-      | gate g =>
-          show runFScript (rest ++ fc2) script (propagateGate g es) = _
-          rw [ih fc2 script (propagateGate g es)]
-          simp [runFScript, errLocCount]
-      | errLoc q =>
-          cases script with
-          | nil =>
-              show runFScript (rest ++ fc2) [] es = _
-              rw [ih fc2 [] es]
-              simp [runFScript, errLocCount, List.drop_nil]
-          | cons o script' =>
-              cases o with
-              | none =>
-                  show runFScript (rest ++ fc2) script' es = _
-                  rw [ih fc2 script' es]
-                  simp [runFScript, errLocCount]
-              | some p =>
-                  by_cases hp : p = Pauli.I
-                  · subst hp
-                    show runFScript (rest ++ fc2) script' es = _
-                    rw [ih fc2 script' es]
-                    simp [runFScript, errLocCount]
-                  · rw [List.cons_append]
-                    simp only [runFScript, if_neg hp]
-                    rw [ih fc2 script' (es.inject q p)]
-                    simp only [errLocCount, List.drop_succ_cons]
-                    congr 1
-                    omega
-/-- errLoc counts add over circuit concatenation (Step-1c arithmetic suite). -/
-@[simp] theorem errLocCount_append {nq : Nat} (fc1 fc2 : FCircuit nq) :
-    errLocCount (fc1 ++ fc2) = errLocCount fc1 + errLocCount fc2 := by
-  induction fc1 with
-  | nil => simp [errLocCount]
-  | cons ev rest ih =>
-      cases ev with
-      | gate g => simpa [errLocCount] using ih
-      | errLoc q => simp only [List.cons_append, errLocCount, ih]; omega
+/-- **Decode, `bulkX(d-2,0)` case** (the last-row injector, 4 `X`-kind slots). -/
+theorem surfaceReachSegment_decode_bulkX_last (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (r : Nat) (h : classifyStab d k.val = .bulkX r 0)
+    (hr : r + 2 = d) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, hr, if_true, kindXZ,
+    slotSiteCount, kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript,
+    slotsScript, slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons,
+    List.tail_cons]
+  rfl
 
-/-! ## Sanity `#eval`s (design-arithmetic validation, pre-proof) -/
+/-- **Decode, fault-free bulk `Z`(c≥1).** -/
+theorem surfaceReachSegment_decode_bulkZ_col (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (r c : Nat) (h : classifyStab d k.val = .bulkZ r (c + 1)) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+/-- **Decode, non-last bulk `X`(_,0).** -/
+theorem surfaceReachSegment_decode_bulkX_off (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (r : Nat) (h : classifyStab d k.val = .bulkX r 0)
+    (hr : ¬ (r + 2 = d)) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, if_neg hr, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+/-- **Decode, bulk `X`(c≥1).** -/
+theorem surfaceReachSegment_decode_bulkX_col (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (r c : Nat) (h : classifyStab d k.val = .bulkX r (c + 1)) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+/-- **Decode, boundary kinds** (topX / rightZ / leftZ / bottomX — 2 slots, fault-free). -/
+theorem surfaceReachSegment_decode_topX (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (b : Nat) (h : classifyStab d k.val = .topX b) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+theorem surfaceReachSegment_decode_rightZ (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (b : Nat) (h : classifyStab d k.val = .rightZ b) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+theorem surfaceReachSegment_decode_leftZ (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (b : Nat) (h : classifyStab d k.val = .leftZ b) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+theorem surfaceReachSegment_decode_bottomX (d : Nat) (hd : 0 < d) (total : Nat)
+    (k : Fin (numStabFormula d)) (b : Nat) (h : classifyStab d k.val = .bottomX b) :
+    surfaceReachSegment d k.val
+      = blockScript (liftSchedule (k := total) (nzSchedule d hd k)).slots (injs_k d k.val) := by
+  simp only [surfaceReachSegment, gadgetErrLocCount, injs_k, h, kindXZ, slotSiteCount,
+    kindOrderRC, nzSchedule, liftSchedule, RuleSchedule.uniform, blockScript, slotsScript,
+    slotScript, liftSlot, List.map_cons, List.map_nil, List.headD_cons, List.tail_cons]
+  rfl
+
+/-- Count equality: the surface segment's length is `gadgetErrLocCount d k`. -/
+theorem surfaceReachSegment_length (d k : Nat) :
+    (surfaceReachSegment d k).length = gadgetErrLocCount d k := by
+  unfold surfaceReachSegment
+  split
+  all_goals first
+    | (split_ifs <;> simp [List.length_map, List.length_range, List.length_replicate])
+    | simp [List.length_map, List.length_range, List.length_replicate]
+
+/-! ## Sanity `#eval`s (design-arithmetic validation, pre-proof)
+
+(`errLocCount`, `runFScript_append`, `errLocCount_append` now live in the surface-free
+`NZReachCalculus`; imported above.) -/
 
 /-- Number of injected (non-`none`) faults in the script. -/
 def scriptFaultCount (s : List (Option Pauli)) : Nat :=
