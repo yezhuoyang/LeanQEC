@@ -90,7 +90,7 @@ theorem crux_topX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (b : Nat) (hb : b < (d - 
         · -- q = (0, 2b); but z there is I, contradiction with anticommutes X (z q)
           exfalso
           have : q = gridFin d hd0 (0, 2 * b) := Fin.ext (by rw [hval0, hqval, h])
-          rw [this, hprev] at hq; exact absurd hq (by decide)
+          rw [this, hprev] at hq; nomatch hq
         · exact Fin.ext (by rw [hval1, hqval, h])
       · rw [if_neg hg] at hq; simp [ErrorVec.Pauli.anticommutes] at hq
     · intro hq; subst hq
@@ -98,6 +98,183 @@ theorem crux_topX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (b : Nat) (hb : b < (d - 
         Or.inr (by rw [hval1]; exact Nat.mod_eq_of_lt hb2)⟩, hZ]
       decide
   rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
-  exact absurd hpar (by decide)
+  nomatch hpar
+
+/-- Decode of the `bottomX b` boundary X-check (mirror of `classifyStab_bottomXIdx`). -/
+theorem decode_bottomXIdx (d b row col : Nat) (_hd : 1 < d) (_hb : b < (d - 1) / 2) :
+    decodeStabPauliAt d (bottomXIdx d b) row col
+      = if row = d - 1 ∧ (col = 2 * b + 1 ∨ col = 2 * b + 2) then Pauli.X else Pauli.I := by
+  unfold decodeStabPauliAt bottomXIdx
+  have hge : (d - 1) * (d - 1) ≤ (d - 1) * (d - 1) + 3 * ((d - 1) / 2) + b := by omega
+  rw [if_neg (Nat.not_lt_of_ge hge)]
+  set b' := (d - 1) * (d - 1) + 3 * ((d - 1) / 2) + b - (d - 1) * (d - 1) with hb'def
+  have hb'_eq : b' = 3 * ((d - 1) / 2) + b := by rw [hb'def]; omega
+  rw [if_neg (by rw [hb'_eq]; omega), if_neg (by rw [hb'_eq]; omega),
+    if_neg (by rw [hb'_eq]; omega)]
+  have h_sub : b' - 3 * ((d - 1) / 2) = b := by rw [hb'_eq]; omega
+  rw [h_sub]
+
+/-- **Crux C** (bottomX).  A `Z`-type vector commuting with `bottomX b` that is `I` on the left
+support cell `(d-1, 2b+1)` is `I` on the right cell `(d-1, 2b+2)`. -/
+theorem crux_bottomX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (hodd : d % 2 = 1)
+    (b : Nat) (hb : b < (d - 1) / 2) (z : ErrorVec (d * d)) (hzt : ∀ q, z q = Pauli.Z ∨ z q = Pauli.I)
+    (hpar : ErrorVec.parity
+        (mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩)
+        z = false)
+    (hprev : z (gridFin d hd0 (d - 1, 2 * b + 1)) = Pauli.I) :
+    z (gridFin d hd0 (d - 1, 2 * b + 2)) = Pauli.I := by
+  have hc1 : 2 * b + 1 < d := by omega
+  have hc2 : 2 * b + 2 < d := by omega
+  have hr : d - 1 < d := by omega
+  have hval0 : (gridFin d hd0 (d - 1, 2 * b + 1)).val = d * (d - 1) + (2 * b + 1) :=
+    gridFin_val_of_lt d hd0 hr hc1
+  have hval1 : (gridFin d hd0 (d - 1, 2 * b + 2)).val = d * (d - 1) + (2 * b + 2) :=
+    gridFin_val_of_lt d hd0 hr hc2
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0 ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q
+        = if q.val / d = d - 1 ∧ (q.val % d = 2 * b + 1 ∨ q.val % d = 2 * b + 2)
+          then Pauli.X else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]; exact decode_bottomXIdx d b _ _ hd hb
+  by_contra hne
+  have hZ : z (gridFin d hd0 (d - 1, 2 * b + 2)) = Pauli.Z := (hzt _).resolve_right hne
+  have hfilter : (Finset.univ.filter fun q =>
+      ErrorVec.Pauli.anticommutes
+        (mkSurfaceStabilizers d hd0
+          ⟨bottomXIdx d b, bottomXIdx_lt_numStab d b hd hodd hb⟩ q) (z q) = true)
+      = {gridFin d hd0 (d - 1, 2 * b + 2)} := by
+    apply Finset.ext; intro q
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+    constructor
+    · intro hq
+      rw [hstab q] at hq
+      by_cases hg : q.val / d = d - 1 ∧ (q.val % d = 2 * b + 1 ∨ q.val % d = 2 * b + 2)
+      · rw [if_pos hg] at hq
+        have hqval : q.val = d * (d - 1) + q.val % d := by
+          have h := Nat.div_add_mod q.val d; rw [hg.1] at h; omega
+        rcases hg.2 with h | h
+        · exfalso
+          have : q = gridFin d hd0 (d - 1, 2 * b + 1) := Fin.ext (by rw [hval0, hqval, h])
+          rw [this, hprev] at hq; nomatch hq
+        · exact Fin.ext (by rw [hval1, hqval, h])
+      · rw [if_neg hg] at hq; simp [ErrorVec.Pauli.anticommutes] at hq
+    · intro hq; subst hq
+      rw [hstab _, if_pos ⟨by rw [hval1]; exact lastRow_div d (2 * b + 2) hd0 hc2,
+        Or.inr (by rw [hval1]; exact lastRow_mod d (2 * b + 2) hc2)⟩, hZ]
+      decide
+  rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
+  nomatch hpar
+
+/-- **Crux D** (X̄).  A `Z`-type vector commuting with `X̄` (`mkSurfaceAttackerX`, the column-0
+`X`-string) that is `I` on every column-0 cell of row `< d-1` is `I` on the corner `(d-1, 0)`. -/
+theorem crux_Xbar (d : Nat) (hd0 : 0 < d) (hd : 1 < d)
+    (z : ErrorVec (d * d)) (hzt : ∀ q, z q = Pauli.Z ∨ z q = Pauli.I)
+    (hpar : ErrorVec.parity (mkSurfaceAttackerX d) z = false)
+    (hprev : ∀ r, r < d - 1 → z (gridFin d hd0 (r, 0)) = Pauli.I) :
+    z (gridFin d hd0 (d - 1, 0)) = Pauli.I := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceAttackerX d q = if q.val % d = 0 then Pauli.X else Pauli.I := fun _ => rfl
+  have hcorner : (gridFin d hd0 (d - 1, 0)).val = d * (d - 1) := by
+    rw [gridFin_val_of_lt d hd0 (by omega) hd0]; omega
+  by_contra hne
+  have hZ : z (gridFin d hd0 (d - 1, 0)) = Pauli.Z := (hzt _).resolve_right hne
+  have hfilter : (Finset.univ.filter fun q =>
+      ErrorVec.Pauli.anticommutes (mkSurfaceAttackerX d q) (z q) = true)
+      = {gridFin d hd0 (d - 1, 0)} := by
+    apply Finset.ext; intro q
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+    constructor
+    · intro hq
+      rw [hstab q] at hq
+      by_cases hc0 : q.val % d = 0
+      · rw [if_pos hc0] at hq
+        have hrow : q.val / d < d := Nat.div_lt_of_lt_mul q.isLt
+        have hqval : q.val = d * (q.val / d) := by
+          have h := Nat.div_add_mod q.val d; rw [hc0, Nat.add_zero] at h; omega
+        by_cases hrd : q.val / d = d - 1
+        · exact Fin.ext (by rw [hcorner, hqval, hrd])
+        · exfalso
+          have : q = gridFin d hd0 (q.val / d, 0) :=
+            Fin.ext (by rw [gridFin_val_of_lt d hd0 hrow hd0]; omega)
+          rw [this, hprev _ (by omega)] at hq; nomatch hq
+      · rw [if_neg hc0] at hq; simp [ErrorVec.Pauli.anticommutes] at hq
+    · intro hq; subst hq
+      rw [hstab _, if_pos (by rw [hcorner]; exact Nat.mul_mod_right d (d - 1)), hZ]
+      decide
+  rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
+  nomatch hpar
+
+/-- Decode of the odd-parity bulk X-check `bulkX r c` (mirror of `classifyStab_bulkIdx_odd`). -/
+theorem decode_bulkXIdx (d r c row col : Nat) (hd : 1 < d) (hr : r < d - 1) (hc : c < d - 1)
+    (hpar : (r + c) % 2 = 1) :
+    decodeStabPauliAt d (bulkIdx d r c) row col
+      = if (row = r ∨ row = r + 1) ∧ (col = c ∨ col = c + 1) then Pauli.X else Pauli.I := by
+  unfold decodeStabPauliAt
+  have hlt := bulkIdx_lt_bulkCount d r c hr hc
+  rw [if_pos hlt]
+  obtain ⟨hdiv, hmod⟩ := bulkIdx_div_mod d r c hd hc
+  rw [hdiv, hmod]
+  simp only [show (if (r + c) % 2 = 0 then Pauli.Z else Pauli.X) = Pauli.X from if_neg (by omega)]
+
+/-- **Crux B** (bulkX, 4-cell).  A `Z`-type vector commuting with `bulkX r c` (parametrized by
+its top-left `(r,c)`, `(r+c)` odd) that is `I` on the three row-major-earlier support cells
+`(r,c)`, `(r,c+1)`, `(r+1,c)` is `I` on the bottom-right `(r+1,c+1)`. -/
+theorem crux_bulkX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (r c : Nat)
+    (hrd : r + 1 < d) (hcd : c + 1 < d) (hpar_rc : (r + c) % 2 = 1)
+    (z : ErrorVec (d * d)) (hzt : ∀ q, z q = Pauli.Z ∨ z q = Pauli.I)
+    (hpar : ErrorVec.parity
+        (mkSurfaceStabilizers d hd0
+          ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd (by omega) (by omega)⟩) z = false)
+    (hp1 : z (gridFin d hd0 (r, c)) = Pauli.I)
+    (hp2 : z (gridFin d hd0 (r, c + 1)) = Pauli.I)
+    (hp3 : z (gridFin d hd0 (r + 1, c)) = Pauli.I) :
+    z (gridFin d hd0 (r + 1, c + 1)) = Pauli.I := by
+  have hstab : ∀ q : Fin (d * d),
+      mkSurfaceStabilizers d hd0
+          ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd (by omega) (by omega)⟩ q
+        = if (q.val / d = r ∨ q.val / d = r + 1) ∧ (q.val % d = c ∨ q.val % d = c + 1)
+          then Pauli.X else Pauli.I := by
+    intro q; simp only [mkSurfaceStabilizers]
+    exact decode_bulkXIdx d r c _ _ hd (by omega) (by omega) hpar_rc
+  by_contra hne
+  have hZ : z (gridFin d hd0 (r + 1, c + 1)) = Pauli.Z := (hzt _).resolve_right hne
+  have hfilter : (Finset.univ.filter fun q =>
+      ErrorVec.Pauli.anticommutes
+        (mkSurfaceStabilizers d hd0
+          ⟨bulkIdx d r c, bulkIdx_lt_numStab d r c hd (by omega) (by omega)⟩ q) (z q) = true)
+      = {gridFin d hd0 (r + 1, c + 1)} := by
+    apply Finset.ext; intro q
+    simp only [Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_singleton]
+    constructor
+    · intro hq
+      rw [hstab q] at hq
+      by_cases hg : (q.val / d = r ∨ q.val / d = r + 1) ∧ (q.val % d = c ∨ q.val % d = c + 1)
+      · rw [if_pos hg] at hq
+        obtain ⟨hrow, hcol⟩ := hg
+        have hqrc : ∀ (rr cc : Nat), q.val / d = rr → q.val % d = cc → q.val = d * rr + cc := by
+          intro rr cc hrr hcc; have h := Nat.div_add_mod q.val d; rw [hrr, hcc] at h; omega
+        rcases hrow with hrow | hrow <;> rcases hcol with hcol | hcol
+        · exfalso
+          have : q = gridFin d hd0 (r, c) :=
+            Fin.ext (by rw [gridFin_val_of_lt d hd0 (by omega) (by omega)]; exact hqrc r c hrow hcol)
+          rw [this, hp1] at hq; nomatch hq
+        · exfalso
+          have : q = gridFin d hd0 (r, c + 1) :=
+            Fin.ext (by rw [gridFin_val_of_lt d hd0 (by omega) hcd]; exact hqrc r (c + 1) hrow hcol)
+          rw [this, hp2] at hq; nomatch hq
+        · exfalso
+          have : q = gridFin d hd0 (r + 1, c) :=
+            Fin.ext (by rw [gridFin_val_of_lt d hd0 hrd (by omega)]; exact hqrc (r + 1) c hrow hcol)
+          rw [this, hp3] at hq; nomatch hq
+        · exact Fin.ext (by rw [gridFin_val_of_lt d hd0 hrd hcd]; exact hqrc (r + 1) (c + 1) hrow hcol)
+      · rw [if_neg hg] at hq; simp [ErrorVec.Pauli.anticommutes] at hq
+    · intro hq; subst hq
+      have hqd : (gridFin d hd0 (r + 1, c + 1)).val / d = r + 1 := by
+        rw [gridFin_val_of_lt d hd0 hrd hcd, Nat.mul_add_div hd0, Nat.div_eq_of_lt hcd, Nat.add_zero]
+      have hqm : (gridFin d hd0 (r + 1, c + 1)).val % d = c + 1 := by
+        rw [gridFin_val_of_lt d hd0 hrd hcd, Nat.mul_add_mod, Nat.mod_eq_of_lt hcd]
+      rw [hstab _, if_pos ⟨Or.inr hqd, Or.inr hqm⟩, hZ]
+      decide
+  rw [ErrorVec.parity, hfilter, Finset.card_singleton] at hpar
+  nomatch hpar
 
 end QStab.QClifford.Compile
