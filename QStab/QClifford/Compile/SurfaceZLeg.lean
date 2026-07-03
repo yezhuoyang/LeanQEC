@@ -36,6 +36,18 @@ theorem decode_topXIdx (d b row col : Nat) (_hd : 1 < d) (hb : b < (d - 1) / 2) 
   have hb'_eq : b' = b := by rw [hb'def]; omega
   rw [if_pos (by rw [hb'_eq]; exact hb), hb'_eq]
 
+/-- Row-major division for last-row cells: `(d·(d−1)+c)/d = d−1` (`c < d`).  The one new
+primitive over crux A — omega cannot divide by the variable `d`. -/
+theorem lastRow_div (d c : Nat) (hd : 0 < d) (hc : c < d) :
+    (d * (d - 1) + c) / d = d - 1 := by
+  rw [Nat.mul_add_div hd, Nat.div_eq_of_lt hc, Nat.add_zero]
+
+/-- Row-major remainder for last-row cells: `(d·(d−1)+c) % d = c` (`c < d`). -/
+theorem lastRow_mod (d c : Nat) (hc : c < d) :
+    (d * (d - 1) + c) % d = c := by
+  rw [Nat.mul_add_mod]
+  exact Nat.mod_eq_of_lt hc
+
 /-- **Crux A** (template-calibrator).  A `Z`-type vector commuting with `topX b` that is `I` on
 the left support cell `(0, 2b)` is `I` on the right cell `(0, 2b+1)`. -/
 theorem crux_topX (d : Nat) (hd0 : 0 < d) (hd : 1 < d) (b : Nat) (hb : b < (d - 1) / 2)
