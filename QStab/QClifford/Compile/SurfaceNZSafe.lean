@@ -1,6 +1,7 @@
 import QStab.QClifford.Compile.SurfaceRhoXDistance
 import QStab.QClifford.Compile.SurfaceNZFtDistanceFull
 import QStab.QClifford.Compile.SurfaceNZVCGen
+import QStab.QClifford.Compile.CodeSafeAssembly
 
 /-!
 # `surface_Safe` — the surface capstone
@@ -44,25 +45,26 @@ verifier's `vcgen_sound` consumes: `programEq`, `wf`, `syn`, `ftDistance`
 for every odd `d ≥ 3`. -/
 def surface_Safe (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
     DischargedVCs (generatedFullProgramVCInputD (surfaceXZProgram d hd) d hd
-      (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)) where
-  reachScript := surfaceReachScript d hd
-  programEq := generatedFullProgram_vcgen_programEqD (surfaceXZProgram d hd) d hd
+      (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)) :=
+  assembleDischargedVCs (surfaceXZProgram d hd) d hd
     (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)
-  wf := generatedFullProgram_vcgen_wfD (surfaceXZProgram d hd) d hd
-    (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)
-  syn := generatedFullProgram_vcgen_synD (surfaceXZProgram d hd) d hd
-    (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)
-  ftDistance := surfaceXZ_vcgen_ftDistanceD_final d hd hd3 hodd
-  reachOk := surfaceXZ_vcgen_reachD d hd hd3 hodd
+    (surfaceReachScript d hd)
+    (surfaceXZ_vcgen_ftDistanceD_final d hd hd3 hodd)
+    (surfaceXZ_vcgen_reachD d hd hd3 hodd)
 
 /-- **The verifier's own soundness, applied**: the compiled surface program is
-`Safe` against its generated spec, for every odd `d ≥ 3`. -/
+`Safe` against its generated spec, for every odd `d ≥ 3` — a one-line instance of
+the generic `assembleCodeSafe`. -/
 theorem surface_compiled_Safe (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d)
     (hodd : d % 2 = 1) :
     Safe (compileProgram (surfaceXZProgram d hd))
       ((generatedFullProgramVCInputD (surfaceXZProgram d hd) d hd
         (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)).toCodeSpec) :=
-  vcgen_sound (.mk (surface_Safe d hd hd3 hodd))
+  assembleCodeSafe (surfaceXZProgram d hd) d hd
+    (surfaceXZ_nq_pos d hd) (surfaceXZ_numStab_pos d hd)
+    (surfaceReachScript d hd)
+    (surfaceXZ_vcgen_ftDistanceD_final d hd hd3 hodd)
+    (surfaceXZ_vcgen_reachD d hd hd3 hodd)
 
 -- Regression guards (axiom pins) for the capstone headliners.
 /--

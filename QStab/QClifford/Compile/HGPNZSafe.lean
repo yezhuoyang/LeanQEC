@@ -1,5 +1,6 @@
 import QStab.QClifford.Compile.HGPNZReach
 import QStab.QClifford.Compile.HGPNZVCGen
+import QStab.QClifford.Compile.CodeSafeAssembly
 
 /-!
 # HGP G3: the reach fold, the discharged `reach` slot, and `hgp_Safe`
@@ -576,21 +577,25 @@ verifier's `vcgen_sound` consumes: `programEq`, `wf`, `syn`, `ftDistance`
 `hd : 2 ≤ d` the only hypothesis. -/
 def hgp_Safe (d : Nat) (hd : 2 ≤ d) :
     DischargedVCs (generatedFullProgramVCInputD (hgpXZProgram d) d
-      (by omega) (hgp_nq_pos d hd) (hgp_numStab_pos d hd)) where
-  reachScript := hgpReachScript d hd
-  programEq := hgpXZ_vcgen_programEqD d hd (hgp_nq_pos d hd) (hgp_numStab_pos d hd)
-  wf := hgpXZ_vcgen_wfD d hd (hgp_nq_pos d hd) (hgp_numStab_pos d hd)
-  syn := hgpXZ_vcgen_synD d hd (hgp_nq_pos d hd) (hgp_numStab_pos d hd)
-  ftDistance := hgpXZ_vcgen_ftDistanceD d hd
-  reachOk := hgpXZ_vcgen_reachD d hd
+      (by omega) (hgp_nq_pos d hd) (hgp_numStab_pos d hd)) :=
+  assembleDischargedVCs (hgpXZProgram d) d (by omega)
+    (hgp_nq_pos d hd) (hgp_numStab_pos d hd)
+    (hgpReachScript d hd)
+    (hgpXZ_vcgen_ftDistanceD d hd)
+    (hgpXZ_vcgen_reachD d hd)
 
 /-- **The verifier's own soundness, applied**: the compiled HGP program is
-`Safe` against its generated spec, for every `d ≥ 2`. -/
+`Safe` against its generated spec, for every `d ≥ 2` — a one-line instance of the
+generic `assembleCodeSafe`. -/
 theorem hgp_compiled_Safe (d : Nat) (hd : 2 ≤ d) :
     Safe (compileProgram (hgpXZProgram d))
       ((generatedFullProgramVCInputD (hgpXZProgram d) d (by omega)
         (hgp_nq_pos d hd) (hgp_numStab_pos d hd)).toCodeSpec) :=
-  vcgen_sound (.mk (hgp_Safe d hd))
+  assembleCodeSafe (hgpXZProgram d) d (by omega)
+    (hgp_nq_pos d hd) (hgp_numStab_pos d hd)
+    (hgpReachScript d hd)
+    (hgpXZ_vcgen_ftDistanceD d hd)
+    (hgpXZ_vcgen_reachD d hd)
 
 -- Regression guards (axiom pins) for the reach/Safe headliners.
 
