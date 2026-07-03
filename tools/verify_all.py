@@ -590,10 +590,15 @@ def check_hgp_chain() -> str:
     for needle in [
         "def hgp_Safe (d : Nat) (hd : 2 ≤ d) :",
         "DischargedVCs (generatedFullProgramVCInputD (hgpXZProgram d) d",
-        "reachScript := hgpReachScript d hd",
+        # hgp_Safe is now the generic capstone-record assembler applied to the
+        # HGP program + its reach script + the two per-code slot proofs.
+        "assembleDischargedVCs (hgpXZProgram d) d",
+        "(hgpReachScript d hd)",
         "theorem hgp_compiled_Safe (d : Nat) (hd : 2 ≤ d) :",
         "Safe (compileProgram (hgpXZProgram d))",
-        "vcgen_sound (.mk (hgp_Safe d hd))",
+        # hgp_compiled_Safe is now the generic Safe capstone (vcgen_sound is
+        # applied inside assembleCodeSafe).
+        "assembleCodeSafe (hgpXZProgram d) d",
     ]:
         if needle not in text:
             raise VerifyError(f"missing HGP capstone declaration/text: {needle}")
