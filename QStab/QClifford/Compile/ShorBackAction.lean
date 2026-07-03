@@ -321,6 +321,191 @@ theorem verifierLegs_zPart_off {nq : Nat} (v c0 clast : Fin nq)
   rw [hcnot_z clast _, hcnot_z c0 _,
     propagateGate_prepPlus_paulis_ne v es x hx]
 
+/-! ## Part 3a: the uniform hook-residual core
+
+The classifier's right branch never needs to know *which* subset of the
+support carries the hook — so every pre-coupling fault site reduces to one
+uniform lemma: from any coupling-entry state with clean data (and clean above
+the gadget ceiling, for the conditional tail), the couplings + raw
+measurements + tail produce exactly the hook-form residual, with the hook set
+read off the entry state's cat Z-parts. -/
+
+/-- `couplingHook` at a cat whose Z-part is `Z` is the schedule kind's Pauli. -/
+theorem couplingHook_toPauli (k : XZPauli) (w : Pauli) (h : zPart w = Pauli.Z) :
+    couplingHook k w = k.toPauli := by
+  cases k <;> cases w <;> simp_all [couplingHook, zPart, hadamardAction, XZPauli.toPauli]
+
+/-- `couplingHook` at a Z-free cat is trivial. -/
+theorem couplingHook_I (k : XZPauli) (w : Pauli) (h : zPart w = Pauli.I) :
+    couplingHook k w = Pauli.I := by
+  cases k <;> cases w <;> simp_all [couplingHook, zPart, hadamardAction]
+
+theorem cab_cons {nq L : Nat} {g : Gate nq} {c : Circuit nq}
+    (hg : ∀ q : Fin nq, gateActsOn g q → q.val < L) (hc : circuitActsBelow c L) :
+    circuitActsBelow (g :: c) L := by
+  intro g' hg' q hq
+  rcases List.mem_cons.mp hg' with rfl | h
+  · exact hg q hq
+  · exact hc g' h q hq
+
+/-- Gates of an erased cnot-pair chain act only on pair components. -/
+theorem cnotPairs_gates_actOn {nq : Nat} (ps : List (Fin nq × Fin nq)) (g : Gate nq)
+    (hg : g ∈ eraseFaults ((ps.map (fun cc => cnot cc.1 cc.2)).flatten)) :
+    ∀ q : Fin nq, gateActsOn g q → ∃ p ∈ ps, q = p.1 ∨ q = p.2 := by
+  intro q hq
+  rw [eraseFaults_flatten, List.map_map, List.mem_flatten] at hg
+  obtain ⟨c, hc, hgc⟩ := hg
+  rw [List.mem_map] at hc
+  obtain ⟨pc, hpc, rfl⟩ := hc
+  simp only [Function.comp_apply] at hgc
+  by_cases hct : pc.1 = pc.2
+  · simp [cnot, hct] at hgc
+  · have he : eraseFaults (cnot pc.1 pc.2) = [Gate.cnot pc.1 pc.2 hct] := by
+      simp [cnot, hct, eraseFaults]
+    rw [he, List.mem_singleton] at hgc
+    subst hgc
+    rcases hq with rfl | rfl
+    · exact ⟨pc, hpc, Or.inl rfl⟩
+    · exact ⟨pc, hpc, Or.inr rfl⟩
+
+/-- **Pre-coupling entry**: propagating any circuit that acts only on helper
+qubits (`≥ P.n`) and below the ceiling `L`, from a clean state injected at a
+qubit below the ceiling, lands at a coupling-entry state with clean data and
+`cleanAbove L`. -/
+theorem preCoupling_to_entry {P : QECParams} {total : Nat} (X : Circuit (P.n + total))
+    (hX_above : ∀ g ∈ X, ∀ q : Fin (P.n + total), gateActsOn g q → P.n ≤ q.val)
+    (L : Nat) (hX_cab : circuitActsBelow X L)
+    (q0 : Fin (P.n + total)) (hq0 : q0.val < L) (hq0n : P.n ≤ q0.val)
+    (p : Pauli) (dstart : Nat) :
+    (∀ q' : Fin P.n,
+      (propagateCircuit X ((PCC.cleanAtDetector dstart).inject q0 p)).paulis
+          (freshDataQ P.n total q') = Pauli.I) ∧
+    cleanAbove (propagateCircuit X ((PCC.cleanAtDetector dstart).inject q0 p)) L := by
+  constructor
+  · intro q'
+    rw [propagateCircuit_paulis_off X (freshDataQ P.n total q') ?_ _]
+    · rw [injectClean_paulis, if_neg ?_]
+      intro he
+      have hlt := q'.isLt
+      rw [← he] at hq0n
+      simp only [freshDataQ_val] at hq0n
+      omega
+    · intro g hg hact
+      have := hX_above g hg _ hact
+      have hlt := q'.isLt
+      simp only [freshDataQ_val] at this
+      omega
+  · apply cleanAbove_preserved_of_actsBelow _ _ hX_cab
+    intro h hh
+    rw [injectClean_paulis, if_neg (fun he => by rw [he] at hh; omega)]
+
+/-- **The uniform hook-residual core.**  From a coupling-entry state with
+clean data and `cleanAbove L`, the couplings + raw measurements + (data-
+preserving-above-`L`) tail produce exactly the subset-hook residual: the
+schedule kind's Pauli on the data qubits whose cat entered with a `Z`-part,
+identity elsewhere. -/
+theorem shor_hook_tail_residual {P : QECParams} {total : Nat}
+    (pairs : List (ScheduledPauli (P.n + total) × Fin (P.n + total)))
+    (kk : XZPauli) (hkindp : ∀ pc ∈ pairs, pc.1.kind = kk)
+    (hndc : (pairs.map (·.2)).Nodup) (hndq : (pairs.map (·.1.qubit)).Nodup)
+    (hqvals : ∀ pc ∈ pairs, pc.1.qubit.val < P.n)
+    (hcvals : ∀ pc ∈ pairs, P.n ≤ pc.2.val)
+    (L : Nat) (hcatsL : ∀ pc ∈ pairs, pc.2.val < L) (hqL : P.n ≤ L)
+    (measCats : List (Fin (P.n + total))) (hmeasL : ∀ c ∈ measCats, c.val < L)
+    (tail : FCircuit (P.n + total))
+    (htail : PreservesDataAbove (eraseFaults tail) L)
+    (es1 : ErrorState (P.n + total))
+    (hclean : cleanAbove es1 L)
+    (hdata : ∀ q' : Fin P.n, es1.paulis (freshDataQ P.n total q') = Pauli.I)
+    (q' : Fin P.n) :
+    (propagateCircuit
+      (eraseFaults ((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)
+        ++ (eraseFaults ((measCats.map rawMeasZ).flatten) ++ eraseFaults tail)) es1).paulis
+      (freshDataQ P.n total q')
+    = if freshDataQ P.n total q'
+          ∈ (pairs.filter (fun pc => zPart (es1.paulis pc.2) == Pauli.Z)).map (·.1.qubit)
+      then kk.toPauli else Pauli.I := by
+  have hcabC : circuitActsBelow
+      (eraseFaults ((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)) L := by
+    apply cab_erase_flatten_map
+    intro pc hpc
+    exact cab_erase_shorCouplingSlot pc.1 pc.2 (hcatsL pc hpc)
+      (lt_of_lt_of_le (hqvals pc hpc) hqL)
+  have hcabM : circuitActsBelow (eraseFaults ((measCats.map rawMeasZ).flatten)) L := by
+    apply cab_erase_flatten_map
+    intro c hc
+    exact cab_erase_rawMeasZ c (hmeasL c hc)
+  rw [QHL.Target.propagateCircuit_append, QHL.Target.propagateCircuit_append]
+  set es2 := propagateCircuit
+    (eraseFaults ((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)) es1 with hes2
+  set es3 := propagateCircuit (eraseFaults ((measCats.map rawMeasZ).flatten)) es2 with hes3
+  have hclean3 : cleanAbove es3 L := by
+    rw [hes3, hes2]
+    exact cleanAbove_preserved_of_actsBelow _ _ hcabM _
+      (cleanAbove_preserved_of_actsBelow _ _ hcabC _ hclean)
+  have htail3 : (propagateCircuit (eraseFaults tail) es3).paulis (freshDataQ P.n total q')
+      = es3.paulis (freshDataQ P.n total q') :=
+    htail es3 hclean3 (freshDataQ P.n total q') (by simp [freshDataQ_val, q'.isLt])
+  rw [htail3, hes3, rawMeasZ_flatten_paulis]
+  by_cases hin : freshDataQ P.n total q' ∈ pairs.map (·.1.qubit)
+  · rw [List.mem_map] at hin
+    obtain ⟨pc, hpc, hq⟩ := hin
+    have hqc : ∀ a ∈ pairs, ∀ b ∈ pairs, a.1.qubit ≠ b.2 := by
+      intro a ha b hb he
+      have h1 := hqvals a ha
+      have h2 := hcvals b hb
+      rw [he] at h1
+      omega
+    have hqclean : ∀ a ∈ pairs, es1.paulis a.1.qubit = Pauli.I := by
+      intro a ha
+      have h1 := hqvals a ha
+      have heq : a.1.qubit = freshDataQ P.n total ⟨a.1.qubit.val, h1⟩ := by
+        apply Fin.ext; simp [freshDataQ_val]
+      rw [heq]
+      exact hdata _
+    have hres := shorCouplings_from_catvec pairs es1 hndc hndq hqc hqclean pc hpc
+    rw [hes2, ← hq, hres, hkindp pc hpc]
+    by_cases hz : zPart (es1.paulis pc.2) = Pauli.Z
+    · rw [couplingHook_toPauli kk _ hz, if_pos ?_]
+      rw [List.mem_map]
+      refine ⟨pc, ?_, rfl⟩
+      rw [List.mem_filter]
+      exact ⟨hpc, by simp [hz]⟩
+    · have hzI : zPart (es1.paulis pc.2) = Pauli.I := by
+        cases hw : es1.paulis pc.2 <;>
+          first
+            | rfl
+            | exact absurd (by rw [hw]; rfl) hz
+      rw [couplingHook_I kk _ hzI, if_neg ?_]
+      intro hmem
+      rw [List.mem_map] at hmem
+      obtain ⟨pc', hpc', hq'⟩ := hmem
+      rw [List.mem_filter] at hpc'
+      have hpceq : pc' = pc := by
+        apply List.inj_on_of_nodup_map hndq hpc'.1 hpc
+        rw [hq', hq]
+      rw [hpceq] at hpc'
+      have := hpc'.2
+      simp [hzI] at this
+  · have hoff : ∀ a ∈ pairs,
+        freshDataQ P.n total q' ≠ a.1.qubit ∧ freshDataQ P.n total q' ≠ a.2 := by
+      intro a ha
+      constructor
+      · intro he
+        exact hin (List.mem_map.mpr ⟨a, ha, he.symm⟩)
+      · intro he
+        have h2 := hcvals a ha
+        have hlt := q'.isLt
+        rw [← he] at h2
+        simp only [freshDataQ_val] at h2
+        omega
+    rw [hes2, shorCouplings_paulis_off pairs _ hoff es1, hdata q', if_neg ?_]
+    intro hmem
+    rw [List.mem_map] at hmem
+    obtain ⟨pc', hpc', hq'⟩ := hmem
+    rw [List.mem_filter] at hpc'
+    exact hin (List.mem_map.mpr ⟨pc', hpc'.1, hq'⟩)
+
 /--
 info: 'QStab.QClifford.Compile.shorCouplings_paulis_off' depends on axioms: [propext, Quot.sound]
 -/
