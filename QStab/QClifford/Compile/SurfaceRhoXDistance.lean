@@ -1,6 +1,7 @@
 import QStab.QClifford.Compile.SurfaceRhoSpread
 import QStab.QClifford.Compile.SurfaceNZAssembly
 import QStab.QClifford.Compile.SurfaceHValid
+import QStab.QClifford.Compile.DualityAutomorphism
 
 /-!
 # The compiled bar-X distance floor by ρ-duality transport (F2b)
@@ -345,15 +346,36 @@ theorem rhoPhi_attackerX (d : Nat) (hd : 0 < d) :
   · rw [if_pos h, if_pos h]; rfl
   · rw [if_neg h, if_neg h]; rfl
 
-/-! ## ★ The compiled bar-X distance floor ★ -/
+/-! ## ★ The bundle and the compiled bar-X distance floor ★ -/
 
-/-- **Compiled bar-X circuit-level distance for the rotated surface code.**
-Every clean-start run of `compileProgram (surfaceXZProgram d hd)` whose data
-residual commutes with every stabilizer and anticommutes with
-`X̄ = mkSurfaceAttackerX` fired at least `d` faults — for every odd `d ≥ 3`.
-Proved by ρ-duality transport: the run is simulated on the ρ-conjugated image
-circuit, where its residual is bar-Z-class over the ρ-machine and the bar-Z
-bridge applies; `λ` agrees between the two runs. -/
+/-- **The surface `DualityAutomorphism` bundle**: the ρ-rotation (order 4) as a
+code automorphism.  `Φ = rhoPhi`, the stab-row surjectivity is `mkSurfaceStabilizers_rho_surj`,
+`Φ(X̄)=Z̄` is `rhoPhi_attackerX`, and the image bar-Z floor is the ρ-machine
+transport `surfaceRhoD_compiled_barZ_distance` (wrapped into parity form). -/
+def surfaceDualityAutomorphism (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1) :
+    DualityAutomorphism where
+  params  := mkSurfaceQECParams d hd hodd
+  helpers := programHelperCount (surfaceXZProgram d hd)
+  d       := d
+  fc      := compileProgram (surfaceXZProgram d hd)
+  Xbar    := mkSurfaceAttackerX d
+  Zbar    := mkSurfaceLogicalZ d
+  perm     := surfaceRhoAmbientPerm d hd hd3 hodd
+  Phi      := rhoPhi d hd
+  dualData := fun q => ⟨rhoInvNat d q.val, rhoInvNat_lt d q.val hd q.isLt⟩
+  Phi_def        := fun _ _ => rfl
+  perm_freshData := fun q => Fin.ext (rho_rightInv d q.val hd)
+  parity_Phi := parity_rhoPhi d hd
+  stab_surj  := fun i => mkSurfaceStabilizers_rho_surj d hd (by omega) hodd i
+  Phi_Xbar   := rhoPhi_attackerX d hd
+  image_barZ_floor := fun tau hrunD hcent hz =>
+    surfaceRhoD_compiled_barZ_distance d hd hd3 hodd tau hrunD
+      ⟨fun S hS => by obtain ⟨i, -, rfl⟩ := List.mem_map.mp hS; exact hcent i,
+       fun T hT => by rw [List.mem_singleton.mp hT]; exact hz⟩
+
+/-- **Compiled bar-X circuit-level distance for the rotated surface code** — now a
+one-line instance of the generic `compiled_barX_of_dualityAutomorphism` for the ρ
+bundle (formerly a bespoke transport proof). -/
 theorem surface_compiled_barX_distance (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d)
     (hodd : d % 2 = 1) :
     ∀ sigma : QCState (d * d + programHelperCount (surfaceXZProgram d hd)),
@@ -368,39 +390,8 @@ theorem surface_compiled_barX_distance (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d)
           (programHelperCount (surfaceXZProgram d hd)) sigma) = true →
       d ≤ sigma.lambda := by
   intro sigma hrun hcent hx
-  have hd1 : 1 < d := by omega
-  obtain ⟨tau, hrunD, hlam, hpauli⟩ :=
-    qceval_hConj (surfaceRhoAmbientPerm d hd hd3 hodd) hrun
-      (HRel_clean (surfaceRhoAmbientPerm d hd hd3 hodd))
-  have hdata : dataErrorOfQCState (surfaceRhoParams d hd3 hodd) (surfaceHelpers d hd) tau
-      = rhoPhi d hd (dataErrorOfQCState (mkSurfaceQECParams d hd hodd)
-          (programHelperCount (surfaceXZProgram d hd)) sigma) := by
-    funext q
-    show tau.es.paulis (freshDataQ (d * d) (surfaceHelpers d hd) q)
-      = hadamardAction (sigma.es.paulis (freshDataQ (d * d) (surfaceHelpers d hd)
-          ⟨rhoInvNat d q.val, rhoInvNat_lt d q.val hd q.isLt⟩))
-    rw [show freshDataQ (d * d) (surfaceHelpers d hd) q
-        = surfaceRhoAmbientPerm d hd hd3 hodd (freshDataQ (d * d) (surfaceHelpers d hd)
-            ⟨rhoInvNat d q.val, rhoInvNat_lt d q.val hd q.isLt⟩)
-      from Fin.ext (rho_rightInv d q.val hd).symm]
-    exact hpauli _
-  have hcls : (surfaceLogicalClass d (rhoSurfaceSpec d hd3 hodd)).contains
-      (dataErrorOfQCState (surfaceRhoParams d hd3 hodd) (surfaceHelpers d hd) tau) := by
-    rw [hdata]
-    constructor
-    · intro S hS
-      obtain ⟨i, -, rfl⟩ := List.mem_map.mp hS
-      show ErrorVec.parity (mkSurfaceStabilizers d hd i) _ = false
-      obtain ⟨j, hj⟩ := mkSurfaceStabilizers_rho_surj d hd hd1 hodd i
-      rw [← hj, parity_rhoPhi]
-      exact hcent j
-    · intro T hT
-      rw [List.mem_singleton.mp hT]
-      show ErrorVec.parity (mkSurfaceLogicalZ d) _ = true
-      rw [← rhoPhi_attackerX d hd, parity_rhoPhi]
-      exact hx
-  have hfloor := surfaceRhoD_compiled_barZ_distance d hd hd3 hodd tau hrunD hcls
-  exact hlam ▸ hfloor
+  exact compiled_barX_of_dualityAutomorphism (surfaceDualityAutomorphism d hd hd3 hodd)
+    sigma hrun hcent hx
 
 -- Regression guards (axiom pins) for the transport headliners.
 /--
