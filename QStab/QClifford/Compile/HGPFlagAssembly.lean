@@ -342,6 +342,122 @@ theorem chain_residual_hook_gen {P : QECParams} {total : Nat} (a : Fin (P.n + to
       · obtain ⟨k, hk⟩ := ih hanc' hnd' _ site p hp hrec hw0 hw1
         exact ⟨k + 1, hk⟩
 
+/-! ## Mixed-kind ancilla chain (for the X-side, with the bare `flag` couplings)
+
+The X-check flag block interleaves H-sandwiched data couplings (`zParitySlot .X`)
+with the bare `cnot flag anc = zParitySlot .Z`.  A single lemma over
+`zParitySlot`s of *arbitrary* kind handles it: the ancilla is always the CNOT
+target, so it **keeps** its Pauli through every coupling, depositing on each
+control qubit the kind's transform of `zPart w`. -/
+
+/-- The Pauli a `zParitySlot` of kind `k` deposits onto its (clean) data qubit
+from an ancilla carrying `w`: `Z` backflows `zPart w`; `X`'s H-sandwich rotates
+it to `hadamardAction (zPart w)`. -/
+def kindTransform : XZPauli → Pauli → Pauli
+  | .Z, w => zPart w
+  | .X, w => hadamardAction (zPart w)
+
+/-- **One mixed-kind coupling**: from an ancilla carrying `w` and a clean data
+qubit, `zParitySlot anc s` puts `kindTransform s.kind w` on `s.qubit`, keeps `w`
+on `anc`, and leaves every other qubit fixed. -/
+theorem zParitySlot_anc_deposit {nq : Nat} (anc : Fin nq) (s : ScheduledPauli nq)
+    (hqa : s.qubit ≠ anc) (es : ErrorState nq) (w : Pauli) (hanc : es.paulis anc = w)
+    (hq : es.paulis s.qubit = Pauli.I) :
+    (propagateCircuit (eraseFaults (zParitySlot anc s)) es).paulis s.qubit
+        = kindTransform s.kind w
+      ∧ (propagateCircuit (eraseFaults (zParitySlot anc s)) es).paulis anc = w
+      ∧ ∀ i : Fin nq, i ≠ s.qubit → i ≠ anc →
+          (propagateCircuit (eraseFaults (zParitySlot anc s)) es).paulis i = es.paulis i := by
+  obtain ⟨sk, sq⟩ := s
+  cases sk with
+  | Z =>
+      have hc : eraseFaults (zParitySlot anc ⟨.Z, sq⟩) = [Gate.cnot sq anc hqa] := by
+        simp [zParitySlot, cnot, hqa, eraseFaults]
+      rw [hc]; simp only [propagateCircuit]
+      refine ⟨?_, ?_, ?_⟩
+      · rw [propagateGate_cnot_control sq anc hqa, hanc, hq]; simp [kindTransform, pauliMul_I_right]
+      · rw [propagateGate_cnot_target sq anc hqa, hq, hanc]; simp [xPart, pauliMul]
+      · intro i hiq hia
+        exact propagateGate_cnot_paulis_ne sq anc hqa es i hiq hia
+  | X =>
+      have hc : eraseFaults (zParitySlot anc ⟨.X, sq⟩) =
+          [Gate.hadamard sq, Gate.cnot sq anc hqa, Gate.hadamard sq] := by
+        simp [zParitySlot, hadamard, cnot, hqa, eraseFaults]
+      rw [hc]; simp only [propagateCircuit]
+      set e1 := propagateGate (Gate.hadamard sq) es with he1
+      have he1q : e1.paulis sq = Pauli.I := by
+        rw [he1, propagateGate_hadamard_self, hq]; rfl
+      have he1a : e1.paulis anc = w := by
+        rw [he1, propagateGate_hadamard_paulis_ne sq es anc (Ne.symm hqa), hanc]
+      set e2 := propagateGate (Gate.cnot sq anc hqa) e1 with he2
+      have he2q : e2.paulis sq = zPart w := by
+        rw [he2, propagateGate_cnot_control sq anc hqa, he1a, he1q]; simp [pauliMul_I_right]
+      have he2a : e2.paulis anc = w := by
+        rw [he2, propagateGate_cnot_target sq anc hqa, he1q, he1a]; simp [xPart, pauliMul]
+      refine ⟨?_, ?_, ?_⟩
+      · rw [propagateGate_hadamard_self, he2q]; rfl
+      · rw [propagateGate_hadamard_paulis_ne sq e2 anc (Ne.symm hqa), he2a]
+      · intro i hiq hia
+        rw [propagateGate_hadamard_paulis_ne sq e2 i hiq, he2,
+          propagateGate_cnot_paulis_ne sq anc hqa e1 i hiq hia, he1,
+          propagateGate_hadamard_paulis_ne sq es i hiq]
+
+/-- **The mixed-kind ancilla chain**: from `w@anc` and clean data, propagating a
+list of `zParitySlot`s deposits `kindTransform s.kind w` on each slot's qubit,
+keeps `w` on `anc`, and fixes every off-chain qubit — the ancilla carrying `w`
+throughout. -/
+theorem propagate_zpsChain_anc {nq : Nat} (anc : Fin nq) (w : Pauli) :
+    ∀ (slots : List (ScheduledPauli nq)), (∀ s ∈ slots, s.qubit ≠ anc) →
+      (slots.map (·.qubit)).Nodup →
+      ∀ (es : ErrorState nq), es.paulis anc = w → (∀ s ∈ slots, es.paulis s.qubit = Pauli.I) →
+        (∀ s ∈ slots, (propagateCircuit (eraseFaults ((slots.map (zParitySlot anc)).flatten)) es).paulis
+            s.qubit = kindTransform s.kind w)
+        ∧ (propagateCircuit (eraseFaults ((slots.map (zParitySlot anc)).flatten)) es).paulis anc = w
+        ∧ (∀ i : Fin nq, i ≠ anc → i ∉ slots.map (·.qubit) →
+            (propagateCircuit (eraseFaults ((slots.map (zParitySlot anc)).flatten)) es).paulis i
+              = es.paulis i) := by
+  intro slots
+  induction slots with
+  | nil => intro _ _ es hanc _; exact ⟨fun s hs => absurd hs (List.not_mem_nil), by simpa [propagateCircuit] using hanc, fun i _ _ => by simp [propagateCircuit]⟩
+  | cons s0 rest ih =>
+      intro hqa hnd es hanc hclean
+      have hs0q : s0.qubit ≠ anc := hqa s0 List.mem_cons_self
+      have hcirc : eraseFaults (((s0 :: rest).map (zParitySlot anc)).flatten)
+          = eraseFaults (zParitySlot anc s0) ++
+            eraseFaults ((rest.map (zParitySlot anc)).flatten) := by
+        simp only [List.map_cons, List.flatten_cons, eraseFaults_append]
+      have hnd0 : (s0.qubit :: rest.map (·.qubit)).Nodup := hnd
+      have hfresh : s0.qubit ∉ rest.map (·.qubit) := (List.nodup_cons.mp hnd0).1
+      have hnd' : (rest.map (·.qubit)).Nodup := (List.nodup_cons.mp hnd0).2
+      have hqa' : ∀ s ∈ rest, s.qubit ≠ anc := fun s hs => hqa s (List.mem_cons_of_mem _ hs)
+      obtain ⟨hd0q, hd0a, hd0o⟩ := zParitySlot_anc_deposit anc s0 hs0q es w hanc
+        (hclean s0 List.mem_cons_self)
+      set e1 := propagateCircuit (eraseFaults (zParitySlot anc s0)) es with he1
+      have he1clean : ∀ s ∈ rest, e1.paulis s.qubit = Pauli.I := by
+        intro s hs
+        have hne : s.qubit ≠ s0.qubit := fun h =>
+          hfresh (h ▸ List.mem_map_of_mem (f := (·.qubit)) hs)
+        rw [hd0o s.qubit hne (hqa' s hs)]
+        exact hclean s (List.mem_cons_of_mem _ hs)
+      obtain ⟨hrq, hra, hro⟩ := ih hqa' hnd' e1 hd0a he1clean
+      rw [hcirc, QHL.Target.propagateCircuit_append]
+      refine ⟨?_, ?_, ?_⟩
+      · intro s hs
+        rcases List.mem_cons.mp hs with rfl | hs'
+        · rw [hro s.qubit hs0q hfresh]; exact hd0q
+        · exact hrq s hs'
+      · rw [hra]
+      · intro i hia himem
+        have hi0 : i ≠ s0.qubit := fun h => himem (h ▸ List.mem_cons_self)
+        have hirest : i ∉ rest.map (·.qubit) := fun h => himem (List.mem_cons_of_mem _ h)
+        rw [hro i hia hirest, hd0o i hi0 hia]
+
+/--
+info: 'QStab.QClifford.Compile.propagate_zpsChain_anc' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms propagate_zpsChain_anc
+
 /--
 info: 'QStab.QClifford.Compile.hgpFlag_leafClean' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
