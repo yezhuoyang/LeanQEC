@@ -242,4 +242,111 @@ theorem shorPreSeg_caa {nq n : Nat} (c0 : Fin nq) (rest : List (Fin nq)) (v : Fi
   · exact caa_erase_hadamard v hv
   · exact caa_erase_flagMeasZ v hv
 
+/-- errLoc bounds for the pre-coupling segment (the `helperPrefix_site` premise). -/
+theorem shorPreSeg_herr {P : QECParams} {total : Nat} (c0 : Fin (P.n + total))
+    (rest : List (Fin (P.n + total))) (v : Fin (P.n + total)) (L : Nat)
+    (hcat : ∀ c ∈ (c0 :: rest), P.n ≤ c.val ∧ c.val < L) (hv : P.n ≤ v.val ∧ v.val < L) :
+    ∀ q0 : Fin (P.n + total), FInstr.errLoc q0 ∈ shorPreSeg c0 rest v →
+      P.n ≤ q0.val ∧ q0.val < L :=
+  fun q0 h => (shorPreSeg_errLoc c0 rest v q0 h).elim (fun hc => hcat q0 hc) (fun hq => hq ▸ hv)
+
+/-- Zip left-projection is a sublist of the first list. -/
+theorem zip_fst_sublist {α β : Type} : ∀ (as : List α) (bs : List β),
+    ((List.zip as bs).map Prod.fst).Sublist as := by
+  intro as
+  induction as with
+  | nil => intro bs; simp
+  | cons a as' ih =>
+      intro bs
+      cases bs with
+      | nil => simp
+      | cons b bs' => simpa using List.Sublist.cons₂ a (ih bs')
+
+/-- **Branch A: a pre-coupling fault site produces a subset hook.**  For a site
+in the pre-coupling segment (helpers only), the data residual is pointwise the
+schedule kind `kk.toPauli` on a subset of the (lifted) scheduled qubits,
+identity elsewhere — because the pre-coupling gates leave the data clean at
+coupling entry and the couplings image the cats' Z-parts onto their own data
+qubits (`shor_hook_tail_residual`).  The tail guarantee is the conditional
+`PreservesDataAbove` at the ceiling, discharged from the acts-below half. -/
+theorem shorPRE_site_hook {P : QECParams} {total : Nat}
+    (σ' : RuleSchedule (P.n + total)) (kk : XZPauli)
+    (hkindL : ∀ s ∈ σ'.slots, s.kind = kk)
+    (c0 : Fin (P.n + total)) (rest : List (Fin (P.n + total))) (v : Fin (P.n + total))
+    (L : Nat) (hnL : P.n ≤ L)
+    (hcatNd : (c0 :: rest).Nodup)
+    (hcatA : ∀ c ∈ (c0 :: rest), P.n ≤ c.val) (hcatB : ∀ c ∈ (c0 :: rest), c.val < L)
+    (hvA : P.n ≤ v.val) (hvB : v.val < L)
+    (hqA : ∀ s ∈ σ'.slots, s.qubit.val < P.n)
+    (hqNd : (σ'.slots.map (·.qubit)).Nodup)
+    (tail : FCircuit (P.n + total)) (htailPDA : PreservesDataAbove (eraseFaults tail) L)
+    (cursor : Nat) (site : PCC.ErrLocWithContext (P.n + total)) (p : Pauli) (hp : p ≠ Pauli.I)
+    (hsite : site ∈ prefixErrLocsWithContextAux cursor (shorPreSeg c0 rest v)
+      (((List.zip σ'.slots (c0 :: rest)).map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten
+        ++ ((c0 :: rest).map rawMeasZ).flatten ++ tail)) :
+    ∀ q' : Fin P.n,
+      targetFaultDataResidual P ⟨site, p, hp⟩ q' = Pauli.I ∨
+        (targetFaultDataResidual P ⟨site, p, hp⟩ q' = kk.toPauli ∧
+          freshDataQ P.n total q' ∈ σ'.slots.map (·.qubit)) := by
+  intro q'
+  set pairs := List.zip σ'.slots (c0 :: rest) with hpairs
+  -- decompose the site through the helper-only pre-coupling segment
+  have hcab := shorPreSeg_cab (L := L) c0 rest v hcatB hvB
+  have hcaa := shorPreSeg_caa (n := P.n) c0 rest v hcatA hvA
+  have hherr := shorPreSeg_herr (P := P) c0 rest v L
+    (fun c hc => ⟨hcatA c hc, hcatB c hc⟩) ⟨hvA, hvB⟩
+  obtain ⟨⟨hq0A, hq0B⟩, Xr, hsuf, hXrB, hXrA⟩ :=
+    helperPrefix_site (shorPreSeg c0 rest v) L hcab hcaa hherr cursor _ site hsite
+  -- residual through the suffix
+  have hcirc : Xr ++ eraseFaults
+        (((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten
+          ++ ((c0 :: rest).map rawMeasZ).flatten) ++ tail)
+      = Xr ++ (eraseFaults ((pairs.map (fun sc => shorCouplingSlot sc.1 sc.2)).flatten)
+          ++ (eraseFaults (((c0 :: rest).map rawMeasZ).flatten) ++ eraseFaults tail)) := by
+    rw [eraseFaults_append, eraseFaults_append, List.append_assoc]
+  set es1 := propagateCircuit Xr ((PCC.cleanAtDetector site.detectorStart).inject site.q p)
+    with hes1
+  -- coupling-entry state: clean data + clean-above-ceiling
+  obtain ⟨hdata, hclean⟩ := preCoupling_to_entry Xr
+    (fun g hg q hq => hXrA g hg q hq) L hXrB site.q hq0B hq0A p site.detectorStart
+  -- pairs facts
+  have hndc : (pairs.map (·.2)).Nodup :=
+    (zip_snd_sublist σ'.slots (c0 :: rest)).nodup hcatNd
+  have hndq : (pairs.map (·.1.qubit)).Nodup := by
+    have hsub : ((pairs.map (·.1)).map (·.qubit)).Sublist (σ'.slots.map (·.qubit)) :=
+      (zip_fst_sublist σ'.slots (c0 :: rest)).map _
+    rw [List.map_map] at hsub
+    exact hsub.nodup hqNd
+  have hkindp : ∀ pc ∈ pairs, pc.1.kind = kk := fun pc hpc =>
+    hkindL pc.1 (List.of_mem_zip hpc).1
+  have hqvals : ∀ pc ∈ pairs, pc.1.qubit.val < P.n := fun pc hpc =>
+    hqA pc.1 (List.of_mem_zip hpc).1
+  have hcvals : ∀ pc ∈ pairs, P.n ≤ pc.2.val := fun pc hpc =>
+    hcatA pc.2 (List.of_mem_zip hpc).2
+  have hcatsL : ∀ pc ∈ pairs, pc.2.val < L := fun pc hpc =>
+    hcatB pc.2 (List.of_mem_zip hpc).2
+  have hmeasL : ∀ c ∈ (c0 :: rest), c.val < L := hcatB
+  -- the uniform hook residual
+  have hR := shor_hook_tail_residual pairs kk hkindp hndc hndq hqvals hcvals L hcatsL hnL
+    (c0 :: rest) hmeasL tail htailPDA es1 hclean hdata q'
+  have hval : targetFaultDataResidual P ⟨site, p, hp⟩ q'
+      = if freshDataQ P.n total q'
+            ∈ (pairs.filter (fun pc => zPart (es1.paulis pc.2) == Pauli.Z)).map (·.1.qubit)
+        then kk.toPauli else Pauli.I := by
+    show (propagateCircuit site.suffix
+        ((PCC.cleanAtDetector site.detectorStart).inject site.q p)).paulis
+        (freshDataQ P.n total q') = _
+    rw [hsuf, hcirc, QHL.Target.propagateCircuit_append]
+    exact hR
+  rw [hval]
+  by_cases hmem : freshDataQ P.n total q'
+      ∈ (pairs.filter (fun pc => zPart (es1.paulis pc.2) == Pauli.Z)).map (·.1.qubit)
+  · rw [if_pos hmem]
+    refine Or.inr ⟨rfl, ?_⟩
+    rw [List.mem_map] at hmem ⊢
+    obtain ⟨pc, hpc, hq⟩ := hmem
+    rw [List.mem_filter] at hpc
+    exact ⟨pc.1, (List.of_mem_zip hpc.1).1, hq⟩
+  · rw [if_neg hmem]; exact Or.inl rfl
+
 end QStab.QClifford.Compile
