@@ -10,12 +10,8 @@ set_option maxRecDepth 8192
 Instantiates `CodeDistanceAtLeast` / `CodeDistanceExactly` (`QStab.Paper.CodeDistance`) for the
 Steane code — a CSS code — and anchors the result to the OCaml-language object program
 `QHL.CodeLang.Steane.code` via the certified evaluation `code_evalAt?_eq_arith` (Route B,
-axiom-clean).  This file delivers the **object-program anchor** and the **distance ≤ 3** witness
-(a weight-3 logical), all via shallow kernel `decide` (axiom-clean, crash-safe).
-
-The distance **≥ 3** lower bound is deferred: the direct `∀ E : ErrorVec 7` enumeration folds
-over `4⁷` elements, whose recursion depth is stack-unsafe in the module build; the safe route is
-the CSS/Hamming factorization (a `2⁷`-case Bool decide, shallow), left as a focused follow-on.
+axiom-clean).  This file delivers **distance = 3** and the **object-program anchor**, all via shallow kernel
+`decide` (axiom-clean, crash-safe) — the lower bound uses the CSS/Hamming factorization.
 -/
 
 namespace QStab.Examples.SteaneDistance
@@ -54,6 +50,91 @@ def steaneParams : QECParams where
   hns := by omega
   hR := by omega
 
+/-! ## Lower bound via CSS/Hamming factorization (crash-safe: `2⁷` Bool decide) -/
+
+/-- X-component mask: `true` where `E q` anticommutes with `Z` (`E q ∈ {X, Y}`). -/
+def xMask (E : ErrorVec 7) : Fin 7 → Bool := fun q => ErrorVec.Pauli.anticommutes Pauli.Z (E q)
+/-- Z-component mask: `true` where `E q` anticommutes with `X` (`E q ∈ {Y, Z}`). -/
+def zMask (E : ErrorVec 7) : Fin 7 → Bool := fun q => ErrorVec.Pauli.anticommutes Pauli.X (E q)
+
+def maskVecX (m : Fin 7 → Bool) : ErrorVec 7 := fun q => if m q then Pauli.X else Pauli.I
+def maskVecZ (m : Fin 7 → Bool) : ErrorVec 7 := fun q => if m q then Pauli.Z else Pauli.I
+
+/-- Parity depends only on the pointwise anticommutation pattern. -/
+theorem parity_congr_anti {n : Nat} (S E F : ErrorVec n)
+    (h : ∀ q, ErrorVec.Pauli.anticommutes (S q) (E q) = ErrorVec.Pauli.anticommutes (S q) (F q)) :
+    ErrorVec.parity S E = ErrorVec.parity S F := by
+  unfold ErrorVec.parity
+  simp only [h]
+
+theorem parity_xMask_bridge (E : ErrorVec 7) (i : Fin 6) (hi : 3 ≤ i.val) :
+    ErrorVec.parity (steaneStab i) E = ErrorVec.parity (steaneStab i) (maskVecX (xMask E)) := by
+  apply parity_congr_anti; intro q
+  have hZ : steaneStab i q = Pauli.Z ∨ steaneStab i q = Pauli.I := by
+    fin_cases i <;> simp_all <;> (fin_cases q <;> decide)
+  have key : ∀ (pp ss : Pauli), (ss = Pauli.Z ∨ ss = Pauli.I) →
+      ErrorVec.Pauli.anticommutes ss pp = ErrorVec.Pauli.anticommutes ss
+        (if ErrorVec.Pauli.anticommutes Pauli.Z pp = true then Pauli.X else Pauli.I) := by
+    intro pp ss hs; rcases hs with h | h <;> subst h <;> cases pp <;> decide
+  simp only [maskVecX, xMask]
+  exact key (E q) (steaneStab i q) hZ
+
+theorem parity_zMask_bridge (E : ErrorVec 7) (i : Fin 6) (hi : i.val < 3) :
+    ErrorVec.parity (steaneStab i) E = ErrorVec.parity (steaneStab i) (maskVecZ (zMask E)) := by
+  apply parity_congr_anti; intro q
+  have hX : steaneStab i q = Pauli.X ∨ steaneStab i q = Pauli.I := by
+    fin_cases i <;> simp_all <;> (fin_cases q <;> decide)
+  have key : ∀ (pp ss : Pauli), (ss = Pauli.X ∨ ss = Pauli.I) →
+      ErrorVec.Pauli.anticommutes ss pp = ErrorVec.Pauli.anticommutes ss
+        (if ErrorVec.Pauli.anticommutes Pauli.X pp = true then Pauli.Z else Pauli.I) := by
+    intro pp ss hs; rcases hs with h | h <;> subst h <;> cases pp <;> decide
+  simp only [maskVecZ, zMask]
+  exact key (E q) (steaneStab i q) hX
+
+/-- **Hamming distance-3 (X side)** over Bool masks — `2⁷ = 128` cases, shallow/safe. -/
+theorem hamming_X_lb : ∀ (m : Fin 7 → Bool),
+    (∀ i : Fin 6, 3 ≤ i.val → ErrorVec.parity (steaneStab i) (maskVecX m) = false) →
+    (Finset.univ.filter (fun q => m q = true)).card ≤ 2 → ∀ q, m q = false := by decide
+
+/-- **Hamming distance-3 (Z side)**. -/
+theorem hamming_Z_lb : ∀ (m : Fin 7 → Bool),
+    (∀ i : Fin 6, i.val < 3 → ErrorVec.parity (steaneStab i) (maskVecZ m) = false) →
+    (Finset.univ.filter (fun q => m q = true)).card ≤ 2 → ∀ q, m q = false := by decide
+
+theorem card_xMask_le_weight (E : ErrorVec 7) :
+    (Finset.univ.filter (fun q => xMask E q = true)).card ≤ ErrorVec.weight E := by
+  apply Finset.card_le_card; intro q hq
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and, xMask] at hq ⊢
+  cases hE : E q <;> simp_all [ErrorVec.Pauli.anticommutes]
+
+theorem card_zMask_le_weight (E : ErrorVec 7) :
+    (Finset.univ.filter (fun q => zMask E q = true)).card ≤ ErrorVec.weight E := by
+  apply Finset.card_le_card; intro q hq
+  simp only [Finset.mem_filter, Finset.mem_univ, true_and, zMask] at hq ⊢
+  cases hE : E q <;> simp_all [ErrorVec.Pauli.anticommutes]
+
+theorem eq_identity_of_masks (E : ErrorVec 7)
+    (hx : ∀ q, xMask E q = false) (hz : ∀ q, zMask E q = false) : E = ErrorVec.identity 7 := by
+  funext q
+  have h1 := hx q; have h2 := hz q
+  simp only [xMask] at h1; simp only [zMask] at h2
+  cases hE : E q <;> simp_all [ErrorVec.Pauli.anticommutes, ErrorVec.identity]
+
+/-- **Code distance ≥ 3** — CSS/Hamming factorization (two `2⁷` Bool decides + mask bridges),
+no `4⁷` enumeration. -/
+theorem st_codeDistanceAtLeast_3 : CodeDistanceAtLeast steaneParams 3 := by
+  intro E hcent hnot
+  by_contra hlt
+  have hw : ErrorVec.weight E ≤ 2 := by omega
+  have hx0 : ∀ q, xMask E q = false := by
+    refine hamming_X_lb (xMask E) (fun i hi => ?_) (le_trans (card_xMask_le_weight E) hw)
+    rw [← parity_xMask_bridge E i hi]; exact hcent i
+  have hz0 : ∀ q, zMask E q = false := by
+    refine hamming_Z_lb (zMask E) (fun i hi => ?_) (le_trans (card_zMask_le_weight E) hw)
+    rw [← parity_zMask_bridge E i hi]; exact hcent i
+  exact hnot (by rw [eq_identity_of_masks E hx0 hz0]; exact InStab.identity)
+
+
 /-- A weight-3 logical: `Z̄·(Z-check₀) = Z{1,3,5}` — centralizes every stabilizer,
 anticommutes with `X̄`. -/
 def steaneLogicalZ3 : ErrorVec 7 := v7 .I .Z .I .Z .I .Z .I
@@ -70,9 +151,10 @@ def steaneWitness : LogicalWitness steaneParams 3 where
     revert hx; decide
   weight_eq := by decide
 
-/-- **Distance ≤ 3**: a weight-3 logical exists (the lower bound `≥ 3` is the deferred
-CSS/Hamming shallow decide — see the module header). -/
-theorem st_distance_upper_3 : Nonempty (LogicalWitness steaneParams 3) := ⟨steaneWitness⟩
+/-- **Steane code distance = 3, exactly** — the shared predicate, on a CSS code: lower bound
+from the CSS/Hamming factorization, upper bound from a weight-3 logical witness. -/
+theorem st_codeDistanceExactly_3 : CodeDistanceExactly steaneParams 3 :=
+  codeDistanceExactly_intro st_codeDistanceAtLeast_3 steaneWitness
 
 /-! ## Object-program anchor (Route B) -/
 
