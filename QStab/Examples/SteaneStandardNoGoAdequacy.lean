@@ -337,6 +337,122 @@ theorem runFScript_zSlot_Zdata {nq : Nat} (anc : Fin nq) (slot : ScheduledPauli 
   · rw [inject_paulis_self, xPart_pauliMul_Z, hq]
   · rw [inject_paulis_ne es slot.qubit anc Pauli.Z (Ne.symm hne), hanc]; rfl
 
+/-! ## Deliverable 2: the Z-gadget block lift over a `pre ++ ⟨.Z,q⟩ :: post` split -/
+
+/-- **Deliverable 2.1: Z-only no-fault identity.**  A fault-free Z-slot chain leaves the state
+unchanged, given a clean ancilla and X-free scheduled data qubits (each CNOT is trivial). -/
+theorem propagateCircuit_zParitySlots_Zonly {nq : Nat} (anc : Fin nq) :
+    ∀ (slots : List (ScheduledPauli nq)) (es : ErrorState nq),
+      (∀ s ∈ slots, s.kind = XZPauli.Z) → (∀ s ∈ slots, s.qubit ≠ anc) →
+      es.paulis anc = Pauli.I → (∀ s ∈ slots, xPart (es.paulis s.qubit) = Pauli.I) →
+      propagateCircuit (eraseFaults (zParitySlotsCircuit anc slots)) es = es := by
+  intro slots
+  induction slots with
+  | nil =>
+    intro es _ _ _ _
+    simp only [zParitySlotsCircuit, List.map_nil, List.flatten_nil, eraseFaults_nil, propagateCircuit]
+  | cons slot rest ih =>
+    intro es hk hne hanc hx
+    rw [zParitySlotsCircuit_cons, eraseFaults_append, QHL.Target.propagateCircuit_append]
+    have hslotk : slot.kind = XZPauli.Z := hk slot (List.mem_cons.mpr (Or.inl rfl))
+    have hslotne : slot.qubit ≠ anc := hne slot (List.mem_cons.mpr (Or.inl rfl))
+    have hslotx : xPart (es.paulis slot.qubit) = Pauli.I := hx slot (List.mem_cons.mpr (Or.inl rfl))
+    have hid : propagateCircuit (eraseFaults (zParitySlot anc slot)) es = es := by
+      have hz : zParitySlot anc slot = cnot slot.qubit anc := by simp only [zParitySlot, hslotk]
+      rw [hz, cnot, dif_neg hslotne]
+      simp only [eraseFaults_errLoc, eraseFaults_gate, eraseFaults_nil, propagateCircuit]
+      exact propagateGate_cnot_id slot.qubit anc hslotne es hslotx (by rw [hanc]; rfl)
+    rw [hid]
+    exact ih es (fun s hs => hk s (List.mem_cons.mpr (Or.inr hs)))
+      (fun s hs => hne s (List.mem_cons.mpr (Or.inr hs))) hanc
+      (fun s hs => hx s (List.mem_cons.mpr (Or.inr hs)))
+
+theorem zParitySlotsCircuit_append {nq : Nat} (anc : Fin nq) (a b : List (ScheduledPauli nq)) :
+    zParitySlotsCircuit anc (a ++ b) = zParitySlotsCircuit anc a ++ zParitySlotsCircuit anc b := by
+  simp only [zParitySlotsCircuit, List.map_append, List.flatten_append]
+
+/-- A fault-free (all-`none`) run of a Z-only slot chain returns the state unchanged, count 0. -/
+theorem runFScript_zParitySlots_none {nq : Nat} (anc : Fin nq) (slots : List (ScheduledPauli nq))
+    (script : List (Option Pauli)) (es : ErrorState nq) (hnone : ∀ o ∈ script, o = none)
+    (hk : ∀ s ∈ slots, s.kind = XZPauli.Z) (hne : ∀ s ∈ slots, s.qubit ≠ anc)
+    (hanc : es.paulis anc = Pauli.I) (hx : ∀ s ∈ slots, xPart (es.paulis s.qubit) = Pauli.I) :
+    runFScript (zParitySlotsCircuit anc slots) script es = (es, 0) := by
+  rw [runFScript_allNone _ _ _ hnone,
+    propagateCircuit_zParitySlots_Zonly anc slots es hk hne hanc hx]
+
+theorem drop_replicate_none (n : Nat) (r : List (Option Pauli)) :
+    (List.replicate n none ++ r).drop n = r := by
+  have h : (List.replicate n (none : Option Pauli) ++ r).drop
+      (List.replicate n (none : Option Pauli)).length = r := List.drop_left
+  rwa [List.length_replicate] at h
+
+/-- Run a Z-only chain reading an all-`none` prefix of length `errLocCount`, ignoring the tail. -/
+theorem runFScript_Zchain_none_pre {nq : Nat} (anc : Fin nq) (slots : List (ScheduledPauli nq))
+    (es : ErrorState nq) (tail : List (Option Pauli))
+    (hk : ∀ s ∈ slots, s.kind = XZPauli.Z) (hne : ∀ s ∈ slots, s.qubit ≠ anc)
+    (hanc : es.paulis anc = Pauli.I) (hx : ∀ s ∈ slots, xPart (es.paulis s.qubit) = Pauli.I) :
+    runFScript (zParitySlotsCircuit anc slots)
+      (List.replicate (errLocCount (zParitySlotsCircuit anc slots)) none ++ tail) es = (es, 0) := by
+  rw [runFScript_take_errLoc _ _ tail es (le_of_eq (List.length_replicate ..).symm)]
+  exact runFScript_zParitySlots_none anc slots _ es
+    (fun o ho => List.eq_of_mem_replicate ho) hk hne hanc hx
+
+theorem drop2_someZ_none (r : List (Option Pauli)) :
+    ([some Pauli.Z, none] ++ r).drop 2 = r := rfl
+
+/-- **Deliverable 2.2: the runFScript split lemma.**  Over `pre ++ ⟨.Z,q⟩ :: post`, with all
+scheduled data qubits X-free and the ancilla clean, the script that idles `pre`, fires one data-`Z`
+at `q`, and idles `post` returns `(es.inject q Z, 1)`. -/
+theorem runFScript_zParitySlots_split {nq : Nat} (anc : Fin nq)
+    (pre post : List (ScheduledPauli nq)) (q : Fin nq) (es : ErrorState nq)
+    (hk : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post, s.kind = XZPauli.Z)
+    (hne : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post, s.qubit ≠ anc)
+    (hanc : es.paulis anc = Pauli.I)
+    (hx : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post,
+        xPart (es.paulis s.qubit) = Pauli.I) :
+    runFScript (zParitySlotsCircuit anc (pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post))
+      (List.replicate (errLocCount (zParitySlotsCircuit anc pre)) none ++ [some Pauli.Z, none] ++
+        List.replicate (errLocCount (zParitySlotsCircuit anc post)) none) es
+      = (es.inject q Pauli.Z, 1) := by
+  have hmid : (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) ∈
+      pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post :=
+    List.mem_append.mpr (Or.inr (List.mem_cons.mpr (Or.inl rfl)))
+  have hqne : q ≠ anc := hne _ hmid
+  have hqx : xPart (es.paulis q) = Pauli.I := hx _ hmid
+  have hpreK : ∀ s ∈ pre, s.kind = XZPauli.Z := fun s hs => hk s (List.mem_append.mpr (Or.inl hs))
+  have hpreNe : ∀ s ∈ pre, s.qubit ≠ anc := fun s hs => hne s (List.mem_append.mpr (Or.inl hs))
+  have hpreX : ∀ s ∈ pre, xPart (es.paulis s.qubit) = Pauli.I :=
+    fun s hs => hx s (List.mem_append.mpr (Or.inl hs))
+  have hpostMem : ∀ s ∈ post, s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post :=
+    fun s hs => List.mem_append.mpr (Or.inr (List.mem_cons.mpr (Or.inr hs)))
+  have hpostK : ∀ s ∈ post, s.kind = XZPauli.Z := fun s hs => hk s (hpostMem s hs)
+  have hpostNe : ∀ s ∈ post, s.qubit ≠ anc := fun s hs => hne s (hpostMem s hs)
+  have hpostX : ∀ s ∈ post, xPart (es.paulis s.qubit) = Pauli.I := fun s hs => hx s (hpostMem s hs)
+  have hIanc : (es.inject q Pauli.Z).paulis anc = Pauli.I := by
+    rw [inject_paulis_ne es q anc Pauli.Z (Ne.symm hqne), hanc]
+  have hIx : ∀ s ∈ post, xPart ((es.inject q Pauli.Z).paulis s.qubit) = Pauli.I := by
+    intro s hs
+    by_cases h : s.qubit = q
+    · rw [h, inject_paulis_self, xPart_pauliMul_Z, hqx]
+    · rw [inject_paulis_ne es q s.qubit Pauli.Z h]; exact hpostX s hs
+  have hqneP : (⟨XZPauli.Z, q⟩ : ScheduledPauli nq).qubit ≠ anc := hqne
+  have hqxP : xPart (es.paulis (⟨XZPauli.Z, q⟩ : ScheduledPauli nq).qubit) = Pauli.I := hqx
+  have hELC : errLocCount (zParitySlot anc (⟨XZPauli.Z, q⟩ : ScheduledPauli nq)) = 2 := by
+    rw [errLocCount_zParitySlot anc _ hqneP]; rfl
+  have hmidRun : runFScript (zParitySlot anc (⟨XZPauli.Z, q⟩ : ScheduledPauli nq)
+        ++ zParitySlotsCircuit anc post)
+      ([some Pauli.Z, none] ++ List.replicate (errLocCount (zParitySlotsCircuit anc post)) none) es
+      = (es.inject q Pauli.Z, 1) := by
+    rw [runFScript_append, hELC,
+      runFScript_take_errLoc _ [some Pauli.Z, none] _ es (le_of_eq hELC),
+      runFScript_zSlot_Zdata anc ⟨XZPauli.Z, q⟩ rfl hqneP es hanc hqxP, drop2_someZ_none,
+      runFScript_zParitySlots_none anc post _ (es.inject q Pauli.Z)
+        (fun o ho => List.eq_of_mem_replicate ho) hpostK hpostNe hIanc hIx]
+    rfl
+  rw [zParitySlotsCircuit_append, zParitySlotsCircuit_cons, List.append_assoc, runFScript_append,
+    runFScript_Zchain_none_pre anc pre es _ hpreK hpreNe hanc hpreX, drop_replicate_none, hmidRun]
+  rfl
+
 /-! ## `ValidStandardSchedule` bookkeeping — the symbolic-order locators
 
 These lemmas turn `hv : ValidStandardSchedule order` (each gadget's slots only *up to* a
