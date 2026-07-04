@@ -69,11 +69,47 @@ preserves the multiset of `(kind, qubit)` slots exactly. -/
 def ValidStandardSchedule (order : Fin 4 → RuleSchedule 5) : Prop :=
   ∀ i, List.Perm (order i).slots (canonicalSlots i)
 
-/-- Sanity check: the identity ordering (canonical slots as written) is a valid schedule — the
-predicate is inhabited, so `∀ valid order, …` is not vacuous. -/
-theorem canonicalOrder_valid :
-    ValidStandardSchedule (fun i => ⟨canonicalSlots i⟩) :=
+/-- The canonical schedule: measure each stabilizer's support in index order. -/
+def canonicalOrder : Fin 4 → RuleSchedule 5 := fun i => ⟨canonicalSlots i⟩
+
+/-- Sanity check: the canonical ordering is a valid schedule — the predicate is inhabited, so
+`∀ valid order, …` is not vacuous. -/
+theorem canonicalOrder_valid : ValidStandardSchedule canonicalOrder :=
   fun _ => List.Perm.refl _
+
+/-! ## The faithful five-qubit code spec (on the 9 = 5 data + 4 ancilla qubits) -/
+
+/-- The `[[5,1,3]]` stabilizers embedded on the 9 compiled qubits (data on `0..4`, `I` on the
+four ancillas `5..8`). -/
+def fqEmb (i : Fin 4) : Fin 9 → Pauli :=
+  fun q => if h : q.val < 5 then FiveQubitNoGo.fqStab i ⟨q.val, h⟩ else Pauli.I
+
+/-- The faithful `CodeSpec` the verifier checks against: the five-qubit stabilizers, data on
+`0..4`, each stabilizer reading its own ancilla-measurement detector, distance `3`.  (The `gadget`
+/ `expectedProgram` fields are irrelevant to `failure`, which reads only the stabilizers, `isData`,
+and the detectors, so they are left trivial.) -/
+def fqSpec : CodeSpec 9 where
+  numStab := 4
+  numFlags := 4
+  isData := fun q => decide (q.val < 5)
+  stabilizer := fqEmb
+  stabilizerReadout := fun i => [⟨i.val, i.isLt⟩]
+  postselectFlag := fun _ => false
+  flagSlot := fun i => i.val
+  flagSlot_injective := by intro a b h; exact Fin.ext h
+  flagSlot_ordered := by intro i; rfl
+  readout_disjoint := by
+    intro i j hij s hs_i hs_j
+    simp only [List.mem_singleton] at hs_i hs_j
+    apply hij; apply Fin.ext
+    have e1 : s.val = i.val := congrArg Fin.val hs_i
+    have e2 : s.val = j.val := congrArg Fin.val hs_j
+    omega
+  gadgetDetectorStart := fun i => i.val
+  gadget := fun _ => []
+  expectedProgram := []
+  d := 3
+  d_pos := by decide
 
 /-- **The remaining obligation (parametric adequacy).**  For schedule `order` and a code spec, a
 real `qceval` run of the compiled circuit reaching a state with `≤ spec.d - 1` faults that is a
@@ -129,5 +165,33 @@ the sole open lemma is the circuit-semantics `StandardAdequacy`. -/
 theorem fiveQubit_standard_full_nogo (spec : CodeSpec 9) (adeq : StandardAdequacy spec) :
     ∀ order, ValidStandardSchedule order → ¬ Safe (fiveQubitStandardCircuit order) spec :=
   fun order hv => fiveQubit_standard_nogo order spec (adeq order hv)
+
+/-! ## A concrete circuit-level witness (first fcevalW dangerous run)
+
+For the canonical schedule, an explicit 2-fault script (`X` at error-location 4, `Z` at 22) drives
+the honestly-compiled circuit — through the real `runFScript`/detector semantics — to a genuine
+`failure`: an undetected logical error with only 2 < d = 3 faults.  Everything is kernel `decide`
+(no `native_decide`). -/
+
+/-- The concrete 2-fault attack script on the canonical compiled circuit. -/
+def canonAttackScript : List (Option Pauli) :=
+  (List.finRange 56).map fun k =>
+    if k.val = 4 then some Pauli.X else if k.val = 22 then some Pauli.Z else none
+
+/-- **A real dangerous run of the honestly-compiled circuit** for the canonical schedule: a
+2-fault `qceval` execution that is a `failure`.  Built from the concrete script via
+`runFScript_sound` + `qceval_of_fcevalW`, with `failure` discharged by kernel `decide`. -/
+theorem fqSpec_canonical_dangerousRun : DangerousRun canonicalOrder fqSpec :=
+  ⟨_, qceval_of_fcevalW (k := 0)
+        (runFScript_sound (fiveQubitStandardCircuit canonicalOrder) canonAttackScript
+          (ErrorState.clean 9)),
+   by decide, by decide⟩
+
+/-- **The honestly-compiled circuit for the canonical schedule is not `Safe`** — a concrete,
+axiom-clean instance of the no-go at the real circuit level (one valid schedule; the universal
+statement is the parametric adequacy still in progress). -/
+theorem canonical_not_safe :
+    ¬ Safe (fiveQubitStandardCircuit canonicalOrder) fqSpec :=
+  fiveQubit_standard_nogo canonicalOrder fqSpec fqSpec_canonical_dangerousRun
 
 end QStab.Examples.FiveQubitStandardNoGo
