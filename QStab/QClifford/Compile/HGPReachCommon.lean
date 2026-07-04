@@ -281,4 +281,46 @@ theorem hgp_heven_amb (d : Nat) (hd : 2 ≤ d) (k : Fin (2 * ((d - 1) * d)))
       vectorParity_eq_parity]
     exact hgp_Xbar_comm d hd k
 
+/-! ## Regression guards (axiom pins for the shared reach headliners) -/
+
+/-- info: 'QStab.QClifford.Compile.hgpRowPref_total' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms hgpRowPref_total
+
+/-- info: 'QStab.QClifford.Compile.hgpInjs_count' depends on axioms: [propext] -/
+#guard_msgs in
+#print axioms hgpInjs_count
+
+/--
+info: 'QStab.QClifford.Compile.dataInputState_rowPref_pureX_amb' does not depend on any axioms
+-/
+#guard_msgs in
+#print axioms dataInputState_rowPref_pureX_amb
+
+/-- info: 'QStab.QClifford.Compile.hgp_lifted_kind_amb' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms hgp_lifted_kind_amb
+
+/--
+info: 'QStab.QClifford.Compile.hgpInjs_length_amb' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms hgpInjs_length_amb
+
+/-- info: 'QStab.QClifford.Compile.hgp_slots_cons_amb' depends on axioms: [propext, Quot.sound] -/
+#guard_msgs in
+#print axioms hgp_slots_cons_amb
+
+/--
+info: 'QStab.QClifford.Compile.hgp_injectE_advances_amb' depends on axioms: [propext, Quot.sound]
+-/
+#guard_msgs in
+#print axioms hgp_injectE_advances_amb
+
+/--
+info: 'QStab.QClifford.Compile.hgp_heven_amb' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in
+#print axioms hgp_heven_amb
+
 end QStab.QClifford.Compile
