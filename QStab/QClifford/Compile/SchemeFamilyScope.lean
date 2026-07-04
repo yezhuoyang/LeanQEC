@@ -4,40 +4,55 @@
 Docs-only (zero declarations).  Honest statement of what the compiled
 pipeline proves today and what the two queued generalisations would need.
 
-## What is proven (both code families, NZ scheme)
+## What is proven
 
-* Surface (odd `d ≥ 3`): compiled bar-Z distance floor, `Stab`/`logicalFailure`
-  transport, `reach` — 4/5 VCGen slots (`ftDistance` blocked on the X-side
-  floor, milestone F3).
-* HGP(Rep(d), Rep(d)) (`d ≥ 2`): **all five slots** — `hgp_Safe` /
-  `hgp_compiled_Safe`.  Both floors (bar-Z direct, bar-X by duality
-  transport), `maximal_isotropic` coverage, row-0 reach script.
+* Surface (odd `d ≥ 3`, NZ scheme): compiled bar-Z distance floor,
+  `Stab`/`logicalFailure` transport, `reach` — 4/5 VCGen slots (`ftDistance`
+  blocked on the X-side floor, milestone F3).
+* HGP(Rep(d), Rep(d)) (`d ≥ 2`), **NZ scheme**: **all five slots** —
+  `hgp_Safe` / `hgp_compiled_Safe`.  Both floors (bar-Z direct, bar-X by
+  duality transport), `maximal_isotropic` coverage, row-0 reach script.
+* HGP(Rep(d), Rep(d)) (`d ≥ 2`), **Shor / Knill / Flag schemes**: **both
+  distance floors** — `hgp{Shor,Knill,Flag}_compiled_barZ_distance` (via the
+  `SchemeClassifier` framework) and `hgp{Shor,Knill,Flag}_compiled_barX_distance`
+  (via the *generic* `compiled_barX_of_dualityAutomorphism`, generalized over
+  helper count / circuit / `HGPSchemeHValid` in `HGPSchemeXDistance.lean`).
+  Everything routes through `hgpSchemeCircuit scheme d`
+  (`= compileProgram (hgpSchemeProgram scheme d)`); the bridge is instantiated,
+  never widened.  `ftDistance` and `Safe` are **not yet** closed for these
+  schemes (see below).
 
-Scope qualifier carried by every headline: the NZ extraction scheme with the
-canonical per-check schedule; any *gate scheduling* of the couplings is
-absorbed by the union back-action machine, but the *scheme* (ancilla
-topology) is fixed.
+## G6 — multi-scheme compiled classification (DONE, `ftDistance`/`reach` open)
 
-## G6 — multi-scheme compiled classification (deferred)
+The compiler front-end emits Shor/Knill/Flag gadget blocks
+(`compileGadgetBlock`), and the compiled per-scheme site classification is now
+**landed** for all four schemes: `shor_gadget_site_classified`,
+`knill_site_wle1`/`knill_SchemeClassifier`, and `zpsChain_site_classified` /
+`flag_gadget_site_classified` (the last handles Flag's mixed X/Z couplings via
+the kind-generic `kindTransform` / `propagate_zpsChain_anc` calculus, replacing
+the kind-uniform `nzSuffixResidual` machinery).  Each closes `HGPSchemeHValid`
+(via `hgpScheme_hvalid`), hence both compiled distance floors above.  Nothing in
+the bridge (`etildeC_hoare_preservation` chain) was changed — it is
+circuit-generic and instantiated.
 
-The compiler front-end already emits Shor/Knill/Flag gadget blocks
-(`compileGadgetBlock`), and the *source-level* scheme-correctness proofs
-exist (`SchemeFamilies/`: Standard, KnillCSS, Flag2, Shor).  What is missing
-for a compiled `hvalid` (hence compiled floors) per scheme:
+What remains open for full `Safe` on the non-NZ schemes:
 
-* per-scheme site classification of the compiled blocks — the NZ
-  classification (`nz_gadget_site_classified` and the `nzSuffixResidual`
-  calculus) has no Shor/Knill/Flag analog; gadget shapes differ (cat states,
-  transversal readout, flag interleaving);
-* Flag blocks mix X- and Z-kind couplings inside one gadget, so the
-  kind-uniform schedule machinery (`RuleSchedule.uniform`,
-  `scheduleRow_eval_uniform`) does not apply as-is;
-* Shor's standalone-vs-compiled bridge (the cat-preparation block is not a
-  `zParitySlot` stream).
-
-Estimate: one NZ-classification-sized campaign *per scheme*; nothing in the
-bridge (`etildeC_hoare_preservation` chain) needs to change — it is
-circuit-generic and would be instantiated, not widened.
+* **`ftDistance` (spec transport).**  `hgpNZ_ftDistance` = generic `hgp_coverage`
+  (maximal-isotropic, scheme-independent) + the two floors + the
+  `logicalFailure`-iff `hgpNZ_logicalFailure_iff`.  Both floors and coverage are
+  in hand; the missing piece is a scheme-generic `logicalFailure`-iff — i.e.
+  scheme versions of `hgpNZ_centralizer_iff_es` (already uses the *generic*
+  `compiled_centralizer_transport`) and `hgpNZ_Stab_iff_InStab_es`
+  (`hgp_prodStab_data`/`hgp_prodStab_helper`/`hgpNumStab_eq`, currently over
+  `hgpXZProgram d`).  Portable in principle — the measurement schedules are
+  scheme-independent — but a real spec-transport port, not free.
+* **`reach` (hard NZ-only gap).**  `hgpReachScript` / `hgp_reach_run` /
+  `hgp_reach_step` are hardwired to the Standard NZ gadget (`nzBlock`, row-0 `X`
+  injection via `hgpInjs`, X-uniform parity blindness).  Each scheme has a
+  different gadget layout (cat states, transversal readout, flag interleaving)
+  and needs its own fault-injection script + reach proof; there is no
+  scheme-generic reach framework.  This is the blocker for `Safe`, and no `Safe`
+  is claimed for Shor/Knill/Flag until it is closed.
 
 ## G7 — general HGP(H₁, H₂) (deferred)
 
