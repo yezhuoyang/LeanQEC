@@ -13,14 +13,17 @@ pipeline proves today and what the two queued generalisations would need.
   `hgp_Safe` / `hgp_compiled_Safe`.  Both floors (bar-Z direct, bar-X by
   duality transport), `maximal_isotropic` coverage, row-0 reach script.
 * HGP(Rep(d), Rep(d)) (`d ≥ 2`), **Shor / Knill / Flag schemes**: **both
-  distance floors** — `hgp{Shor,Knill,Flag}_compiled_barZ_distance` (via the
-  `SchemeClassifier` framework) and `hgp{Shor,Knill,Flag}_compiled_barX_distance`
-  (via the *generic* `compiled_barX_of_dualityAutomorphism`, generalized over
-  helper count / circuit / `HGPSchemeHValid` in `HGPSchemeXDistance.lean`).
-  Everything routes through `hgpSchemeCircuit scheme d`
-  (`= compileProgram (hgpSchemeProgram scheme d)`); the bridge is instantiated,
-  never widened.  `ftDistance` and `Safe` are **not yet** closed for these
-  schemes (see below).
+  distance floors and the `ftDistance` VCGen slot** — 4/5 slots.
+  `hgp{Shor,Knill,Flag}_compiled_barZ_distance` (via the `SchemeClassifier`
+  framework), `hgp{Shor,Knill,Flag}_compiled_barX_distance` (via the *generic*
+  `compiled_barX_of_dualityAutomorphism`, generalized over helper count / circuit
+  / `HGPSchemeHValid` in `HGPSchemeXDistance.lean`), and
+  `hgp{Shor,Knill,Flag}_ftDistance` / `_vcgen_ftDistanceD` (via the generic
+  `hgp_coverage` + both floors + a scheme-generic `logicalFailure`-iff, in
+  `HGPSchemeFtDistance.lean`).  Everything routes through `hgpSchemeCircuit
+  scheme d` (`= compileProgram (hgpSchemeProgram scheme d)`); the bridge and the
+  VCGen slot are instantiated, never widened.  Only `reach` (hence `Safe`) is
+  **not yet** closed for these schemes (see below).
 
 ## G6 — multi-scheme compiled classification (DONE, `ftDistance`/`reach` open)
 
@@ -35,24 +38,23 @@ the kind-uniform `nzSuffixResidual` machinery).  Each closes `HGPSchemeHValid`
 the bridge (`etildeC_hoare_preservation` chain) was changed — it is
 circuit-generic and instantiated.
 
-What remains open for full `Safe` on the non-NZ schemes:
+What remains open for full `Safe` on the non-NZ schemes — **only `reach`**:
 
-* **`ftDistance` (spec transport).**  `hgpNZ_ftDistance` = generic `hgp_coverage`
-  (maximal-isotropic, scheme-independent) + the two floors + the
-  `logicalFailure`-iff `hgpNZ_logicalFailure_iff`.  Both floors and coverage are
-  in hand; the missing piece is a scheme-generic `logicalFailure`-iff — i.e.
-  scheme versions of `hgpNZ_centralizer_iff_es` (already uses the *generic*
-  `compiled_centralizer_transport`) and `hgpNZ_Stab_iff_InStab_es`
-  (`hgp_prodStab_data`/`hgp_prodStab_helper`/`hgpNumStab_eq`, currently over
-  `hgpXZProgram d`).  Portable in principle — the measurement schedules are
-  scheme-independent — but a real spec-transport port, not free.
-* **`reach` (hard NZ-only gap).**  `hgpReachScript` / `hgp_reach_run` /
-  `hgp_reach_step` are hardwired to the Standard NZ gadget (`nzBlock`, row-0 `X`
-  injection via `hgpInjs`, X-uniform parity blindness).  Each scheme has a
-  different gadget layout (cat states, transversal readout, flag interleaving)
-  and needs its own fault-injection script + reach proof; there is no
-  scheme-generic reach framework.  This is the blocker for `Safe`, and no `Safe`
-  is claimed for Shor/Knill/Flag until it is closed.
+* **`ftDistance`: DONE** (`HGPSchemeFtDistance.lean`).  The spec transport lifted
+  over `scheme` cleanly: the compiled program's measured schedules are the
+  scheme-independent `hgpSchedule` family (`hgpSchemeProgram_map_schedule` via the
+  tag-generalized `measuresAtAux_seqMeas_map_schedule_gen`), and every downstream
+  faithfulness lemma (`scheduleRow_hgpSchedule_dataRestrict`/`_helperTrivial`,
+  `stabEntry_eq_I_of_not_mem`, `hgp_scheduleParity_eq_vectorParity`) is already
+  helper-count-generic, so `hgpScheme_Stab_iff_InStab_es` /
+  `_centralizer_iff_es` / `_logicalFailure_iff` port by swapping the program.
+* **`reach`: hard NZ-only gap** (the sole blocker for `Safe`).  `hgpReachScript`
+  / `hgp_reach_run` / `hgp_reach_step` are hardwired to the Standard NZ gadget
+  (`nzBlock`, row-0 `X` injection via `hgpInjs`, X-uniform parity blindness).
+  Each scheme has a different gadget layout (cat states, transversal readout,
+  flag interleaving) and needs its own fault-injection script + reach proof;
+  there is no scheme-generic reach framework.  No `Safe` is claimed for
+  Shor/Knill/Flag until it is closed.
 
 ## G7 — general HGP(H₁, H₂) (deferred)
 
