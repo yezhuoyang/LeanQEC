@@ -80,6 +80,19 @@ theorem steane_nogo_core_spec :
         ¬ Stab steaneSpec (emb13 (ErrorVec.mul (suffix2 i c d) (single7 q Pauli.Z))) := by
   decide
 
+/-- **Deliverable 3, Step 1: strengthened Z-sector core for gadget 5.**  Every distinct support
+pair `{c,d}` of `steaneStabVec 5` (the hook gadget) has a completing single-`Z` fault at some qubit
+`q` **outside** the gadget-5 support (`steaneStabVec 5 q = I`), still a `logicalFailure` residual.
+Keeping `q` out of the suffix means the completing data-`Z` fault does not land on a hook qubit
+(no pre-existing `Z` on `{c,d}`), so it is injectable in gadget 3/4.  Kernel-`decide`d. -/
+theorem steane_nogo_core_gadget5 :
+    ∀ (c d : Fin 7), c ≠ d →
+      steaneStabVec (5 : Fin 6) c ≠ Pauli.I → steaneStabVec (5 : Fin 6) d ≠ Pauli.I →
+      ∃ (q : Fin 7), steaneStabVec (5 : Fin 6) q = Pauli.I ∧
+        Centralizer steaneSpec (emb13 (ErrorVec.mul (suffix2 (5 : Fin 6) c d) (single7 q Pauli.Z))) ∧
+        ¬ Stab steaneSpec (emb13 (ErrorVec.mul (suffix2 (5 : Fin 6) c d) (single7 q Pauli.Z))) := by
+  decide
+
 /-- `dataVector steaneSpec es = es.paulis` whenever `es.paulis` is an `emb13` embedding. -/
 theorem dataVector_of_emb13 (es : ErrorState 13) (F : Fin 7 → Pauli)
     (hesdata : es.paulis = emb13 F) :
