@@ -282,6 +282,114 @@ theorem cnotChain_hook_residual {nq : Nat} (anc : Fin nq) (ps : List (Fin nq))
     simp [ErrorState.inject, hqa, hesQ q hq]
   rw [propagate_nzCnotChain_anc anc Pauli.Z ps hanc hnd (es.inject anc Pauli.Z) hinjA hinjQ i, zPart_Z]
 
+/-! ## `ValidStandardSchedule` bookkeeping — the symbolic-order locators
+
+These lemmas turn `hv : ValidStandardSchedule order` (each gadget's slots only *up to* a
+permutation of its canonical support) into the concrete structural facts the parametric attack
+needs, **symbolic in `order`** — no `decide` on the order, no enumeration of the `∏ (wᵢ!)` valid
+circuits.  The only `decide`s are on *closed finite Steane support facts* (the canonical slot lists
+of the fixed Z-stabilizers).  This discharges obligation (2) of the parametric assembly. -/
+
+/-! ### Concrete canonical-slot facts for the Z-stabilizers (indices 3,4,5) -/
+
+theorem canonicalSlots_Z_kind (i : Fin 6) (hi : 3 ≤ i.val) :
+    ∀ s ∈ canonicalSlots i, s.kind = XZPauli.Z := by
+  fin_cases i <;> first | (exact absurd hi (by decide)) | decide
+
+theorem canonicalSlots_len (i : Fin 6) (hi : 3 ≤ i.val) : (canonicalSlots i).length = 4 := by
+  fin_cases i <;> first | (exact absurd hi (by decide)) | decide
+
+theorem canonicalSlots_nodup_q (i : Fin 6) (hi : 3 ≤ i.val) :
+    ((canonicalSlots i).map (·.qubit)).Nodup := by
+  fin_cases i <;> first | (exact absurd hi (by decide)) | decide
+
+theorem canonicalSlots_supp (i : Fin 6) (hi : 3 ≤ i.val) :
+    ∀ s ∈ canonicalSlots i, steaneStabVec i s.qubit ≠ Pauli.I := by
+  fin_cases i <;> first | (exact absurd hi (by decide)) | decide
+
+/-! ### Transported to a valid schedule's actual slot list (via `List.Perm`, symbolic in `order`) -/
+
+/-- Every slot the schedule assigns to a Z-gadget is a `Z`-slot. -/
+theorem order_Z_kind {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (i : Fin 6) (hi : 3 ≤ i.val) : ∀ s ∈ (order i).slots, s.kind = XZPauli.Z :=
+  fun s hs => canonicalSlots_Z_kind i hi s ((hv i).mem_iff.mp hs)
+
+/-- A Z-gadget's schedule couples exactly four qubits. -/
+theorem order_len {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (i : Fin 6) (hi : 3 ≤ i.val) : (order i).slots.length = 4 := by
+  rw [(hv i).length_eq]; exact canonicalSlots_len i hi
+
+/-- The coupled qubits are distinct. -/
+theorem order_nodup_q {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (i : Fin 6) (hi : 3 ≤ i.val) : ((order i).slots.map (·.qubit)).Nodup :=
+  ((hv i).map (·.qubit)).nodup_iff.mpr (canonicalSlots_nodup_q i hi)
+
+/-- Every coupled qubit is in the stabilizer's support. -/
+theorem order_supp {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (i : Fin 6) (hi : 3 ≤ i.val) : ∀ s ∈ (order i).slots, steaneStabVec i s.qubit ≠ Pauli.I :=
+  fun s hs => canonicalSlots_supp i hi s ((hv i).mem_iff.mp hs)
+
+/-! ### The two locators the pure-Z attack consumes -/
+
+/-- A length-4 list splits into its four elements. -/
+theorem list_len4 {α} (l : List α) (h : l.length = 4) : ∃ a b c d, l = [a, b, c, d] := by
+  rcases l with _ | ⟨a, _ | ⟨b, _ | ⟨c, _ | ⟨d, _ | ⟨e, t⟩⟩⟩⟩⟩ <;>
+    simp only [List.length_cons, List.length_nil] at h <;>
+    first | omega | exact ⟨a, b, c, d, rfl⟩
+
+/-- **Last-two locator for gadget 5** (the hook gadget, `Z{3,4,5,6}`).  For *any* valid schedule,
+its slot list ends in two `Z`-slots on distinct support qubits `c, d` — the weight-2 suffix the
+ancilla hook deposits.  Symbolic in `order`. -/
+theorem last2_locator {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order) :
+    ∃ (pre : List (ScheduledPauli 7)) (c d : Fin 7),
+      (order 5).slots = pre ++ [⟨XZPauli.Z, c⟩, ⟨XZPauli.Z, d⟩] ∧ c ≠ d ∧
+      steaneStabVec 5 c ≠ Pauli.I ∧ steaneStabVec 5 d ≠ Pauli.I := by
+  have hlen : (order 5).slots.length = 4 := order_len hv 5 (by decide)
+  have hkind := order_Z_kind hv 5 (by decide)
+  have hnd := order_nodup_q hv 5 (by decide)
+  have hsp := order_supp hv 5 (by decide)
+  obtain ⟨a, b, c, d, he⟩ := list_len4 _ hlen
+  have hmc : c ∈ (order 5).slots := by
+    rw [he]; simp only [List.mem_cons, List.not_mem_nil, or_false]; tauto
+  have hmd : d ∈ (order 5).slots := by
+    rw [he]; simp only [List.mem_cons, List.not_mem_nil, or_false]; tauto
+  have hck : c.kind = XZPauli.Z := hkind c hmc
+  have hdk : d.kind = XZPauli.Z := hkind d hmd
+  have hcq : c = ⟨XZPauli.Z, c.qubit⟩ := by rw [← hck]
+  have hdq : d = ⟨XZPauli.Z, d.qubit⟩ := by rw [← hdk]
+  refine ⟨[a, b], c.qubit, d.qubit, ?_, ?_, ?_, ?_⟩
+  · rw [he]; rw [← hcq, ← hdq]; rfl
+  · rw [he] at hnd
+    simp only [List.map_cons, List.map_nil, List.nodup_cons, List.mem_cons, List.not_mem_nil,
+      or_false] at hnd
+    tauto
+  · exact hsp c hmc
+  · exact hsp d hmd
+
+/-- A located slot in a valid schedule's gadget-`i` list gives an explicit append split. -/
+theorem slot_in_order {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (i : Fin 6) (q : Fin 7) (hmem : (⟨XZPauli.Z, q⟩ : ScheduledPauli 7) ∈ canonicalSlots i) :
+    ∃ (pre post : List (ScheduledPauli 7)), (order i).slots = pre ++ ⟨XZPauli.Z, q⟩ :: post :=
+  List.append_of_mem ((hv i).mem_iff.mpr hmem)
+
+/-- **Z-cover / completing-fault locator.**  The three Steane Z-stabilizers cover all 7 data
+qubits, so for every `q` some Z-gadget `i ∈ {3,4,5}` couples it, and that `{Z, q}` slot sits at a
+locatable position in the valid schedule's gadget-`i` slot list — where the completing data-`Z`
+fault is injected.  Symbolic in `order`. -/
+theorem z_cover_locator {order : Fin 6 → RuleSchedule 7} (hv : ValidStandardSchedule order)
+    (q : Fin 7) :
+    ∃ (i : Fin 6), 3 ≤ i.val ∧
+      ∃ (pre post : List (ScheduledPauli 7)),
+        (order i).slots = pre ++ ⟨XZPauli.Z, q⟩ :: post := by
+  fin_cases q
+  · exact ⟨3, by decide, slot_in_order hv 3 _ (by decide)⟩
+  · exact ⟨4, by decide, slot_in_order hv 4 _ (by decide)⟩
+  · exact ⟨3, by decide, slot_in_order hv 3 _ (by decide)⟩
+  · exact ⟨5, by decide, slot_in_order hv 5 _ (by decide)⟩
+  · exact ⟨3, by decide, slot_in_order hv 3 _ (by decide)⟩
+  · exact ⟨4, by decide, slot_in_order hv 4 _ (by decide)⟩
+  · exact ⟨3, by decide, slot_in_order hv 3 _ (by decide)⟩
+
 /-! ## The remaining obstacle for a fully parametric `StandardAdequacy steaneSpec`
 
 The pieces above reduce the campaign to *assembling* a real 2-fault `runFScript` run of
@@ -309,13 +417,17 @@ The two faults are:
    "every ancilla is X-free at its `measZ`" invariant through `runFScript`'s detector cursor across
    all six blocks — a multi-block induction (the X-gadget-first ordering is load-bearing).
 
-2. **The `List.Perm` bookkeeping for the completing fault's position.**  `ValidStandardSchedule`
-   gives each gadget's slot list only up to permutation of the canonical support; locating `q`'s
-   coupling slot (and gadget 5's last-two pair `{c,d}`) inside an arbitrary permuted order, and
-   aligning the two injection scripts, is symbolic in `order` — neither a `decide` nor a finite
-   enumeration (≈`(4!·3!·4!·4!·3!·4!)` valid circuits).
+2. **The `List.Perm` bookkeeping for the completing fault's position.**  *This is now proved*
+   (`order_Z_kind`/`order_len`/`order_nodup_q`/`order_supp`, `last2_locator`, `z_cover_locator`
+   above): from `hv : ValidStandardSchedule order` alone — symbolic in `order`, with `decide` used
+   only on closed finite Steane support facts — we obtain gadget 5's last-two `Z`-suffix pair
+   `{c,d}` and, for every data qubit `q`, a Z-gadget coupling it with an explicit slot-list append
+   split.  What still remains under this heading is purely the *script alignment*: turning these
+   append splits (`pre ++ … :: post`) into the `errLocCount`-indexed `runFScript` injection offsets
+   and feeding them to the hook/measure peeling — mechanical, but not yet assembled.
 
-Both are deliberately left un-assumed here — no `sorry`, no axiom, no weakened theorem.  The
+Obligation (1) is the genuine remaining development; obligation (2)'s combinatorics is discharged.
+Both are handled honestly — no `sorry`, no axiom, no weakened theorem.  The
 concrete `steaneSpec_canonical_dangerousRun` in `SteaneStandardNoGo.lean` discharges the *canonical*
 schedule at the real circuit level (kernel `decide`), and the machinery in this file is the reusable
 core of the parametric assembly. -/
