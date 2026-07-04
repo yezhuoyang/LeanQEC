@@ -201,4 +201,45 @@ theorem surfaceKnill_compiled_barZ_distance (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ 
 #guard_msgs in
 #print axioms surfaceKnill_compiled_barZ_distance
 
+/-! ## Post-selection-aware bar-Z floor (the Shor route)
+
+Knill closes the compiled surface bar-Z floor **unconditionally** (every fault
+weight `≤ 1`).  Shor cannot: an executable `d = 3` fingerprint shows exactly 4 of
+its weight-`≥ 2` single-fault data residuals are X-type, span `≥ 2` rows, and are
+absorbed by no stabilizer — so the unconditional `SurfaceSchemeHValid` route
+fails.  But all 4 are **detected** (they fire the cat-verifier flag), so the floor
+holds under **post-selection** (`allFlagsZero`).
+
+`SurfaceSchemeAcceptedBarZFloor` is the post-selection floor, over an abstract
+`accepted` predicate on the final error state (instantiated `allFlagsZero
+(surfaceSchemeCodeSpec …)` for the concrete pipeline).  It is the exact shape the
+post-selection-aware `ftDistance` VC slot (which quantifies `allFlagsZero`)
+consumes — mirroring how `surfaceNZ_ftDistance` takes `SurfaceBarXFloor` as an
+explicit hypothesis.  Knill discharges it trivially (weaker than its
+unconditional bound); the Shor discharge is the parametric-`AcceptedBarrierBound`
+campaign (the d=3 case is proved: `SurfaceD3Shor.surfaceAcceptedBarrierBound`). -/
+def SurfaceSchemeAcceptedBarZFloor (scheme : Scheme) (d : Nat) (hd3 : 3 ≤ d)
+    (hodd : d % 2 = 1)
+    (accepted : ErrorState ((surfaceUParams d hd3 hodd).n + surfaceSchemeHelpers scheme d) → Prop) :
+    Prop :=
+  ∀ sigma : QCState ((surfaceUParams d hd3 hodd).n + surfaceSchemeHelpers scheme d),
+    qceval (surfaceSchemeCircuit scheme d)
+      (QCState.clean ((surfaceUParams d hd3 hodd).n + surfaceSchemeHelpers scheme d)) sigma →
+    accepted sigma.es →
+    (surfaceLogicalClass d (unionSurfaceSpec d hd3 hodd)).contains
+      (dataErrorOfQCState (surfaceUParams d hd3 hodd) (surfaceSchemeHelpers scheme d) sigma) →
+    d ≤ sigma.lambda
+
+/-- **Knill discharges the post-selection floor for free** — its unconditional
+bar-Z distance is strictly stronger, so the `accepted`-gated version holds for
+every `accepted`. -/
+theorem surfaceKnill_acceptedBarZFloor (d : Nat) (hd : 0 < d) (hd3 : 3 ≤ d) (hodd : d % 2 = 1)
+    (accepted : ErrorState ((surfaceUParams d hd3 hodd).n + surfaceSchemeHelpers Scheme.Knill d) → Prop) :
+    SurfaceSchemeAcceptedBarZFloor Scheme.Knill d hd3 hodd accepted :=
+  fun sigma hrun _ hlog => surfaceKnill_compiled_barZ_distance d hd hd3 hodd sigma hrun hlog
+
+/-- info: 'QStab.QClifford.Compile.surfaceKnill_acceptedBarZFloor' depends on axioms: [propext, Classical.choice, Quot.sound] -/
+#guard_msgs in
+#print axioms surfaceKnill_acceptedBarZFloor
+
 end QStab.QClifford.Compile
