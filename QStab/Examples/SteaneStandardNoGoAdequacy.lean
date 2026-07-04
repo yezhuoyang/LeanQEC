@@ -453,6 +453,62 @@ theorem runFScript_zParitySlots_split {nq : Nat} (anc : Fin nq)
     runFScript_Zchain_none_pre anc pre es _ hpreK hpreNe hanc hpreX, drop_replicate_none, hmidRun]
   rfl
 
+theorem drop_left_none (l r : List (Option Pauli)) : (l ++ r).drop l.length = r := List.drop_left
+
+/-- **Deliverable 2.3: the Z-gadget block wrapper.**  Running the full NZ gadget block
+(prep0, the Z-slot chain, measZ) under the block script that idles prep0, fires one data-`Z` at
+`q`, idles the rest, and idles measZ: `Z` lands on `q`, the (still-`I`) ancilla is re-measured,
+count 1.  The `propagateGate (Gate.measZ anc)` head makes the quiet detector explicit (it reads
+`hasXComp` of the `I` ancilla, i.e. `false`). -/
+theorem runFScript_zBlock_Zfault {nq : Nat} (anc : Fin nq)
+    (pre post : List (ScheduledPauli nq)) (q : Fin nq) (es : ErrorState nq)
+    (hk : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post, s.kind = XZPauli.Z)
+    (hne : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post, s.qubit ≠ anc)
+    (hx : ∀ s ∈ pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post,
+        xPart (es.paulis s.qubit) = Pauli.I) :
+    runFScript (nzBlock anc (pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post))
+      ([none] ++ ((List.replicate (errLocCount (zParitySlotsCircuit anc pre)) none ++
+        [some Pauli.Z, none] ++ List.replicate (errLocCount (zParitySlotsCircuit anc post)) none)
+        ++ [none])) es
+      = (propagateGate (Gate.measZ anc)
+          ((propagateGate (Gate.prepZero anc) es).inject q Pauli.Z), 1) := by
+  set slots := pre ++ (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) :: post with hslots
+  set split := List.replicate (errLocCount (zParitySlotsCircuit anc pre)) none ++
+    [some Pauli.Z, none] ++ List.replicate (errLocCount (zParitySlotsCircuit anc post)) none
+    with hsplit
+  set es' := propagateGate (Gate.prepZero anc) es with hes'
+  have hmemZ : (⟨XZPauli.Z, q⟩ : ScheduledPauli nq) ∈ slots := by
+    rw [hslots]; exact List.mem_append.mpr (Or.inr (List.mem_cons.mpr (Or.inl rfl)))
+  have hanc' : es'.paulis anc = Pauli.I := by
+    rw [hes']; show (if anc = anc then Pauli.I else es.paulis anc) = Pauli.I; rw [if_pos rfl]
+  have hx' : ∀ s ∈ slots, xPart (es'.paulis s.qubit) = Pauli.I := by
+    intro s hs
+    have hsne : s.qubit ≠ anc := hne s hs
+    have he : es'.paulis s.qubit = es.paulis s.qubit := by
+      rw [hes']; show (if s.qubit = anc then Pauli.I else es.paulis s.qubit) = _; rw [if_neg hsne]
+    rw [he]; exact hx s hs
+  have hELC : errLocCount (zParitySlot anc (⟨XZPauli.Z, q⟩ : ScheduledPauli nq)) = 2 := by
+    rw [errLocCount_zParitySlot anc _ (hne _ hmemZ)]; rfl
+  have hEL : errLocCount (zParitySlotsCircuit anc slots) = split.length := by
+    rw [hslots, hsplit, zParitySlotsCircuit_append, zParitySlotsCircuit_cons,
+      errLocCount_append, errLocCount_append, hELC]
+    simp only [List.length_append, List.length_replicate, List.length_cons, List.length_nil]
+    omega
+  have hd1 : List.drop (errLocCount (prep0 anc)) ([none] ++ (split ++ [none])) = split ++ [none] := by
+    simp [prep0, errLocCount]
+  have hd2 : List.drop (errLocCount (zParitySlotsCircuit anc slots)) (split ++ [none]) = [none] := by
+    rw [hEL]; exact drop_left_none split [none]
+  rw [nzBlock,
+    show prep0 anc ++ zParitySlotsCircuit anc slots ++ flagMeasZ anc
+      = prep0 anc ++ (zParitySlotsCircuit anc slots ++ flagMeasZ anc) from by rw [List.append_assoc],
+    runFScript_append (prep0 anc),
+    runFScript_take_errLoc (prep0 anc) [none] (split ++ [none]) es (by simp [prep0, errLocCount]),
+    runFScript_prep0, ← hes', hd1,
+    runFScript_append (zParitySlotsCircuit anc slots),
+    runFScript_take_errLoc (zParitySlotsCircuit anc slots) split [none] es' (le_of_eq hEL),
+    runFScript_zParitySlots_split anc pre post q es' hk hne hanc' hx', hd2, runFScript_flagMeasZ]
+  rfl
+
 /-! ## `ValidStandardSchedule` bookkeeping — the symbolic-order locators
 
 These lemmas turn `hv : ValidStandardSchedule order` (each gadget's slots only *up to* a
