@@ -295,6 +295,25 @@ theorem cnotChain_hook_residual {nq : Nat} (anc : Fin nq) (ps : List (Fin nq))
     simp [ErrorState.inject, hqa, hesQ q hq]
   rw [propagate_nzCnotChain_anc anc Pauli.Z ps hanc hnd (es.inject anc Pauli.Z) hinjA hinjQ i, zPart_Z]
 
+/-- For an all-`Z` slot list, `zParitySlotsCircuit` is exactly the bare-CNOT chain over the slot
+qubits — so gadget 5 (all Z-slots) is a bare-CNOT chain and the ancilla-hook machinery
+(`runFScript_cnotChain_hook` / `cnotChain_hook_residual`) applies to it directly.  This is the CSS
+bridge for the Deliverable 3 hook block. -/
+theorem zParitySlotsCircuit_Zonly {nq : Nat} (anc : Fin nq) :
+    ∀ (slots : List (ScheduledPauli nq)), (∀ s ∈ slots, s.kind = XZPauli.Z) →
+      zParitySlotsCircuit anc slots
+        = ((slots.map (·.qubit)).map (fun q => cnot q anc)).flatten := by
+  intro slots
+  induction slots with
+  | nil => intro _; simp [zParitySlotsCircuit]
+  | cons s rest ih =>
+    intro hk
+    rw [zParitySlotsCircuit_cons]
+    have hsk : s.kind = XZPauli.Z := hk s (List.mem_cons.mpr (Or.inl rfl))
+    have hz : zParitySlot anc s = cnot s.qubit anc := by simp only [zParitySlot, hsk]
+    rw [hz, ih (fun x hx => hk x (List.mem_cons.mpr (Or.inr hx)))]
+    simp only [List.map_cons, List.flatten_cons]
+
 /-! ## The completing data-`Z` fault (Z-slot injection)
 
 The existing `runFScript_nzBlock` machinery models *data-`X`* injections (the positive reach
