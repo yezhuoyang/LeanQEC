@@ -282,6 +282,61 @@ theorem cnotChain_hook_residual {nq : Nat} (anc : Fin nq) (ps : List (Fin nq))
     simp [ErrorState.inject, hqa, hesQ q hq]
   rw [propagate_nzCnotChain_anc anc Pauli.Z ps hanc hnd (es.inject anc Pauli.Z) hinjA hinjQ i, zPart_Z]
 
+/-! ## The completing data-`Z` fault (Z-slot injection)
+
+The existing `runFScript_nzBlock` machinery models *data-`X`* injections (the positive reach
+witness).  The pure-`Z` no-go attack needs a *data-`Z`* completing fault.  These lemmas supply it:
+a `Z` on a CNOT control (a `Z`-slot's data qubit) stays on the control, so a mid-gadget data-`Z`
+fault survives as `Z` on that qubit, leaves the ancilla untouched, and flips no detector. -/
+
+theorem xPart_pauliMul_Z (p : Pauli) : xPart (pauliMul Pauli.Z p) = xPart p := by cases p <;> rfl
+theorem pauliMul_I_left (p : Pauli) : pauliMul Pauli.I p = p := by cases p <;> rfl
+
+theorem inject_paulis_self {nq : Nat} (es : ErrorState nq) (q : Fin nq) (p : Pauli) :
+    (es.inject q p).paulis q = pauliMul p (es.paulis q) := by
+  show (if q = q then pauliMul p (es.paulis q) else es.paulis q) = _; rw [if_pos rfl]
+
+theorem inject_paulis_ne {nq : Nat} (es : ErrorState nq) (q i : Fin nq) (p : Pauli) (h : i ≠ q) :
+    (es.inject q p).paulis i = es.paulis i := by
+  show (if i = q then pauliMul p (es.paulis i) else es.paulis i) = _; rw [if_neg h]
+
+/-- A CNOT acts as the identity on an error state whose control has no X-component and whose
+target has no Z-component. -/
+theorem propagateGate_cnot_id {nq : Nat} (c t : Fin nq) (h : c ≠ t) (X : ErrorState nq)
+    (hc : xPart (X.paulis c) = Pauli.I) (ht : zPart (X.paulis t) = Pauli.I) :
+    propagateGate (Gate.cnot c t h) X = X := by
+  have hf : (propagateGate (Gate.cnot c t h) X).paulis = X.paulis := by
+    funext i
+    show (if i = t then pauliMul (xPart (X.paulis c)) (X.paulis t)
+          else if i = c then pauliMul (zPart (X.paulis t)) (X.paulis c) else X.paulis i) = X.paulis i
+    by_cases hit : i = t
+    · subst hit; rw [if_pos rfl, hc, pauliMul_I_left]
+    · rw [if_neg hit]; by_cases hic : i = c
+      · subst hic; rw [if_pos rfl, ht, pauliMul_I_left]
+      · rw [if_neg hic]
+  show (⟨(propagateGate (Gate.cnot c t h) X).paulis, X.measFlips, X.detectors, X.detectorCursor⟩
+        : ErrorState nq) = X
+  rw [hf]
+
+/-- **Deliverable 1: Z-slot data-fault.**  Running a Z-kind slot's gadget with a data-`Z` fault
+(script `[some Z, none]`) on a state whose ancilla is clean and whose data qubit carries no
+X-component leaves exactly `Z` on the data qubit (`es.inject slot.qubit Z`) — ancilla untouched,
+detectors/cursor preserved (both via `inject`), and fault count 1. -/
+theorem runFScript_zSlot_Zdata {nq : Nat} (anc : Fin nq) (slot : ScheduledPauli nq)
+    (hk : slot.kind = XZPauli.Z) (hne : slot.qubit ≠ anc) (es : ErrorState nq)
+    (hanc : es.paulis anc = Pauli.I) (hq : xPart (es.paulis slot.qubit) = Pauli.I) :
+    runFScript (zParitySlot anc slot) [some Pauli.Z, none] es
+      = (es.inject slot.qubit Pauli.Z, 1) := by
+  have hcnot : zParitySlot anc slot
+      = [FInstr.errLoc slot.qubit, FInstr.errLoc anc, FInstr.gate (Gate.cnot slot.qubit anc hne)] := by
+    simp only [zParitySlot, hk, cnot, dif_neg hne]
+  rw [hcnot]
+  simp only [runFScript, if_neg (show Pauli.Z ≠ Pauli.I by decide)]
+  refine Prod.ext ?_ rfl
+  refine propagateGate_cnot_id slot.qubit anc hne _ ?_ ?_
+  · rw [inject_paulis_self, xPart_pauliMul_Z, hq]
+  · rw [inject_paulis_ne es slot.qubit anc Pauli.Z (Ne.symm hne), hanc]; rfl
+
 /-! ## `ValidStandardSchedule` bookkeeping — the symbolic-order locators
 
 These lemmas turn `hv : ValidStandardSchedule order` (each gadget's slots only *up to* a
